@@ -13,10 +13,16 @@ name: CFD Trading (OANDA)
 # UNTESTED end-to-end as of writing -- see src/trading/cfd/broker.py's
 # docstring. Do not assume this works until it's been run against a real
 # OANDA practice account and its logs checked.
+#
+# The "schedule" trigger below is commented out on purpose: with no
+# OANDA_API_TOKEN/OANDA_ACCOUNT_ID secrets set yet, a live cron would just
+# fail every 20 minutes and burn CI minutes on guaranteed failures. Trigger
+# manually (workflow_dispatch) to validate against a real practice account
+# first, then uncomment the schedule once that's confirmed working.
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "7,27,47 * * * 1-5"
+  # schedule:
+  #   - cron: "7,27,47 * * * 1-5"
 
 permissions:
   contents: write
