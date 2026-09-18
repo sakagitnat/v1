@@ -1,8 +1,7 @@
 name: Optimize Strategy
 
-# On-demand parameter grid-search (train/test split) for one sub-strategy,
-# aimed at raising win rate without giving up profitability. No secrets
-# needed -- historical price data comes free from yfinance.
+# On-demand parameter grid-search (train/test split) for one sub-strategy.
+# No secrets needed -- historical price data comes free from yfinance.
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +10,12 @@ on:
         required: true
         type: choice
         options: [breakout, mean_reversion, macd_trend]
+      objective:
+        description: "calmar = maximize profit per unit of drawdown risk (default). win_rate = maximize % winning trades."
+        required: false
+        type: choice
+        default: calmar
+        options: [calmar, win_rate]
 
 permissions:
   contents: read
@@ -24,4 +29,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: python scripts/optimize_strategy.py --strategy "${{ inputs.strategy }}"
+      - run: python scripts/optimize_strategy.py --strategy "${{ inputs.strategy }}" --objective "${{ inputs.objective }}"

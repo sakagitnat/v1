@@ -1,6 +1,6 @@
-"""Grid-search a strategy's parameters to raise win rate WITHOUT sacrificing
-profitability, validated out-of-sample so a result that only looks good
-because it's curve-fit to history gets caught instead of shipped.
+"""Grid-search a strategy's parameters for a chosen objective, validated
+out-of-sample so a result that only looks good because it's curve-fit to
+history gets caught instead of shipped.
 
 History is split into a TRAIN period (the grid search runs here) and a
 TEST/holdout period (never touched during the search -- the winning
@@ -8,9 +8,17 @@ parameters are evaluated on it once, at the end, as a sanity check). A
 parameter set that wins on TRAIN but falls apart on TEST is overfit and is
 flagged as such, not silently recommended.
 
+Objectives:
+  calmar (default) -- maximize CAGR per unit of max drawdown (CAGR / |DD|),
+    i.e. the most total profit for how much the portfolio could have
+    dropped along the way. Any combo whose max drawdown breaches
+    MAX_DRAWDOWN_CAP is rejected outright, however good its return --
+    that cap is the "the portfolio must not blow up" constraint.
+  win_rate -- maximize the fraction of winning trades among combos that
+    keep TRAIN CAGR positive (no drawdown cap).
+
 Usage: python scripts/optimize_strategy.py --strategy breakout
-       python scripts/optimize_strategy.py --strategy mean_reversion
-       python scripts/optimize_strategy.py --strategy macd_trend
+       python scripts/optimize_strategy.py --strategy breakout --objective win_rate
 """
 import argparse
 import itertools
@@ -30,7 +38,8 @@ FETCH_START = "2018-06-01"  # buffer before TRAIN_START for indicator warmup
 TRAIN_START, TRAIN_END = "2019-01-01", "2023-12-31"
 TEST_START, TEST_END = "2024-01-01", None  # None = through the most recent bar
 
-MIN_TRADES = 20  # ignore combos too thin to trust their win rate
+MIN_TRADES = 20  # ignore combos too thin to trust their metrics
+MAX_DRAWDOWN_CAP = -25.0  # reject any combo whose TRAIN max drawdown is worse than this, for the calmar objective
 
 GRIDS = {
     "breakout": {
@@ -38,8 +47,8 @@ GRIDS = {
         "params": {
             "entry_window": [10, 15, 20, 30],
             "exit_window": [5, 10, 15],
-            "atr_stop_mult": [1.5, 2.0, 2.5],
-            "atr_target_mult": [1.5, 2.0, 3.0, 4.0],
+            "atr_stop_mult": [1.5, 2.0, 2.5, 3.0],
+            "atr_target_mult": [2.0, 3.0, 4.0, 5.0, 6.0],
         },
     },
     "mean_reversion": {
@@ -74,15 +83,23 @@ def run_backtest(strategy, bars: dict, start: str, end: str | None) -> dict:
 
 
 def fmt(m: dict) -> str:
-    return f"win_rate={m['win_rate_pct']:.1f}% cagr={m['cagr_pct']:.1f}% sharpe={m['sharpe_ratio']:.2f} trades={m['num_trades']}"
+    return (
+        f"cagr={m['cagr_pct']:.1f}% maxdd={m['max_drawdown_pct']:.1f}% "
+        f"sharpe={m['sharpe_ratio']:.2f} win_rate={m['win_rate_pct']:.1f}% trades={m['num_trades']}"
+    )
 
 
-def search(strategy_name: str):
+def calmar(m: dict) -> float:
+    dd = abs(m["max_drawdown_pct"])
+    return m["cagr_pct"] / dd if dd > 0 else float("-inf")
+
+
+def search(strategy_name: str, objective: str):
     spec = GRIDS[strategy_name]
     cls = spec["cls"]
     param_grid = spec["params"]
 
-    print(f"Fetching {settings.watchlist} from {FETCH_START} ...")
+    print(f"Fetching {settings.watchlist} from {FETCH_START} (objective: {objective}) ...")
     bars = load_watchlist_bars(settings.watchlist, start=FETCH_START)
 
     baseline_train = run_backtest(cls(), bars, TRAIN_START, TRAIN_END)
@@ -103,34 +120,48 @@ def search(strategy_name: str):
             continue
         results.append((kwargs, train_metrics))
 
-    profitable = [r for r in results if r[1]["cagr_pct"] > 0]
-    pool = profitable if profitable else results
-    pool.sort(key=lambda r: r[1]["win_rate_pct"], reverse=True)
-
-    print(f"\nTop 5 by TRAIN win rate ({len(profitable)}/{len(results)} combos kept CAGR > 0):")
-    for kwargs, m in pool[:5]:
-        print(f"  {kwargs} -> {fmt(m)}")
+    if objective == "calmar":
+        pool = [r for r in results if r[1]["cagr_pct"] > 0 and r[1]["max_drawdown_pct"] >= MAX_DRAWDOWN_CAP]
+        pool.sort(key=lambda r: calmar(r[1]), reverse=True)
+        print(
+            f"\nTop 5 by TRAIN calmar (cagr/|maxdd|) among combos with CAGR > 0 "
+            f"and drawdown no worse than {MAX_DRAWDOWN_CAP}% ({len(pool)}/{len(results)} qualify):"
+        )
+        for kwargs, m in pool[:5]:
+            print(f"  calmar={calmar(m):.2f}  {kwargs} -> {fmt(m)}")
+    else:
+        profitable = [r for r in results if r[1]["cagr_pct"] > 0]
+        pool = profitable if profitable else results
+        pool.sort(key=lambda r: r[1]["win_rate_pct"], reverse=True)
+        print(f"\nTop 5 by TRAIN win rate ({len(profitable)}/{len(results)} combos kept CAGR > 0):")
+        for kwargs, m in pool[:5]:
+            print(f"  {kwargs} -> {fmt(m)}")
 
     if not pool:
-        print("\nNo combination produced enough trades to evaluate. Try a wider grid or lower MIN_TRADES.")
+        print(f"\nNo combination qualified (min {MIN_TRADES} trades, and for calmar: CAGR>0 and drawdown cap). Try a wider grid.")
         return
 
     best_kwargs, best_train = pool[0]
     best_test = run_backtest(cls(**best_kwargs), bars, TEST_START, TEST_END)
 
-    print(f"\n=== Best candidate: {best_kwargs} ===")
+    print(f"\n=== Best candidate ({objective}): {best_kwargs} ===")
     print(f"  TRAIN {fmt(best_train)}")
     print(f"  TEST  {fmt(best_test)}")
 
-    overfit = best_test["cagr_pct"] <= 0 or best_test["win_rate_pct"] < baseline_test["win_rate_pct"] - 5
+    if objective == "calmar":
+        overfit = best_test["cagr_pct"] <= 0 or best_test["max_drawdown_pct"] < MAX_DRAWDOWN_CAP
+    else:
+        overfit = best_test["cagr_pct"] <= 0 or best_test["win_rate_pct"] < baseline_test["win_rate_pct"] - 5
+
     if overfit:
         print("\n  WARNING: does not hold up out-of-sample -- likely overfit to TRAIN. NOT recommended as-is.")
     else:
-        print("\n  Holds up out-of-sample (TEST win rate and CAGR both reasonable) -- recommended.")
+        print("\n  Holds up out-of-sample -- recommended.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--strategy", required=True, choices=list(GRIDS.keys()))
+    parser.add_argument("--objective", default="calmar", choices=["calmar", "win_rate"])
     args = parser.parse_args()
-    search(args.strategy)
+    search(args.strategy, args.objective)
