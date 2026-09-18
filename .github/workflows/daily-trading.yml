@@ -26,14 +26,14 @@ jobs:
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_PAPER: "true"
         run: python scripts/run_paper_trading.py
-      - name: Commit tracked-position changes (if any)
+      - name: Commit tracked-position/bucket/state changes (if any)
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          git add state/positions.json
+          git add state/positions.json state/buckets.json state/bot_state.json
           if ! git diff --cached --quiet; then
-            git commit -m "Update tracked positions from daily run"
+            git commit -m "Update tracked positions/buckets/state from daily run"
             git push
           else
-            echo "No position changes to commit."
+            echo "No changes to commit."
           fi

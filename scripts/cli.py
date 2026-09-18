@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading.config import settings
 from trading.data.market_data import load_daily_bars_yfinance
 from trading.execution.broker import AlpacaBroker
+from trading.execution.buckets import load_buckets
 from trading.execution.positions import record_close, record_open
 from trading.execution.state import banked_profit, load_state, set_capital_floor, set_paused
 from trading.risk.risk_manager import RiskManager
@@ -58,6 +59,17 @@ def cmd_status(_args):
         )
     else:
         print("Capital floor: not set")
+
+    if state.get("milestone_reached"):
+        buckets = load_buckets()
+        print(f"Bucket mode: ACTIVE (equity passed {settings.withdrawal_multiple:.0f}x the initial floor)")
+        for name, bucket in buckets.items():
+            blown_note = ""
+            if name != "safe" and bucket.get("cash", 0) < 5.0:
+                blown_note = " [BLOWN -- paused until refilled]"
+            print(f"  {name} ({bucket.get('strategy')}): cash {bucket.get('cash', 0):.2f}{blown_note}")
+    else:
+        print("Bucket mode: not yet (activates once equity passes 2x the initial floor)")
 
     print(f"Open positions ({len(positions)}):")
     for p in positions:

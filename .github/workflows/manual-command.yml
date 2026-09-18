@@ -71,7 +71,7 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          git add state/bot_state.json state/positions.json
+          git add state/bot_state.json state/positions.json state/buckets.json
           if ! git diff --cached --quiet; then
             git commit -m "Update bot state via manual command: ${{ inputs.command }}"
             git push

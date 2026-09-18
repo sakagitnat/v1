@@ -3,15 +3,20 @@ import pandas as pd
 from trading.config import settings
 from trading.data.market_data import load_watchlist_bars
 from trading.execution.broker import AlpacaBroker
+from trading.execution.buckets import init_buckets_if_needed, is_blown, rebalance, save_buckets
 from trading.execution.positions import load_positions, record_close, record_open
-from trading.execution.state import load_state, set_capital_floor
+from trading.execution.state import load_state, set_capital_floor, set_milestone_reached
 from trading.logging_utils import get_logger
 from trading.risk.ratchet import maybe_ratchet_floor
 from trading.risk.risk_manager import RiskManager
 from trading.strategy.base import Action
 from trading.strategy.breakout import BreakoutStrategy
+from trading.strategy.mean_reversion import MeanReversionStrategy
 
 logger = get_logger(__name__)
+
+STRATEGY_REGISTRY = {"breakout": BreakoutStrategy, "mean_reversion": MeanReversionStrategy}
+BUCKET_MAX_OPEN_POSITIONS = 2
 
 
 def run_once(lookback_days: int = 150):
@@ -35,6 +40,15 @@ def run_once(lookback_days: int = 150):
     whether equity has grown enough above it to "ratchet" the floor up --
     banking part of the gain as a new, higher protected minimum -- before
     building the risk manager (see risk/ratchet.py).
+
+    Once equity first exceeds Settings.withdrawal_multiple x the original
+    floor (e.g. $100 -> $200), everything above the (still-ratcheting)
+    floor switches to bucket mode (buckets.py): a "safe" bucket trading
+    conservatively and one or more "risk" buckets trading aggressively,
+    each sized off its own virtual cash rather than total account equity.
+    A risk bucket that loses its cash down near zero ("blown") pauses
+    until profit from other risk buckets -- or new growth -- refills it.
+    Before the milestone, trading is unchanged: one strategy, one pool.
     """
     state = load_state()
     if state.get("paused"):
@@ -57,7 +71,90 @@ def run_once(lookback_days: int = 150):
         )
         set_capital_floor(new_floor)
         capital_floor = new_floor
+        state = load_state()
 
+    initial_floor = state.get("initial_floor")
+    if (
+        not state.get("milestone_reached")
+        and initial_floor
+        and equity > initial_floor * settings.withdrawal_multiple
+    ):
+        logger.info(
+            "MILESTONE: equity %.2f passed %.0fx the initial floor (%.2f) -- switching to bucket mode "
+            "(safe + risk) for everything above the capital floor from here on.",
+            equity, settings.withdrawal_multiple, initial_floor,
+        )
+        set_milestone_reached(True)
+        state = load_state()
+
+    end = pd.Timestamp.today().normalize()
+    start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    bars = load_watchlist_bars(settings.watchlist, start=start)
+
+    if state.get("milestone_reached"):
+        _run_bucket_mode(broker, bars, equity, capital_floor)
+    else:
+        _run_single_strategy_mode(broker, bars, equity, capital_floor)
+
+
+def _manage_tracked_positions(broker: AlpacaBroker, buckets: dict | None) -> dict:
+    """Shared by both modes: for every tracked position, either notice it
+    closed (crediting its bucket's cash with the sale proceeds, if it has
+    one) or re-arm fresh stop/limit DAY orders so protection stays live
+    intraday today too. Returns the (possibly bucket-credited) buckets dict.
+    """
+    tracked = load_positions()
+    for symbol, pos in list(tracked.items()):
+        qty = broker.get_position_qty(symbol)
+        if qty <= 0:
+            bucket_name = pos.get("bucket")
+            if buckets is not None and bucket_name and bucket_name in buckets:
+                exit_price = broker.get_last_filled_sell_price(symbol)
+                proceeds = pos["qty"] * exit_price if exit_price > 0 else 0.0
+                buckets[bucket_name]["cash"] += proceeds
+                logger.info(
+                    "%s: position closed, credited %.2f to bucket '%s' (exit ~%.2f)",
+                    symbol, proceeds, bucket_name, exit_price,
+                )
+            else:
+                logger.info("%s: position closed (stop or target filled)", symbol)
+            record_close(symbol)
+            continue
+        broker.cancel_open_orders(symbol)
+        broker.submit_stop_sell(symbol, qty, pos["stop_price"])
+        broker.submit_limit_sell(symbol, qty, pos["target_price"])
+    if buckets is not None:
+        save_buckets(buckets)
+    return buckets
+
+
+def _try_enter(broker, symbol, signal, notional, bucket_name=None) -> bool:
+    if notional <= 0:
+        logger.info("Skipping %s: notional size computed as 0", symbol)
+        return False
+    logger.info(
+        "BUY %s ~$%.2f @ ~%.2f (stop %.2f, target %.2f)%s",
+        symbol, notional, signal.price, signal.stop_price, signal.take_profit_price,
+        f" [bucket {bucket_name}]" if bucket_name else "",
+    )
+    broker.submit_notional_buy(symbol, notional)
+    qty = broker.wait_for_position_qty(symbol)
+    if qty <= 0:
+        logger.info(
+            "%s: buy did not fill in time (market likely closed) -- cancelling so it doesn't "
+            "fill later untracked; will retry next run",
+            symbol,
+        )
+        broker.cancel_open_orders(symbol)
+        return False
+
+    broker.submit_stop_sell(symbol, qty, signal.stop_price)
+    broker.submit_limit_sell(symbol, qty, signal.take_profit_price)
+    record_open(symbol, qty, signal.stop_price, signal.take_profit_price, bucket=bucket_name, entry_price=signal.price)
+    return True
+
+
+def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor):
     risk = RiskManager(
         equity=equity,
         risk_per_trade=settings.risk_per_trade,
@@ -72,32 +169,12 @@ def run_once(lookback_days: int = 150):
             equity, capital_floor,
         )
 
-    end = pd.Timestamp.today().normalize()
-    start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
-    bars = load_watchlist_bars(settings.watchlist, start=start)
     strategy = BreakoutStrategy()
-
-    # 1. Re-check tracked positions: if Alpaca no longer shows the position
-    #    open, yesterday's stop or limit order filled -- stop tracking it.
-    #    Otherwise cancel any leftover DAY orders and re-arm fresh ones so
-    #    the stop-loss / take-profit stay live intraday today too.
-    tracked = load_positions()
-    for symbol, pos in list(tracked.items()):
-        qty = broker.get_position_qty(symbol)
-        if qty <= 0:
-            logger.info("%s: position closed (stop or target filled)", symbol)
-            record_close(symbol)
-            continue
-        broker.cancel_open_orders(symbol)
-        broker.submit_stop_sell(symbol, qty, pos["stop_price"])
-        broker.submit_limit_sell(symbol, qty, pos["target_price"])
+    _manage_tracked_positions(broker, buckets=None)
 
     tracked = load_positions()
-    # Union with Alpaca's actual open positions (not just our tracked ones)
-    # so a manual buy or an untracked fill never gets double-bought here.
     open_symbols = set(tracked.keys()) | broker.open_symbols()
 
-    # 2. Evaluate new entries for symbols not already held.
     for symbol, df in bars.items():
         if symbol in open_symbols or df.empty:
             continue
@@ -113,29 +190,56 @@ def run_once(lookback_days: int = 150):
             continue
 
         notional = risk.notional_size(signal.price, signal.stop_price)
-        if notional <= 0:
-            logger.info("Skipping %s: notional size computed as 0", symbol)
+        if _try_enter(broker, symbol, signal, notional):
+            open_symbols.add(symbol)
+
+
+def _run_bucket_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor: float):
+    buckets = init_buckets_if_needed()
+    buckets = _manage_tracked_positions(broker, buckets=buckets)
+
+    growth_capital = max(0.0, equity - (capital_floor or 0.0))
+    buckets = rebalance(buckets, growth_capital, settings.bucket_safe_fraction)
+    save_buckets(buckets)
+
+    tracked = load_positions()
+    open_symbols = set(tracked.keys()) | broker.open_symbols()
+    bucket_open_counts = {name: 0 for name in buckets}
+    for pos in tracked.values():
+        if pos.get("bucket") in bucket_open_counts:
+            bucket_open_counts[pos["bucket"]] += 1
+
+    for bucket_name, bucket in buckets.items():
+        strategy_cls = STRATEGY_REGISTRY.get(bucket.get("strategy"), BreakoutStrategy)
+        strategy = strategy_cls()
+        bucket_risk_per_trade = settings.risk_per_trade * (0.5 if bucket_name == "safe" else 1.0)
+
+        if bucket_name != "safe" and is_blown(bucket):
+            logger.info("Bucket '%s' is blown (cash %.2f) -- skipping new entries until refilled", bucket_name, bucket["cash"])
             continue
 
-        logger.info(
-            "BUY %s ~$%.2f @ ~%.2f (stop %.2f, target %.2f)",
-            symbol, notional, signal.price, signal.stop_price, signal.take_profit_price,
-        )
-        broker.submit_notional_buy(symbol, notional)
-        qty = broker.wait_for_position_qty(symbol)
-        if qty <= 0:
-            logger.info(
-                "%s: buy did not fill in time (market likely closed) -- cancelling so it doesn't "
-                "fill later untracked; will retry next run",
-                symbol,
-            )
-            broker.cancel_open_orders(symbol)
-            continue
+        risk = RiskManager(equity=bucket["cash"], risk_per_trade=bucket_risk_per_trade, max_open_positions=BUCKET_MAX_OPEN_POSITIONS)
 
-        broker.submit_stop_sell(symbol, qty, signal.stop_price)
-        broker.submit_limit_sell(symbol, qty, signal.take_profit_price)
-        record_open(symbol, qty, signal.stop_price, signal.take_profit_price)
-        open_symbols.add(symbol)
+        for symbol, df in bars.items():
+            if symbol in open_symbols or df.empty:
+                continue
+            if bucket_open_counts.get(bucket_name, 0) >= BUCKET_MAX_OPEN_POSITIONS:
+                break
+
+            prepared = strategy.prepare(df)
+            last_row = prepared.iloc[-1]
+            signal = strategy.signal_for_row(symbol, last_row, in_position=False)
+            if signal.action != Action.BUY:
+                continue
+
+            notional = risk.notional_size(signal.price, signal.stop_price)
+            if notional <= 0:
+                continue
+            if _try_enter(broker, symbol, signal, notional, bucket_name=bucket_name):
+                open_symbols.add(symbol)
+                bucket_open_counts[bucket_name] = bucket_open_counts.get(bucket_name, 0) + 1
+                buckets[bucket_name]["cash"] -= notional
+                save_buckets(buckets)
 
 
 if __name__ == "__main__":

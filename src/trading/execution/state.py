@@ -4,7 +4,7 @@ from typing import Optional
 
 _STATE_PATH = Path(__file__).resolve().parents[3] / "state" / "bot_state.json"
 
-_DEFAULTS = {"paused": False, "capital_floor": None, "initial_floor": None}
+_DEFAULTS = {"paused": False, "capital_floor": None, "initial_floor": None, "milestone_reached": False}
 
 
 def load_state() -> dict:
@@ -53,3 +53,14 @@ def banked_profit(state: dict) -> float:
     if floor is None or initial is None:
         return 0.0
     return max(0.0, floor - initial)
+
+
+def set_milestone_reached(reached: bool = True) -> None:
+    """Marks that equity has crossed withdrawal_multiple x initial_floor at
+    least once -- e.g. the $100 -> $200 "principal back + first $100 of
+    usable profit" goal. From then on the live bot splits everything above
+    the capital floor into buckets (safe / risk) instead of trading it all
+    with one strategy. See buckets.py and Settings.withdrawal_multiple."""
+    state = load_state()
+    state["milestone_reached"] = reached
+    _write_state(state)

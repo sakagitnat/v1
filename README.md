@@ -219,6 +219,36 @@ in chat and it'll walk through it with you rather than trigger a transfer
 on its own; moving money out of a brokerage account should always be a
 step you take knowingly, not something a bot decides for you.
 
+### Bucket mode (safe + risk, once you're past the "withdraw" milestone)
+
+The first time equity exceeds `WITHDRAWAL_MULTIPLE` (default 2.0) times the
+initial floor -- e.g. $100 -> $200, "principal back plus a first $100 of
+usable profit" -- the live bot permanently switches from one strategy
+trading the whole account to **buckets** (`src/trading/execution/buckets.py`,
+`state/buckets.json`), each sized off its own virtual cash instead of
+total equity:
+
+- **`safe`** -- Mean Reversion, at half the configured `RISK_PER_TRADE`.
+  Historically the strategy that best avoided losses in a bad market (see
+  "Comparing strategies" above).
+- **`risk1`** -- Breakout (the same calmar-tuned strategy the bot already
+  uses), at the full `RISK_PER_TRADE`, aimed at maximum profit. Add more
+  `riskN` buckets later by adding entries to `state/buckets.json` (or ask
+  in chat) -- `buckets.rebalance()` already splits the shared risk pool
+  across however many there are.
+
+Each run, `growth_capital` (equity above the capital floor) is split
+`BUCKET_SAFE_FRACTION` (default 50%) to the safe bucket and the rest
+across risk buckets, but a bucket's cash only ever gets topped up toward
+that target -- it's never clawed back; a bucket only loses cash through
+its own trading losses. If a risk bucket's cash drops below $5 ("blown"),
+it stops opening new positions until profit from other risk buckets --
+or new growth -- refills it, ahead of any bucket that's still healthy.
+This is a simplified accounting model (it compares bucket cash, not the
+current value of what a bucket has invested, so it can be imprecise while
+positions are open); Alpaca's own buying power is the backstop that keeps
+that imprecision safe rather than an actual overspend.
+
 ## Tests
 
 ```bash
@@ -241,6 +271,7 @@ src/trading/
     regime_adaptive.py        # switches between the sub-strategies by market regime (available, not default)
   risk/
     risk_manager.py        # position sizing, daily-loss circuit breaker
+    ratchet.py               # banks profit by raising the capital floor as equity grows
   backtest/
     engine.py              # event-driven backtester
     metrics.py              # CAGR, Sharpe, drawdown, win rate
@@ -248,15 +279,16 @@ src/trading/
     market_data.py          # historical bars via yfinance
   execution/
     broker.py               # Alpaca order placement (paper by default), notional buys + stop/limit orders
-    scheduler.py            # one strategy evaluation + order pass
-    state.py                # paused flag + capital floor, shared with the daily workflow
-    positions.py             # tracked stop/target prices for open fractional positions
+    scheduler.py            # one strategy evaluation + order pass; single-strategy or bucket mode
+    state.py                # paused flag, capital floor, milestone flag -- shared with the daily workflow
+    positions.py             # tracked stop/target prices (+ owning bucket) for open fractional positions
+    buckets.py                # safe/risk virtual sub-accounts, active once the withdrawal milestone hits
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
   optimize_strategy.py         # train/test parameter grid search (calmar or win_rate)
   run_paper_trading.py          # used by the daily-trading.yml workflow
-  cli.py                         # status / pause / resume / buy / sell -- used by manual-command.yml
+  cli.py                         # status / pause / resume / buy / sell / set-floor / cancel -- used by manual-command.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
@@ -266,6 +298,7 @@ scripts/
 state/
   bot_state.json
   positions.json
+  buckets.json
 tests/
 ```
 

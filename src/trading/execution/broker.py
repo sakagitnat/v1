@@ -95,6 +95,23 @@ class AlpacaBroker:
         )
         return self.client.submit_order(order)
 
+    def get_last_filled_sell_price(self, symbol: str) -> float:
+        """The fill price of the most recent filled SELL order for symbol --
+        used to credit a bucket's cash with the actual sale proceeds when a
+        stop or limit order closes its position (see buckets.py)."""
+        from alpaca.trading.enums import OrderSide, QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+
+        request = GetOrdersRequest(
+            status=QueryOrderStatus.CLOSED, symbols=[symbol], side=OrderSide.SELL, limit=5
+        )
+        orders = self.client.get_orders(request)
+        filled = [o for o in orders if getattr(o, "filled_avg_price", None)]
+        if not filled:
+            return 0.0
+        filled.sort(key=lambda o: o.filled_at, reverse=True)
+        return float(filled[0].filled_avg_price)
+
     def cancel_open_orders(self, symbol: str):
         from alpaca.trading.enums import QueryOrderStatus
         from alpaca.trading.requests import GetOrdersRequest

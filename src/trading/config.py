@@ -37,6 +37,12 @@ class Settings:
     ratchet_bank_fraction: float = field(
         default_factory=lambda: float(os.getenv("RATCHET_BANK_FRACTION", "0.5"))
     )
+    withdrawal_multiple: float = field(
+        default_factory=lambda: float(os.getenv("WITHDRAWAL_MULTIPLE", "2.0"))
+    )
+    bucket_safe_fraction: float = field(
+        default_factory=lambda: float(os.getenv("BUCKET_SAFE_FRACTION", "0.5"))
+    )
 
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper

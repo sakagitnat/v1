@@ -10,7 +10,19 @@ def test_record_open_then_load_roundtrips(tmp_path, monkeypatch):
     monkeypatch.setattr(positions, "_POSITIONS_PATH", tmp_path / "nested" / "positions.json")
     positions.record_open("AAPL", qty=0.5, stop_price=190.0, target_price=210.0)
     result = positions.load_positions()
-    assert result == {"AAPL": {"qty": 0.5, "stop_price": 190.0, "target_price": 210.0}}
+    assert result == {
+        "AAPL": {
+            "qty": 0.5, "stop_price": 190.0, "target_price": 210.0, "bucket": None, "entry_price": None,
+        }
+    }
+
+
+def test_record_open_with_bucket_and_entry_price(tmp_path, monkeypatch):
+    monkeypatch.setattr(positions, "_POSITIONS_PATH", tmp_path / "positions.json")
+    positions.record_open("AAPL", qty=0.5, stop_price=190.0, target_price=210.0, bucket="risk1", entry_price=200.0)
+    result = positions.load_positions()
+    assert result["AAPL"]["bucket"] == "risk1"
+    assert result["AAPL"]["entry_price"] == 200.0
 
 
 def test_record_close_removes_symbol(tmp_path, monkeypatch):
