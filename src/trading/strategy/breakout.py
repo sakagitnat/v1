@@ -13,20 +13,22 @@ class BreakoutStrategy:
     `entry_window` bars. Exit: close drops below the lowest low of the prior
     `exit_window` bars, or an ATR-based stop-loss / take-profit is hit.
 
-    Defaults tuned by scripts/optimize_strategy.py (2026-09-18): grid-searched
-    on 2019-2023, validated on the untouched 2024-present holdout, where it
-    raised win rate from 45.5% to 68.6% (Sharpe 1.26 -> 0.94, CAGR 13.9% ->
-    8.1% -- a deliberate trade: smaller, more frequent wins over fewer,
-    larger ones). See that script's docstring for the train/test methodology.
+    Defaults tuned by scripts/optimize_strategy.py --objective calmar
+    (2026-09-18): grid-searched on 2019-2023 for the highest CAGR per unit
+    of max drawdown, rejecting any combo whose drawdown breached -25%,
+    then validated on the untouched 2024-present holdout (TRAIN cagr=14.7%
+    maxdd=-8.5%; TEST cagr=7.1% maxdd=-6.8%, both profitable with a
+    controlled drawdown). Optimizes for total profit without a severe
+    drawdown, not for win rate -- see that script's docstring.
     """
 
     def __init__(
         self,
-        entry_window: int = 10,
-        exit_window: int = 15,
+        entry_window: int = 30,
+        exit_window: int = 10,
         atr_window: int = 14,
         atr_stop_mult: float = 2.5,
-        atr_target_mult: float = 1.5,
+        atr_target_mult: float = 4.0,
     ):
         self.entry_window = entry_window
         self.exit_window = exit_window
