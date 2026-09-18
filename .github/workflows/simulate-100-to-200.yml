@@ -1,0 +1,22 @@
+name: Simulate 100 to 200 (temporary)
+
+# One-off: how long would it historically have taken $100 to reach $200
+# under the real capital-floor ladder (capital_floor=100, ladder=True).
+# Requested ad hoc in chat -- delete this workflow and
+# scripts/simulate_100_to_200.py once done.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python scripts/simulate_100_to_200.py
