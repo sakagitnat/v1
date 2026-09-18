@@ -39,16 +39,21 @@ def run_once(lookback_days: int = 150):
     If a capital floor is set (state/bot_state.json), this also checks
     whether equity has grown enough above it to "ratchet" the floor up --
     banking part of the gain as a new, higher protected minimum -- before
-    building the risk manager (see risk/ratchet.py).
+    building the risk manager (see risk/ratchet.py). The floor never rises
+    past Settings.withdrawal_multiple x the initial floor (e.g. $100 ->
+    $200): that's a fixed checkpoint, "the money earmarked to withdraw,"
+    not something that keeps climbing.
 
-    Once equity first exceeds Settings.withdrawal_multiple x the original
-    floor (e.g. $100 -> $200), everything above the (still-ratcheting)
-    floor switches to bucket mode (buckets.py): a "safe" bucket trading
+    Once equity first exceeds Settings.bucket_activation_multiple x the
+    initial floor (e.g. $100 -> $300), the capital floor is snapped to
+    exactly that $200 withdrawal checkpoint (even if the gradual ratchet
+    hadn't quite reached it) and stays there for good, and everything
+    above it switches to bucket mode (buckets.py): a "safe" bucket trading
     conservatively and one or more "risk" buckets trading aggressively,
     each sized off its own virtual cash rather than total account equity.
     A risk bucket that loses its cash down near zero ("blown") pauses
     until profit from other risk buckets -- or new growth -- refills it.
-    Before the milestone, trading is unchanged: one strategy, one pool.
+    Before that milestone, trading is unchanged: one strategy, one pool.
     """
     state = load_state()
     if state.get("paused"):
@@ -58,34 +63,45 @@ def run_once(lookback_days: int = 150):
     capital_floor = state.get("capital_floor")
     broker = AlpacaBroker()
     equity = broker.account_equity()
-
-    new_floor = maybe_ratchet_floor(
-        equity, capital_floor, settings.ratchet_trigger_pct, settings.ratchet_bank_fraction
-    )
-    if new_floor is not None:
-        logger.info(
-            "Ratcheting capital floor %.2f -> %.2f (equity %.2f grew >=%.0f%% above the floor; "
-            "banking %.0f%% of that gain)",
-            capital_floor, new_floor, equity, settings.ratchet_trigger_pct * 100,
-            settings.ratchet_bank_fraction * 100,
-        )
-        set_capital_floor(new_floor)
-        capital_floor = new_floor
-        state = load_state()
-
     initial_floor = state.get("initial_floor")
-    if (
-        not state.get("milestone_reached")
-        and initial_floor
-        and equity > initial_floor * settings.withdrawal_multiple
-    ):
-        logger.info(
-            "MILESTONE: equity %.2f passed %.0fx the initial floor (%.2f) -- switching to bucket mode "
-            "(safe + risk) for everything above the capital floor from here on.",
-            equity, settings.withdrawal_multiple, initial_floor,
+    withdrawal_checkpoint = initial_floor * settings.withdrawal_multiple if initial_floor else None
+
+    # The floor ratchets up as normal (banking profit) but never past the
+    # fixed withdrawal checkpoint (e.g. $200 = 2x the initial $100) -- once
+    # bucket mode activates, that checkpoint stays put as "the money that's
+    # earmarked to withdraw," and growth beyond it is bucket-managed instead
+    # of being folded into more ratcheting.
+    if not state.get("milestone_reached"):
+        new_floor = maybe_ratchet_floor(
+            equity, capital_floor, settings.ratchet_trigger_pct, settings.ratchet_bank_fraction,
+            cap=withdrawal_checkpoint,
         )
-        set_milestone_reached(True)
-        state = load_state()
+        if new_floor is not None:
+            logger.info(
+                "Ratcheting capital floor %.2f -> %.2f (equity %.2f grew >=%.0f%% above the floor; "
+                "banking %.0f%% of that gain)",
+                capital_floor, new_floor, equity, settings.ratchet_trigger_pct * 100,
+                settings.ratchet_bank_fraction * 100,
+            )
+            set_capital_floor(new_floor)
+            capital_floor = new_floor
+            state = load_state()
+
+        if (
+            initial_floor
+            and withdrawal_checkpoint
+            and equity > initial_floor * settings.bucket_activation_multiple
+        ):
+            logger.info(
+                "MILESTONE: equity %.2f passed %.0fx the initial floor -- locking the capital floor "
+                "at the %.2f withdrawal checkpoint and switching to bucket mode (safe + risk) for "
+                "everything above it from here on.",
+                equity, settings.bucket_activation_multiple, withdrawal_checkpoint,
+            )
+            set_capital_floor(withdrawal_checkpoint)  # snap to exactly the checkpoint, even if the
+            capital_floor = withdrawal_checkpoint      # gradual ratchet hadn't quite reached it yet
+            set_milestone_reached(True)
+            state = load_state()
 
     end = pd.Timestamp.today().normalize()
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")

@@ -219,15 +219,27 @@ in chat and it'll walk through it with you rather than trigger a transfer
 on its own; moving money out of a brokerage account should always be a
 step you take knowingly, not something a bot decides for you.
 
-### Bucket mode (safe + risk, once you're past the "withdraw" milestone)
+### Bucket mode (safe + risk, once you're well past the "withdraw" milestone)
 
-The first time equity exceeds `WITHDRAWAL_MULTIPLE` (default 2.0) times the
-initial floor -- e.g. $100 -> $200, "principal back plus a first $100 of
-usable profit" -- the live bot permanently switches from one strategy
-trading the whole account to **buckets** (`src/trading/execution/buckets.py`,
-`state/buckets.json`), each sized off its own virtual cash instead of
-total equity:
+Two fixed checkpoints, both multiples of the initial floor (e.g. $100):
 
+1. **`WITHDRAWAL_MULTIPLE`** (default 2.0 -> $200) -- "principal back plus a
+   first $100 of usable profit." The capital floor ratchets up toward this
+   as normal (banking profit -- see above) but never past it; once
+   reached, the floor **locks there for good** instead of continuing to
+   climb. This is money conceptually earmarked to withdraw, not something
+   that keeps growing on its own.
+2. **`BUCKET_ACTIVATION_MULTIPLE`** (default 3.0 -> $300) -- once equity
+   first exceeds this, the floor is snapped to exactly the $200 checkpoint
+   (even if gradual ratcheting hadn't quite reached it yet) and the live
+   bot permanently switches from one strategy trading the whole account to
+   **buckets** (`src/trading/execution/buckets.py`, `state/buckets.json`),
+   each sized off its own virtual cash instead of total equity. In the
+   example, that's the $100 between $200 and $300 that starts getting
+   managed this way -- more precisely, everything above the now-frozen
+   $200 floor, however much that turns out to be by the time $300 is hit.
+
+The buckets themselves:
 - **`safe`** -- Mean Reversion, at half the configured `RISK_PER_TRADE`.
   Historically the strategy that best avoided losses in a bad market (see
   "Comparing strategies" above).
@@ -237,8 +249,8 @@ total equity:
   in chat) -- `buckets.rebalance()` already splits the shared risk pool
   across however many there are.
 
-Each run, `growth_capital` (equity above the capital floor) is split
-`BUCKET_SAFE_FRACTION` (default 50%) to the safe bucket and the rest
+Each run, `growth_capital` (equity above the now-frozen $200 floor) is
+split `BUCKET_SAFE_FRACTION` (default 50%) to the safe bucket and the rest
 across risk buckets, but a bucket's cash only ever gets topped up toward
 that target -- it's never clawed back; a bucket only loses cash through
 its own trading losses. If a risk bucket's cash drops below $5 ("blown"),

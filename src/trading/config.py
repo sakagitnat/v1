@@ -40,6 +40,9 @@ class Settings:
     withdrawal_multiple: float = field(
         default_factory=lambda: float(os.getenv("WITHDRAWAL_MULTIPLE", "2.0"))
     )
+    bucket_activation_multiple: float = field(
+        default_factory=lambda: float(os.getenv("BUCKET_ACTIVATION_MULTIPLE", "3.0"))
+    )
     bucket_safe_fraction: float = field(
         default_factory=lambda: float(os.getenv("BUCKET_SAFE_FRACTION", "0.5"))
     )
