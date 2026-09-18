@@ -25,7 +25,7 @@ from trading.config import settings
 from trading.data.market_data import load_daily_bars_yfinance
 from trading.execution.broker import AlpacaBroker
 from trading.execution.positions import record_close, record_open
-from trading.execution.state import load_state, set_capital_floor, set_paused
+from trading.execution.state import banked_profit, load_state, set_capital_floor, set_paused
 from trading.risk.risk_manager import RiskManager
 
 
@@ -51,6 +51,10 @@ def cmd_status(_args):
             f"Capital floor: {capital_floor} ({status}); "
             f"effective risk per trade: {risk.effective_risk_per_trade() * 100:.2f}% "
             f"(base {settings.risk_per_trade * 100:.2f}%)"
+        )
+        print(
+            f"Initial floor (original principal): {state.get('initial_floor')}; "
+            f"banked profit (locked in by the ratchet, not withdrawn): {banked_profit(state):.2f}"
         )
     else:
         print("Capital floor: not set")

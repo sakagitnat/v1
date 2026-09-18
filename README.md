@@ -195,11 +195,29 @@ When a floor is set, the live bot:
   `RISK_PER_TRADE` while the cushion is under 20%, the full amount between
   20-50%, and 1.5x once the cushion exceeds 50% -- trading more of the
   profit built up, not more of the original principal.
+- **Ratchets the floor up as equity grows** (`risk/ratchet.py`): once
+  equity is `RATCHET_TRIGGER_PCT` (default 20%) above the current floor,
+  the floor rises by `RATCHET_BANK_FRACTION` (default 50%) of that excess
+  -- "banking" part of each gain as a new, higher protected minimum, so
+  profit already made becomes progressively harder to trade away. The
+  first floor ever set is remembered as `initial_floor`; `cli.py status`
+  reports `capital_floor - initial_floor` as banked profit.
 
-This is a strong protection, not an absolute guarantee: an overnight gap
-past a stop-loss can still land below the floor in one move, since a
-stop-loss order fills at the next available price, not necessarily its
-trigger price.
+This protects money *within* the trading account -- it does not withdraw
+anything to a bank account. That's a separate, manual, real-money-only
+step (see below). It's also a strong protection, not an absolute
+guarantee: an overnight gap past a stop-loss can still land below the
+floor in one move, since a stop-loss order fills at the next available
+price, not necessarily its trigger price.
+
+**Turning banked profit into money you can actually spend** needs a live
+(not paper) Alpaca account funded with real money, plus a bank transfer
+out -- both real-money steps this project deliberately does not automate.
+When paper trading has proven the strategy out and you're ready to go
+live, do that funding/withdrawal through Alpaca's own dashboard, or ask
+in chat and it'll walk through it with you rather than trigger a transfer
+on its own; moving money out of a brokerage account should always be a
+step you take knowingly, not something a bot decides for you.
 
 ## Tests
 

@@ -4,7 +4,7 @@ from typing import Optional
 
 _STATE_PATH = Path(__file__).resolve().parents[3] / "state" / "bot_state.json"
 
-_DEFAULTS = {"paused": False, "capital_floor": None}
+_DEFAULTS = {"paused": False, "capital_floor": None, "initial_floor": None}
 
 
 def load_state() -> dict:
@@ -30,7 +30,26 @@ def set_paused(paused: bool) -> None:
 def set_capital_floor(floor: Optional[float]) -> None:
     """Set (or, with None, clear) the equity floor: once account equity
     drops to or below this, the live bot stops opening new positions until
-    equity recovers above it. See RiskManager.capital_floor / ladder."""
+    equity recovers above it. See RiskManager.capital_floor / ladder.
+
+    The first time a floor is set, it's also remembered as initial_floor
+    (the original principal) so banked profit -- how much the ratchet has
+    raised the floor by -- can be reported later. Clearing the floor
+    (floor=None) leaves initial_floor alone.
+    """
     state = load_state()
     state["capital_floor"] = floor
+    if floor is not None and state.get("initial_floor") is None:
+        state["initial_floor"] = floor
     _write_state(state)
+
+
+def banked_profit(state: dict) -> float:
+    """How much the capital floor has been ratcheted up by since it was
+    first set -- i.e. how much profit is now protected/"locked in", not
+    at risk of being traded away. 0 if no floor has ever been set."""
+    floor = state.get("capital_floor")
+    initial = state.get("initial_floor")
+    if floor is None or initial is None:
+        return 0.0
+    return max(0.0, floor - initial)

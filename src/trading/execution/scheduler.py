@@ -4,8 +4,9 @@ from trading.config import settings
 from trading.data.market_data import load_watchlist_bars
 from trading.execution.broker import AlpacaBroker
 from trading.execution.positions import load_positions, record_close, record_open
-from trading.execution.state import load_state
+from trading.execution.state import load_state, set_capital_floor
 from trading.logging_utils import get_logger
+from trading.risk.ratchet import maybe_ratchet_floor
 from trading.risk.risk_manager import RiskManager
 from trading.strategy.base import Action
 from trading.strategy.breakout import BreakoutStrategy
@@ -29,6 +30,11 @@ def run_once(lookback_days: int = 150):
     shares. Alpaca doesn't support bracket orders for fractional quantities,
     so each open position gets two independent DAY orders -- a stop and a
     limit -- re-armed every run (see positions.py and broker.py).
+
+    If a capital floor is set (state/bot_state.json), this also checks
+    whether equity has grown enough above it to "ratchet" the floor up --
+    banking part of the gain as a new, higher protected minimum -- before
+    building the risk manager (see risk/ratchet.py).
     """
     state = load_state()
     if state.get("paused"):
@@ -38,6 +44,20 @@ def run_once(lookback_days: int = 150):
     capital_floor = state.get("capital_floor")
     broker = AlpacaBroker()
     equity = broker.account_equity()
+
+    new_floor = maybe_ratchet_floor(
+        equity, capital_floor, settings.ratchet_trigger_pct, settings.ratchet_bank_fraction
+    )
+    if new_floor is not None:
+        logger.info(
+            "Ratcheting capital floor %.2f -> %.2f (equity %.2f grew >=%.0f%% above the floor; "
+            "banking %.0f%% of that gain)",
+            capital_floor, new_floor, equity, settings.ratchet_trigger_pct * 100,
+            settings.ratchet_bank_fraction * 100,
+        )
+        set_capital_floor(new_floor)
+        capital_floor = new_floor
+
     risk = RiskManager(
         equity=equity,
         risk_per_trade=settings.risk_per_trade,
