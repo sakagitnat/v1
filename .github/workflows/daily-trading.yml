@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   trade:
@@ -26,3 +26,14 @@ jobs:
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
           ALPACA_PAPER: "true"
         run: python scripts/run_paper_trading.py
+      - name: Commit tracked-position changes (if any)
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/positions.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update tracked positions from daily run"
+            git push
+          else
+            echo "No position changes to commit."
+          fi

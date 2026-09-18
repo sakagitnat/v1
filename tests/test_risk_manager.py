@@ -81,3 +81,36 @@ def test_ladder_has_no_effect_when_disabled():
 def test_ladder_has_no_effect_without_a_floor():
     rm = RiskManager(equity=160, risk_per_trade=0.02, ladder=True)
     assert rm.effective_risk_per_trade() == 0.02
+
+
+def test_notional_size_respects_risk_budget():
+    rm = RiskManager(equity=100, risk_per_trade=0.01, max_open_positions=5)
+    notional = rm.notional_size(entry_price=150, stop_price=140)
+    assert notional == 15.0  # risk budget 1 / (10/150 risk fraction)
+
+
+def test_notional_size_capped_by_max_allocation():
+    rm = RiskManager(equity=100, risk_per_trade=0.01, max_open_positions=5)
+    notional = rm.notional_size(entry_price=100, stop_price=99)  # thin stop -> huge uncapped notional
+    assert notional == 20.0  # equity / max_open_positions
+
+
+def test_notional_size_capped_by_equity():
+    rm = RiskManager(equity=100, risk_per_trade=0.5, max_open_positions=1)
+    notional = rm.notional_size(entry_price=100, stop_price=95)
+    assert notional == 100.0
+
+
+def test_notional_size_zero_without_a_stop():
+    rm = RiskManager(equity=100, risk_per_trade=0.01)
+    assert rm.notional_size(entry_price=100, stop_price=None) == 0.0
+
+
+def test_notional_size_zero_when_stop_above_entry():
+    rm = RiskManager(equity=100, risk_per_trade=0.01)
+    assert rm.notional_size(entry_price=100, stop_price=105) == 0.0
+
+
+def test_notional_size_respects_capital_floor():
+    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
+    assert rm.notional_size(entry_price=100, stop_price=95) == 0.0

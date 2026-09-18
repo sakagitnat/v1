@@ -53,9 +53,15 @@ by default, with backtesting on free historical data.
 3. **Backtest engine** (`src/trading/backtest/engine.py`) — replays the
    strategy bar-by-bar over historical data and reports CAGR, Sharpe ratio,
    max drawdown, win rate, and the full trade log.
-4. **Execution** (`src/trading/execution/`) — wraps Alpaca's trading API to
-   place bracket orders (entry + stop-loss + take-profit) sized by the risk
-   manager, using the account's live equity.
+4. **Execution** (`src/trading/execution/`) — wraps Alpaca's trading API.
+   Buys are **notional** (a dollar amount, not a share count), sized by the
+   risk manager, so small accounts can hold fractional shares of expensive
+   stocks. Alpaca doesn't support bracket orders (built-in stop-loss +
+   take-profit) for fractional quantities, so each entry is followed by two
+   independent DAY orders for the exact filled quantity -- a stop and a
+   limit -- which `positions.py` tracks and the scheduler re-arms every run
+   (cancelling and resubmitting) so protection stays live intraday each
+   trading day, not just the day it opened.
 
 ## Setup
 
@@ -223,9 +229,10 @@ src/trading/
   data/
     market_data.py          # historical bars via yfinance
   execution/
-    broker.py               # Alpaca order placement (paper by default)
+    broker.py               # Alpaca order placement (paper by default), notional buys + stop/limit orders
     scheduler.py            # one strategy evaluation + order pass
-    state.py                # paused/resumed flag shared with the daily workflow
+    state.py                # paused flag + capital floor, shared with the daily workflow
+    positions.py             # tracked stop/target prices for open fractional positions
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
@@ -240,6 +247,7 @@ scripts/
   optimize-strategy.yml
 state/
   bot_state.json
+  positions.json
 tests/
 ```
 

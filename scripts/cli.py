@@ -12,7 +12,7 @@ Usage:
   python scripts/cli.py resume
   python scripts/cli.py set-floor AMOUNT
   python scripts/cli.py clear-floor
-  python scripts/cli.py buy SYMBOL [--qty N] [--risk-pct 0.01] [--stop-pct 0.05]
+  python scripts/cli.py buy SYMBOL [--notional 50] [--risk-pct 0.01] [--stop-pct 0.05]
   python scripts/cli.py sell SYMBOL
 """
 import argparse
@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading.config import settings
 from trading.data.market_data import load_daily_bars_yfinance
 from trading.execution.broker import AlpacaBroker
+from trading.execution.positions import record_close, record_open
 from trading.execution.state import load_state, set_capital_floor, set_paused
 from trading.risk.risk_manager import RiskManager
 
@@ -101,19 +102,27 @@ def cmd_buy(args):
     stop_price = price * (1 - args.stop_pct)
     target_price = price * (1 + args.stop_pct * 2)
 
-    if args.qty and args.qty > 0:
-        qty = args.qty
+    if args.notional and args.notional > 0:
+        notional = min(args.notional, equity)
     else:
         risk_amount = equity * args.risk_pct
-        qty = int(risk_amount // (price - stop_price))
+        notional = risk_amount / (args.stop_pct)  # risk_amount == notional * stop_pct
 
-    if qty <= 0:
-        print("Computed quantity is 0 -- order not placed.")
+    if notional <= 0:
+        print("Computed notional amount is 0 -- order not placed.")
         return
 
-    print(f"Placing BUY {symbol} x{qty} @ ~{price:.2f} (stop {stop_price:.2f}, target {target_price:.2f})")
-    broker.submit_bracket_buy(symbol, qty, stop_price, target_price)
-    print("Order submitted.")
+    print(f"Placing BUY {symbol} ~${notional:.2f} @ ~{price:.2f} (stop {stop_price:.2f}, target {target_price:.2f})")
+    broker.submit_notional_buy(symbol, notional)
+    qty = broker.wait_for_position_qty(symbol)
+    if qty <= 0:
+        print("Buy did not fill in time -- no stop/target orders placed. Check the Alpaca dashboard.")
+        return
+
+    broker.submit_stop_sell(symbol, qty, stop_price)
+    broker.submit_limit_sell(symbol, qty, target_price)
+    record_open(symbol, qty, stop_price, target_price)
+    print(f"Filled {qty} shares; stop/target orders placed.")
 
 
 def cmd_sell(args):
@@ -121,6 +130,7 @@ def cmd_sell(args):
     broker = AlpacaBroker()
     print(f"Closing position: {symbol}")
     broker.close_position(symbol)
+    record_close(symbol)
     print("Close order submitted.")
 
 
@@ -140,8 +150,8 @@ def main():
 
     buy_parser = sub.add_parser("buy")
     buy_parser.add_argument("symbol")
-    buy_parser.add_argument("--qty", type=int, default=0, help="Exact share count; overrides risk-based sizing")
-    buy_parser.add_argument("--risk-pct", type=float, default=0.01, help="Fraction of equity to risk if --qty is not given")
+    buy_parser.add_argument("--notional", type=float, default=0, help="Dollar amount to buy; overrides risk-based sizing")
+    buy_parser.add_argument("--risk-pct", type=float, default=0.01, help="Fraction of equity to risk if --notional is not given")
     buy_parser.add_argument("--stop-pct", type=float, default=0.05, help="Stop-loss distance below entry, as a fraction")
     buy_parser.set_defaults(func=cmd_buy)
 

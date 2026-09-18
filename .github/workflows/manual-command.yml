@@ -19,12 +19,8 @@ on:
         description: "Symbol (required for buy/sell)"
         required: false
         type: string
-      qty:
-        description: "Exact share count for buy (optional -- omit to size by risk %)"
-        required: false
-        type: string
       amount:
-        description: "Dollar amount (required for set-floor)"
+        description: "Dollar amount -- required for set-floor; optional for buy (omit to size by risk %)"
         required: false
         type: string
 
@@ -47,7 +43,6 @@ jobs:
           ALPACA_PAPER: "true"
           CMD: ${{ inputs.command }}
           SYMBOL: ${{ inputs.symbol }}
-          QTY: ${{ inputs.qty }}
           AMOUNT: ${{ inputs.amount }}
         run: |
           set -e
@@ -59,7 +54,7 @@ jobs:
               python scripts/cli.py set-floor "$AMOUNT"
               ;;
             buy)
-              python scripts/cli.py buy "$SYMBOL" --qty "${QTY:-0}"
+              python scripts/cli.py buy "$SYMBOL" --notional "${AMOUNT:-0}"
               ;;
             sell)
               python scripts/cli.py sell "$SYMBOL"
@@ -73,7 +68,7 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          git add state/bot_state.json
+          git add state/bot_state.json state/positions.json
           if ! git diff --cached --quiet; then
             git commit -m "Update bot state via manual command: ${{ inputs.command }}"
             git push

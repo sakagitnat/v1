@@ -41,10 +41,16 @@ class RiskManager:
     def at_or_below_floor(self) -> bool:
         return self.capital_floor is not None and self.equity <= self.capital_floor
 
+    def _can_open_new_position(self, entry_price: float) -> bool:
+        return not (
+            self._halted
+            or self._open_positions >= self.max_open_positions
+            or entry_price <= 0
+            or self.at_or_below_floor()
+        )
+
     def position_size(self, entry_price: float, stop_price: Optional[float]) -> int:
-        if self._halted or self._open_positions >= self.max_open_positions or entry_price <= 0:
-            return 0
-        if self.at_or_below_floor():
+        if not self._can_open_new_position(entry_price):
             return 0
 
         if stop_price is None:
@@ -60,6 +66,22 @@ class RiskManager:
         shares_by_risk = int(risk_amount // per_share_risk)
         shares_affordable = int(self.equity // entry_price)
         return max(0, min(shares_by_risk, shares_affordable))
+
+    def notional_size(self, entry_price: float, stop_price: Optional[float]) -> float:
+        """Dollar amount to invest in a fractional-share buy, sized so a
+        stop-out loses about `effective_risk_per_trade()` of equity -- the
+        fractional-share analogue of position_size's whole-share count."""
+        if not self._can_open_new_position(entry_price) or stop_price is None:
+            return 0.0
+
+        per_share_risk = entry_price - stop_price
+        if per_share_risk <= 0:
+            return 0.0
+        risk_amount = self.equity * self.effective_risk_per_trade()
+        risk_fraction = per_share_risk / entry_price
+        notional = risk_amount / risk_fraction
+        max_allocation = self.equity / self.max_open_positions
+        return max(0.0, min(notional, max_allocation, self.equity))
 
     def register_open(self):
         self._open_positions += 1
