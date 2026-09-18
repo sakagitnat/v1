@@ -25,6 +25,7 @@ class Settings:
     alpaca_paper: bool = field(default_factory=lambda: _env_bool("ALPACA_PAPER", True))
     allow_live_trading: bool = field(default_factory=lambda: _env_bool("ALLOW_LIVE_TRADING", False))
     watchlist: list[str] = field(default_factory=_default_watchlist)
+    regime_symbol: str = field(default_factory=lambda: os.getenv("REGIME_SYMBOL", "SPY").strip().upper())
     risk_per_trade: float = field(default_factory=lambda: float(os.getenv("RISK_PER_TRADE", "0.01")))
     max_open_positions: int = field(default_factory=lambda: int(os.getenv("MAX_OPEN_POSITIONS", "5")))
     max_daily_loss_pct: float = field(

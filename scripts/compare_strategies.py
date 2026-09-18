@@ -20,20 +20,13 @@ import pandas as pd
 from trading.backtest.engine import BacktestEngine
 from trading.backtest.metrics import compute_metrics
 from trading.config import settings
-from trading.data.market_data import load_watchlist_bars
+from trading.data.market_data import load_daily_bars_yfinance, load_watchlist_bars
 from trading.strategy.breakout import BreakoutStrategy
 from trading.strategy.buy_and_hold import BuyAndHoldStrategy
 from trading.strategy.macd_trend import MacdTrendStrategy
 from trading.strategy.mean_reversion import MeanReversionStrategy
+from trading.strategy.regime_adaptive import RegimeAdaptiveStrategy
 from trading.strategy.trend_momentum import TrendMomentumStrategy
-
-STRATEGIES = {
-    "trend_momentum": TrendMomentumStrategy,
-    "mean_reversion": MeanReversionStrategy,
-    "macd_trend": MacdTrendStrategy,
-    "breakout": BreakoutStrategy,
-    "buy_and_hold": BuyAndHoldStrategy,
-}
 
 # (label, start, end) -- end=None means "through the most recent bar"
 PERIODS = [
@@ -58,13 +51,23 @@ def slice_metrics(equity_curve: pd.Series, trades: list[dict], start: str, end: 
 
 def main():
     symbols = settings.watchlist
-    print(f"Fetching {symbols} from {FETCH_START} ...\n")
+    print(f"Fetching {symbols} from {FETCH_START} (regime reference: {settings.regime_symbol}) ...\n")
     bars = load_watchlist_bars(symbols, start=FETCH_START)
+    regime_bars = load_daily_bars_yfinance(settings.regime_symbol, start=FETCH_START)
+
+    strategies = {
+        "trend_momentum": TrendMomentumStrategy(),
+        "mean_reversion": MeanReversionStrategy(),
+        "macd_trend": MacdTrendStrategy(),
+        "breakout": BreakoutStrategy(),
+        "buy_and_hold": BuyAndHoldStrategy(),
+        "regime_adaptive": RegimeAdaptiveStrategy(regime_bars=regime_bars),
+    }
 
     results = {}
-    for name, strategy_cls in STRATEGIES.items():
+    for name, strategy in strategies.items():
         engine = BacktestEngine(
-            strategy=strategy_cls(),
+            strategy=strategy,
             starting_equity=100_000.0,
             risk_per_trade=settings.risk_per_trade,
             max_open_positions=settings.max_open_positions,

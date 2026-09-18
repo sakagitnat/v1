@@ -14,11 +14,10 @@ by default, with backtesting on free historical data.
 
 ## How it works
 
-1. **Strategies** (`src/trading/strategy/`) — five long-only strategies
+1. **Strategies** (`src/trading/strategy/`) — six long-only strategies
    sharing one interface (`prepare()` + `signal_for_row()`), so the backtest
-   engine and live execution work with any of them unchanged. `WATCHLIST`'s
-   default strategy is `trend_momentum`; swap it in `scripts/run_backtest.py`
-   / `run_paper_trading.py` to try another:
+   engine and live execution work with any of them unchanged. The default
+   used by both the backtest and the live/paper bot is **`regime_adaptive`**:
    - **`trend_momentum`** — enter when the 20-day EMA is above the 50-day
      EMA, price is above the 50-day EMA, and RSI(14) is 40–70 (momentum
      without chasing an overbought move).
@@ -30,9 +29,20 @@ by default, with backtesting on free historical data.
      buy a new N-day high, exit on a new M-day low.
    - **`buy_and_hold`** — not a real strategy; a benchmark to check whether
      an active strategy is actually earning its complexity.
+   - **`regime_adaptive`** (default) — switches between the sub-strategies
+     above based on the broad market's trend (`REGIME_SYMBOL`, SPY by
+     default): **bull → breakout**, **bear → mean_reversion**,
+     **neutral → macd_trend**. This mapping came out of backtesting all
+     five individually across 2020-2026's different market regimes (see
+     `compare_strategies.py` below) — breakout had the best risk-adjusted
+     returns in trending markets, mean_reversion was the only strategy that
+     didn't lose money in the 2022 bear market, and macd_trend is a more
+     conservative pick for the turning points between the two.
 
-   All (except buy-and-hold) exit on an ATR-based stop-loss / take-profit
-   in addition to their signal-based exit.
+   All the entry-based strategies (everything but buy-and-hold) exit on an
+   ATR-based stop-loss / take-profit in addition to their signal-based exit.
+   Swap the `strategy=` argument in `scripts/run_backtest.py` /
+   `trading/execution/scheduler.py` to use a single strategy instead.
 2. **Risk management** (`src/trading/risk/risk_manager.py`) — position size
    is capped so a stopped-out trade only loses `RISK_PER_TRADE` (default 1%)
    of account equity; a hard cap on concurrent open positions
@@ -153,12 +163,14 @@ pytest
 src/trading/
   config.py              # environment-driven settings, incl. the live-trading safety switch
   indicators.py           # SMA, EMA, RSI, MACD, ATR, Bollinger Bands, Donchian channel
+  regime.py                # bull/bear/neutral classifier used by regime_adaptive
   strategy/
-    trend_momentum.py     # EMA cross + RSI filter (default)
+    trend_momentum.py     # EMA cross + RSI filter
     mean_reversion.py      # Bollinger Band dip-buy
     macd_trend.py           # MACD cross filtered by 200-day trend
     breakout.py              # Donchian channel / Turtle-style breakout
     buy_and_hold.py           # benchmark, not a real strategy
+    regime_adaptive.py        # switches between the above by market regime (default)
   risk/
     risk_manager.py        # position sizing, daily-loss circuit breaker
   backtest/

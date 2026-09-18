@@ -1,23 +1,28 @@
 import pandas as pd
 
 from trading.config import settings
-from trading.data.market_data import load_watchlist_bars
+from trading.data.market_data import load_daily_bars_yfinance, load_watchlist_bars
 from trading.execution.broker import AlpacaBroker
 from trading.execution.state import load_state
 from trading.logging_utils import get_logger
 from trading.risk.risk_manager import RiskManager
 from trading.strategy.base import Action
-from trading.strategy.trend_momentum import TrendMomentumStrategy
+from trading.strategy.regime_adaptive import RegimeAdaptiveStrategy
 
 logger = get_logger(__name__)
 
 
-def run_once(lookback_days: int = 250):
+def run_once(lookback_days: int = 450):
     """Evaluate the strategy on the latest bar for each watchlist symbol and
     place/close paper (or, if explicitly enabled, live) orders accordingly.
 
     Meant to be invoked once per trading day shortly after market open, e.g.
     via cron or a scheduled GitHub Actions workflow.
+
+    lookback_days defaults to ~450 calendar days (~300 trading days) so the
+    200-day indicators used by the regime-adaptive strategy's sub-strategies
+    are already warmed up, both for the watchlist symbols and for the
+    regime reference symbol.
     """
     if load_state().get("paused"):
         logger.info("Bot is paused (state/bot_state.json) -- skipping this run.")
@@ -32,10 +37,11 @@ def run_once(lookback_days: int = 250):
         max_daily_loss_pct=settings.max_daily_loss_pct,
     )
 
-    strategy = TrendMomentumStrategy()
     end = pd.Timestamp.today().normalize()
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     bars = load_watchlist_bars(settings.watchlist, start=start)
+    regime_bars = load_daily_bars_yfinance(settings.regime_symbol, start=start)
+    strategy = RegimeAdaptiveStrategy(regime_bars=regime_bars)
 
     open_symbols = broker.open_symbols()
     for symbol, df in bars.items():
