@@ -1,0 +1,48 @@
+name: CFD Trading (OANDA)
+
+# Runs the CFD/forex strategy every 20 minutes on weekdays. Forex trades
+# ~24 hours a day Sunday evening through Friday evening UTC, so this
+# misses a few hours at each end of that window (Mon-Fri only) -- a known
+# simplification for now, not a full 24/5 schedule.
+#
+# Always runs against the PRACTICE account: OANDA_PRACTICE is hardcoded to
+# "true" below regardless of any secret, so this workflow can never place
+# a live order even by accident (same safety pattern as manual-command.yml
+# for the stock system).
+#
+# UNTESTED end-to-end as of writing -- see src/trading/cfd/broker.py's
+# docstring. Do not assume this works until it's been run against a real
+# OANDA practice account and its logs checked.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "7,27,47 * * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python scripts/run_cfd_trading.py
+        env:
+          OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
+          OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+          OANDA_PRACTICE: "true"
+      - name: Commit state changes (if any)
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/cfd_bot_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD bot state from scheduled run"
+            git push
+          else
+            echo "No state changes to commit."
+          fi

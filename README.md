@@ -345,6 +345,64 @@ current value of what a bucket has invested, so it can be imprecise while
 positions are open); Alpaca's own buying power is the backstop that keeps
 that imprecision safe rather than an actual overspend.
 
+## CFD/forex trading (OANDA)
+
+A second, completely separate trading system, in `src/trading/cfd/` --
+different account, different broker, different everything from the stock
+system above. Built because the stock system (Alpaca, US equities) can't
+do genuine intraday day-trading on a small account: the US Pattern Day
+Trader (PDT) rule caps accounts under $25,000 to 3 same-day round trips
+per 5 business days on a margin account. Forex/CFDs aren't "securities"
+under that rule, so they aren't PDT-restricted at all.
+
+**Broker: OANDA**, not a MetaTrader-based broker (XM, Exness, etc.) --
+those need either a desktop MT4/5 terminal running continuously (not
+practical on GitHub Actions) or a paid third-party bridge service to get
+REST API access at all. OANDA has its own free REST API (v20) directly,
+the same shape as Alpaca: a free practice (demo) account gets full API
+access with no bridge, no hidden per-hour charges.
+
+**Setup:**
+1. Free practice account: https://hub.oanda.com/apply/demo
+2. Account Management Portal -> "My Services" -> "Manage API Access" ->
+   generate a personal access token
+3. Add `OANDA_API_TOKEN` and `OANDA_ACCOUNT_ID` as repository secrets
+   (same as the Alpaca keys -- never paste them in chat)
+
+**How it works:** `src/trading/cfd/strategy.py`'s `EmaCrossoverStrategy`
+(fast/slow EMA crossover, long or short, ATR-based stop-loss/take-profit
+attached directly to the order via OANDA's `stopLossOnFill`/
+`takeProfitOnFill` -- no separate re-arming step needed, unlike the stock
+system) runs on 15-minute candles. `.github/workflows/cfd-trading.yml`
+triggers it every 20 minutes on weekdays via `scripts/run_cfd_trading.py`
+-- frequent enough for real same-day, multiple-trades-per-day trading,
+without needing a always-on server (GitHub Actions minutes are free for
+periodic runs like this; a repo would need to go *public* to get free
+*unlimited/continuous* minutes for true tick-level reaction speed, which
+this deliberately doesn't need).
+
+Default instruments: `XAU_USD` (gold) plus `EUR_USD`, `GBP_USD`,
+`USD_JPY` -- change via `CFD_INSTRUMENTS`. Manual control
+(`scripts/cfd_cli.py status` / `pause` / `resume` /
+`exclude-instrument` / `include-instrument`, or the "CFD Manual Command"
+GitHub Actions workflow) mirrors the stock system's `cli.py`. Same
+dual-gate live-trading safety pattern as Alpaca
+(`OANDA_PRACTICE` + `CFD_ALLOW_LIVE_TRADING`, both hardcoded to
+practice-only in both CFD workflows regardless of secrets).
+
+**Status: scaffolded but not yet validated against a real account.**
+Every method in `broker.py` was written from OANDA's v20 API
+documentation, not exercised against a live practice account (no token
+was available while building it). Do not trust it with even practice
+money until it's been run end-to-end and its logs checked -- same
+discipline the stock system used throughout (this sandbox can't reach
+external APIs, so every change needs validating via a real GitHub
+Actions run). Also not yet backtested/tuned: `EmaCrossoverStrategy`'s
+parameters are a reasonable starting guess, not the result of the
+train/test-split, calmar-optimized process `optimize_strategy.py` used
+for the stock system's Breakout strategy -- that needs OANDA's candle
+history, which also needs a live token to fetch.
+
 ## Tests
 
 ```bash
@@ -379,22 +437,33 @@ src/trading/
     state.py                # paused flag, capital floor, milestone flag -- shared with the daily workflow
     positions.py             # tracked stop/target prices (+ owning bucket) for open fractional positions
     buckets.py                # safe/risk virtual sub-accounts, active once the withdrawal milestone hits
+  cfd/                        # separate CFD/forex (OANDA) system -- see "CFD/forex trading" above
+    broker.py                   # OANDA v20 REST calls -- UNTESTED against a real account as of writing
+    strategy.py                   # intraday EMA crossover, long or short
+    risk.py                        # unit-based position sizing, capital floor, daily-loss circuit breaker
+    scheduler.py                    # one strategy evaluation + order pass, every ~20 min
+    state.py                         # paused flag, capital floor, excluded instruments -- own state file
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
   optimize_strategy.py         # train/test parameter grid search (calmar or win_rate)
   run_paper_trading.py          # used by the daily-trading.yml workflow
   cli.py                         # status / pause / resume / buy / sell / set-floor / cancel -- used by manual-command.yml
+  run_cfd_trading.py               # used by cfd-trading.yml
+  cfd_cli.py                         # status / pause / resume / exclude-instrument -- used by cfd-manual-command.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
   backtest.yml
   compare-strategies.yml
   optimize-strategy.yml
+  cfd-trading.yml
+  cfd-manual-command.yml
 state/
   bot_state.json
   positions.json
   buckets.json
+  cfd_bot_state.json
 tests/
 ```
 

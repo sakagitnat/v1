@@ -1,0 +1,77 @@
+name: CFD Manual Command (OANDA)
+
+# Triggered on demand -- normally by Claude, via the GitHub Actions API,
+# when you ask for something in chat about the CFD/forex bot. Can also be
+# run by hand from the Actions tab.
+#
+# Always runs against the PRACTICE account: OANDA_PRACTICE is hardcoded to
+# "true" below regardless of any secret, so this workflow can never place
+# a live order even by accident.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "What to do"
+        required: true
+        type: choice
+        options: [status, pause, resume, exclude-instrument, include-instrument]
+      instrument:
+        description: "Instrument (required for exclude-instrument/include-instrument, e.g. XAU_USD)"
+        required: false
+        type: string
+      reason:
+        description: "Why (optional, for pause/exclude-instrument)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  run-command:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run command
+        env:
+          OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
+          OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+          OANDA_PRACTICE: "true"
+          CMD: ${{ inputs.command }}
+          INSTRUMENT: ${{ inputs.instrument }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          set -e
+          case "$CMD" in
+            status|resume)
+              python scripts/cfd_cli.py "$CMD"
+              ;;
+            pause)
+              python scripts/cfd_cli.py pause --reason "$REASON"
+              ;;
+            exclude-instrument)
+              python scripts/cfd_cli.py exclude-instrument "$INSTRUMENT" --reason "$REASON"
+              ;;
+            include-instrument)
+              python scripts/cfd_cli.py include-instrument "$INSTRUMENT"
+              ;;
+            *)
+              echo "Unknown command: $CMD" >&2
+              exit 1
+              ;;
+          esac
+      - name: Commit state changes (if any)
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/cfd_bot_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD bot state via manual command: ${{ inputs.command }}"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
