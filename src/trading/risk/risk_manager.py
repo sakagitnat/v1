@@ -9,11 +9,19 @@ class RiskManager:
     max_open_positions: int = 5
     max_daily_loss_pct: float = 0.03
     capital_floor: Optional[float] = None
-    """Once equity drops to or below this, new positions stop opening until
-    it recovers above it. Unlike the daily circuit breaker, this never
-    resets on its own -- it's meant to protect the original principal, not
-    just cap one bad day. Not an absolute guarantee: an overnight gap past
-    a stop-loss can still land below it in one move."""
+    """Once equity drops strictly below this, new positions stop opening
+    until it recovers back above it. Unlike the daily circuit breaker,
+    this never resets on its own -- it's meant to protect the original
+    principal, not just cap one bad day. Not an absolute guarantee: an
+    overnight gap past a stop-loss can still land below it in one move.
+
+    Deliberately a strict "below", not "at or below": the floor is
+    normally first set equal to the current equity (e.g. "protect my
+    starting $100"), and blocking trades at that exact starting point
+    would deadlock forever -- equity could never rise above a floor it's
+    never allowed to trade away from. Sitting right at the floor still
+    trades; a loss that pushes equity genuinely below it halts new
+    entries until it recovers back above."""
     ladder: bool = False
     """If True (and capital_floor is set), scale risk_per_trade by how far
     equity has grown above the floor -- smaller risk while the cushion
@@ -38,15 +46,15 @@ class RiskManager:
             return self.risk_per_trade
         return self.risk_per_trade * 1.5
 
-    def at_or_below_floor(self) -> bool:
-        return self.capital_floor is not None and self.equity <= self.capital_floor
+    def below_floor(self) -> bool:
+        return self.capital_floor is not None and self.equity < self.capital_floor
 
     def _can_open_new_position(self, entry_price: float) -> bool:
         return not (
             self._halted
             or self._open_positions >= self.max_open_positions
             or entry_price <= 0
-            or self.at_or_below_floor()
+            or self.below_floor()
         )
 
     def position_size(self, entry_price: float, stop_price: Optional[float]) -> int:

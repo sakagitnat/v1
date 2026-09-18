@@ -267,8 +267,13 @@ python scripts/cli.py clear-floor
 ```
 
 When a floor is set, the live bot:
-- **Stops opening new positions** while equity is at or below it (existing
-  positions still close normally on their own stop-loss/target).
+- **Stops opening new positions** once equity is genuinely *below* it
+  (existing positions still close normally on their own stop-loss/target).
+  Equity sitting exactly *at* the floor still trades -- deliberately, since
+  the floor is normally first set equal to the current balance ("protect
+  my starting $100"), and blocking trades at that exact point would
+  deadlock forever: equity could never rise above a floor it's never
+  allowed to trade away from.
 - **Scales risk per trade** by how big a cushion equity has above the floor
   (`RiskManager.effective_risk_per_trade`): half the configured
   `RISK_PER_TRADE` while the cushion is under 20%, the full amount between

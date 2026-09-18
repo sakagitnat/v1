@@ -47,15 +47,25 @@ def test_position_size_with_no_stop_still_respects_max_positions():
     assert rm.position_size(entry_price=100, stop_price=None) == 0
 
 
-def test_capital_floor_blocks_new_entries_at_or_below_it():
-    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
-    assert rm.at_or_below_floor() is True
+def test_capital_floor_blocks_new_entries_below_it():
+    rm = RiskManager(equity=99, risk_per_trade=0.01, capital_floor=100)
+    assert rm.below_floor() is True
     assert rm.position_size(entry_price=10, stop_price=9) == 0
 
 
 def test_capital_floor_does_not_block_above_it():
     rm = RiskManager(equity=101, risk_per_trade=0.01, capital_floor=100)
-    assert rm.at_or_below_floor() is False
+    assert rm.below_floor() is False
+
+
+def test_capital_floor_does_not_block_exactly_at_it():
+    # Deliberate: the floor is normally first set equal to starting equity
+    # ("protect my starting $100"), so blocking trades exactly at the floor
+    # would deadlock forever -- equity could never rise above a floor it's
+    # never allowed to trade away from. See risk_manager.py's docstring.
+    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
+    assert rm.below_floor() is False
+    assert rm.position_size(entry_price=10, stop_price=9) > 0
 
 
 def test_ladder_reduces_risk_with_thin_cushion():
@@ -112,5 +122,10 @@ def test_notional_size_zero_when_stop_above_entry():
 
 
 def test_notional_size_respects_capital_floor():
-    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
+    rm = RiskManager(equity=99, risk_per_trade=0.01, capital_floor=100)
     assert rm.notional_size(entry_price=100, stop_price=95) == 0.0
+
+
+def test_notional_size_nonzero_exactly_at_capital_floor():
+    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
+    assert rm.notional_size(entry_price=100, stop_price=95) > 0.0

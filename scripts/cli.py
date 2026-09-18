@@ -58,7 +58,7 @@ def cmd_status(_args):
         risk = RiskManager(
             equity=equity, risk_per_trade=settings.risk_per_trade, capital_floor=capital_floor, ladder=True
         )
-        status = "AT/BELOW FLOOR -- new entries halted" if risk.at_or_below_floor() else "above floor"
+        status = "BELOW FLOOR -- new entries halted" if risk.below_floor() else "at/above floor"
         print(
             f"Capital floor: {capital_floor} ({status}); "
             f"effective risk per trade: {risk.effective_risk_per_trade() * 100:.2f}% "
@@ -105,8 +105,9 @@ def cmd_set_floor(args):
     set_capital_floor(args.amount)
     print(
         f"Capital floor set to {args.amount}. The daily run will stop opening new positions "
-        f"if/while equity is at or below this, and will scale risk per trade by how far above "
-        f"it equity has grown (see RiskManager.effective_risk_per_trade)."
+        f"if/while equity is genuinely below this (equity sitting exactly at it still trades -- "
+        f"see RiskManager.capital_floor), and will scale risk per trade by how far above it "
+        f"equity has grown (see RiskManager.effective_risk_per_trade)."
     )
 
 

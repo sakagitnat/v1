@@ -187,9 +187,9 @@ def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, c
         capital_floor=capital_floor,
         ladder=capital_floor is not None,
     )
-    if risk.at_or_below_floor():
+    if risk.below_floor():
         logger.info(
-            "Equity %.2f is at or below the capital floor %.2f -- no new positions will open this run.",
+            "Equity %.2f is below the capital floor %.2f -- no new positions will open this run.",
             equity, capital_floor,
         )
 
