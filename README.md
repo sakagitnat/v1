@@ -49,7 +49,16 @@ by default, with backtesting on free historical data.
    is capped so a stopped-out trade only loses `RISK_PER_TRADE` (default 1%)
    of account equity; a hard cap on concurrent open positions
    (`MAX_OPEN_POSITIONS`); a daily-loss circuit breaker
-   (`MAX_DAILY_LOSS_PCT`) that halts new entries for the rest of the day.
+   (`MAX_DAILY_LOSS_PCT`) that halts new entries for the rest of the day;
+   an **earnings-date filter** (`src/trading/data/earnings.py`) that skips
+   opening a *new* position in a stock with an earnings report due in the
+   next 2 days -- a single-company announcement can gap the price well past
+   the ATR-based stop, which the stop can't protect against overnight. This
+   only blocks new entries; it doesn't close positions already open going
+   into an earnings date. It's best-effort: if the earnings-date lookup
+   fails or the data isn't available (index ETFs like SPY/GLD have no
+   earnings at all), it fails open rather than blocking trading on a data
+   hiccup.
 3. **Backtest engine** (`src/trading/backtest/engine.py`) — replays the
    strategy bar-by-bar over historical data and reports CAGR, Sharpe ratio,
    max drawdown, win rate, and the full trade log.

@@ -1,6 +1,7 @@
 import pandas as pd
 
 from trading.config import settings
+from trading.data.earnings import has_upcoming_earnings
 from trading.data.market_data import load_watchlist_bars
 from trading.execution.broker import AlpacaBroker
 from trading.execution.buckets import init_buckets_if_needed, is_blown, rebalance, save_buckets
@@ -147,6 +148,9 @@ def _manage_tracked_positions(broker: AlpacaBroker, buckets: dict | None) -> dic
 def _try_enter(broker, symbol, signal, notional, bucket_name=None) -> bool:
     if notional <= 0:
         logger.info("Skipping %s: notional size computed as 0", symbol)
+        return False
+    if has_upcoming_earnings(symbol):
+        logger.info("Skipping %s: earnings report due within the next couple of days", symbol)
         return False
     logger.info(
         "BUY %s ~$%.2f @ ~%.2f (stop %.2f, target %.2f)%s",
