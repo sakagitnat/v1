@@ -1,76 +1,126 @@
-# Grove
+# Automated Stock Trading System
 
-แอปฝึกภาษาอังกฤษครบวงจร — Flashcard, Reading, Listening, Writing, Mock Exam, Community, Skill Bank, Pro/Stripe, Admin
-Frontend: React + TypeScript + Vite + Tailwind, deploy บน Cloudflare Pages
-Backend: Supabase (Auth + Postgres) + Cloudflare Pages Functions (Stripe)
+A trend-following, risk-managed trading bot for US-listed stocks, built to run
+against [Alpaca](https://alpaca.markets)'s paper (simulated money) trading API
+by default, with backtesting on free historical data.
 
-## สถานะ: ครบทุกฟีเจอร์ในสเปกเดิมแล้ว
+> **Disclaimer — read this first.** No trading system can guarantee profit.
+> Markets are risky, past performance does not predict future results, and
+> this is not financial advice. This project defaults to **paper trading**
+> (simulated money) and requires two explicit, separate settings to be
+> changed before it will ever place a real-money order. Do not enable live
+> trading until you have reviewed weeks or months of paper-trading results
+> and are comfortable with the risk of loss.
 
-- ✅ Login ด้วย Google
-- ✅ Flashcard: หลายชุด, ท่องคำ (batch unlock), เกมจับคู่ (ชีวิต/คอมโบ+แบดจ์), **Crossword** (auto-generate จากคำในชุด), เรียง a-z, แชร์สาธารณะ (Pro)
-- ✅ Reading: รายการของตัวเอง, แตะคำแปล→เพิ่มคำศัพท์ (โควตา 10/วันสำหรับ non-Pro), quiz จับเวลา, เพิ่มเอง
-- ✅ Listening: TTS (เลือกเสียง/ความเร็ว), quiz, เพิ่มเอง
-- ✅ Writing: เติมคำ, เรียงประโยค, ระบุชนิดคำ
-- ✅ สอบจำลอง, จุดอ่อน (วิเคราะห์จากตาราง attempts จริง)
-- ✅ คลังสาธารณะ: คำศัพท์/Reading/Listening/Writing/**Skill Bank** — import เป็นสำเนาใหม่เสมอ
-- ✅ **Skill Bank**: รวมเนื้อหาที่มีอยู่แล้วเป็นชุด แชร์/นำเข้าทั้งชุดได้ (Pro)
-- ✅ จัดการเนื้อหาของฉัน, เพิ่มเนื้อหา (hub)
-- ✅ **นำเข้าจาก PDF**: ใช้ pdf.js ดึงข้อความจริง + heuristic จับคู่ "คำ-ความหมาย" อัตโนมัติ พร้อมพรีวิวให้ตรวจก่อนบันทึก (นำเข้าเป็นชุดคำศัพท์ หรือบทความ Reading)
-- ✅ นำเข้าจาก JSON
-- ✅ โปรไฟล์: เลเวล/XP, streak, แบดจ์, leaderboard
-- ✅ Pro: Stripe Checkout + Billing Portal ผ่าน Cloudflare Pages Functions, **webhook verify signature จริง** (HMAC-SHA256 ตามสเปก Stripe, ใช้ Web Crypto API)
-- ✅ ชวนเพื่อน + แลกโค้ดของขวัญ
-- ✅ แอดมิน: คิวลบ/รายงาน, ออกโค้ดของขวัญ
-- ✅ ตั้งค่า: ธีม/เสียง/ภาษา
+## How it works
 
-### ข้อจำกัดที่ควรรู้ก่อนใช้งานจริง (ไม่ใช่บั๊ก แต่เป็นสิ่งที่ควร harden เพิ่มก่อนขึ้น production)
-- PDF import เป็น heuristic (จับรูปแบบ "word - meaning" ฯลฯ) — ไม่ใช่ NLP เต็มรูปแบบ ต้องตรวจก่อนบันทึกเสมอ (มี preview ให้แล้ว)
-- Crossword generator เป็นแบบ greedy ไม่ใช่ solver เต็มรูปแบบ — คำที่ไม่มีตัวอักษรร่วมกับคำอื่นจะถูกข้าม (แจ้งในหน้าเกม)
-- Stripe subscription upsert ยังไม่มี idempotency key กันเหตุการณ์ซ้ำจาก Stripe retry — เพิ่มได้โดยเก็บ `event.id` ที่เคยประมวลผลแล้ว
-- ทดสอบ (unit/e2e tests) ยังไม่มี — โค้ดทั้งหมดยังไม่ได้รันจริงเพราะ sandbox นี้ไม่มี network ให้ `npm install`
+1. **Strategy** (`src/trading/strategy/trend_momentum.py`) — long-only trend
+   following: enter when the 20-day EMA is above the 50-day EMA, price is
+   above the 50-day EMA, and RSI(14) is between 40–70 (confirms momentum
+   without chasing an overbought move). Exit when the trend flips, or when
+   an ATR-based stop-loss / take-profit is hit.
+2. **Risk management** (`src/trading/risk/risk_manager.py`) — position size
+   is capped so a stopped-out trade only loses `RISK_PER_TRADE` (default 1%)
+   of account equity; a hard cap on concurrent open positions
+   (`MAX_OPEN_POSITIONS`); a daily-loss circuit breaker
+   (`MAX_DAILY_LOSS_PCT`) that halts new entries for the rest of the day.
+3. **Backtest engine** (`src/trading/backtest/engine.py`) — replays the
+   strategy bar-by-bar over historical data and reports CAGR, Sharpe ratio,
+   max drawdown, win rate, and the full trade log.
+4. **Execution** (`src/trading/execution/`) — wraps Alpaca's trading API to
+   place bracket orders (entry + stop-loss + take-profit) sized by the risk
+   manager, using the account's live equity.
 
 ## Setup
 
-### 1. Supabase
-1. สร้างโปรเจกต์ที่ [supabase.com](https://supabase.com)
-2. SQL Editor → รันไฟล์ `supabase/schema.sql` ทั้งไฟล์ (มี RLS + seed แบดจ์มาให้)
-3. Authentication → Providers → เปิด Google OAuth
-4. Authentication → URL Configuration → เพิ่ม URL จริง + `http://localhost:5173`
-5. Project Settings → API → คัดลอก `Project URL`, `anon public key`, และ `service_role` key (ใช้เฉพาะฝั่ง Cloudflare Function เท่านั้น)
-6. Table Editor → `profiles` → set `is_admin = true` ให้บัญชีตัวเอง
-
-### 2. รันในเครื่อง
 ```bash
-npm install
-cp .env.example .env.local   # ใส่ VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-npm run dev
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
 ```
 
-### 3. Deploy Cloudflare Pages
-1. Push ขึ้น GitHub → Cloudflare Dashboard → Workers & Pages → Create → Pages → Connect to Git
-2. Build command `npm run build`, output `dist`
-3. Environment variables:
-   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-   - Stripe (ถ้าจะเปิดใช้): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY`,
-     `STRIPE_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PUBLIC_SITE_URL`
-4. Stripe Dashboard → Webhooks → เพิ่ม endpoint `https://your-site.pages.dev/api/stripe-webhook`
-   → เลือก events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
-5. กลับไปเพิ่ม URL จริงใน Supabase Auth → URL Configuration
+Get **paper** API keys from your Alpaca dashboard (Alpaca gives every
+account a free paper-trading endpoint) and put them in `.env`:
 
-## โครงสร้างโปรเจกต์
 ```
-src/
-  lib/            supabase client, types, gamification, attempt logging, POS drill data, PDF import
-  contexts/       AuthContext
-  hooks/          หนึ่ง hook ต่อหนึ่งโดเมนข้อมูล
-  components/     Layout, QuizRunner, FlashcardGames, Crossword, ReferralProcessor
-  pages/          หนึ่งไฟล์ต่อหนึ่งเมนู
-functions/
-  _stripeVerify.ts        Stripe webhook signature verification (Web Crypto)
-  api/                     Cloudflare Pages Functions (checkout / webhook / billing portal)
-supabase/
-  schema.sql      DB schema + RLS ครบทุกตาราง + seed badges
+ALPACA_API_KEY=...
+ALPACA_SECRET_KEY=...
+ALPACA_PAPER=true
 ```
 
-## หมายเหตุเรื่องชื่อแอป
-ใช้ "Grove" ในโค้ด — เปลี่ยนได้โดยค้นหาคำว่า "Grove" ใน `index.html` และ `Layout.tsx`
+Edit `WATCHLIST` in `.env` to the symbols you want the strategy to trade
+(defaults to SPY, AAPL, MSFT, GOOGL, AMZN, NVDA).
+
+## Backtest first
+
+No API keys needed — pulls free historical data via `yfinance`:
+
+```bash
+python scripts/run_backtest.py
+```
+
+Prints total return, CAGR, Sharpe ratio, max drawdown, win rate, and trade
+count for the configured watchlist since 2020. Tune the strategy's
+parameters (EMA windows, RSI bounds, ATR multipliers) and re-run before
+risking any money, even simulated money.
+
+## Paper trading
+
+Once you're satisfied with the backtest, run one live evaluation against
+your **paper** account:
+
+```bash
+python scripts/run_paper_trading.py
+```
+
+This checks the latest bar for each watchlist symbol, and opens/closes
+paper positions accordingly. Run it once per trading day, shortly after
+market open — e.g. via `cron` or a scheduled CI job. It will refuse to run
+against real money unless you explicitly set `ALPACA_PAPER=false` **and**
+`ALLOW_LIVE_TRADING=true` in the environment (see `.env.example`).
+
+## Tests
+
+```bash
+pytest
+```
+
+## Project layout
+
+```
+src/trading/
+  config.py              # environment-driven settings, incl. the live-trading safety switch
+  indicators.py           # SMA, EMA, RSI, MACD, ATR
+  strategy/
+    trend_momentum.py     # default strategy
+  risk/
+    risk_manager.py        # position sizing, daily-loss circuit breaker
+  backtest/
+    engine.py              # event-driven backtester
+    metrics.py              # CAGR, Sharpe, drawdown, win rate
+  data/
+    market_data.py          # historical bars via yfinance
+  execution/
+    broker.py               # Alpaca order placement (paper by default)
+    scheduler.py            # one strategy evaluation + order pass
+scripts/
+  run_backtest.py
+  run_paper_trading.py
+tests/
+```
+
+## Roadmap / going live
+
+This is a starting template, not a finished profitable system. Before ever
+setting `ALLOW_LIVE_TRADING=true`:
+
+- Backtest across more symbols, timeframes, and market regimes (bull, bear,
+  choppy) — a strategy that only wins in one regime will lose money in
+  another.
+- Run it on paper for an extended period and compare live paper results to
+  the backtest.
+- Consider transaction costs, slippage, and taxes, none of which this
+  template models.
+- Start with real money you can afford to lose, at a small fraction of your
+  intended size, and scale up only if results hold up.
