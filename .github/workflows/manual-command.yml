@@ -14,7 +14,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, set-floor, clear-floor, buy, sell]
+        options: [status, pause, resume, set-floor, clear-floor, buy, sell, cancel]
       symbol:
         description: "Symbol (required for buy/sell)"
         required: false
@@ -58,6 +58,9 @@ jobs:
               ;;
             sell)
               python scripts/cli.py sell "$SYMBOL"
+              ;;
+            cancel)
+              python scripts/cli.py cancel "$SYMBOL"
               ;;
             *)
               echo "Unknown command: $CMD" >&2

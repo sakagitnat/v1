@@ -73,7 +73,9 @@ def run_once(lookback_days: int = 150):
         broker.submit_limit_sell(symbol, qty, pos["target_price"])
 
     tracked = load_positions()
-    open_symbols = set(tracked.keys())
+    # Union with Alpaca's actual open positions (not just our tracked ones)
+    # so a manual buy or an untracked fill never gets double-bought here.
+    open_symbols = set(tracked.keys()) | broker.open_symbols()
 
     # 2. Evaluate new entries for symbols not already held.
     for symbol, df in bars.items():
@@ -102,7 +104,12 @@ def run_once(lookback_days: int = 150):
         broker.submit_notional_buy(symbol, notional)
         qty = broker.wait_for_position_qty(symbol)
         if qty <= 0:
-            logger.info("%s: buy did not fill in time -- will retry next run", symbol)
+            logger.info(
+                "%s: buy did not fill in time (market likely closed) -- cancelling so it doesn't "
+                "fill later untracked; will retry next run",
+                symbol,
+            )
+            broker.cancel_open_orders(symbol)
             continue
 
         broker.submit_stop_sell(symbol, qty, signal.stop_price)

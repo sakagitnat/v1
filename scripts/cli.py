@@ -116,7 +116,12 @@ def cmd_buy(args):
     broker.submit_notional_buy(symbol, notional)
     qty = broker.wait_for_position_qty(symbol)
     if qty <= 0:
-        print("Buy did not fill in time -- no stop/target orders placed. Check the Alpaca dashboard.")
+        broker.cancel_open_orders(symbol)
+        print(
+            "Buy did not fill in time (market likely closed) -- cancelled rather than leave an "
+            "untracked order that could fill later without stop/target protection. Try again "
+            "during market hours."
+        )
         return
 
     broker.submit_stop_sell(symbol, qty, stop_price)
@@ -132,6 +137,14 @@ def cmd_sell(args):
     broker.close_position(symbol)
     record_close(symbol)
     print("Close order submitted.")
+
+
+def cmd_cancel(args):
+    symbol = args.symbol.upper()
+    broker = AlpacaBroker()
+    broker.cancel_open_orders(symbol)
+    record_close(symbol)
+    print(f"Cancelled any open orders for {symbol} (no position to close, just pending orders).")
 
 
 def main():
@@ -158,6 +171,10 @@ def main():
     sell_parser = sub.add_parser("sell")
     sell_parser.add_argument("symbol")
     sell_parser.set_defaults(func=cmd_sell)
+
+    cancel_parser = sub.add_parser("cancel")
+    cancel_parser.add_argument("symbol")
+    cancel_parser.set_defaults(func=cmd_cancel)
 
     args = parser.parse_args()
     args.func(args)
