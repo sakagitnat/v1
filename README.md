@@ -80,6 +80,39 @@ market open — e.g. via `cron` or a scheduled CI job. It will refuse to run
 against real money unless you explicitly set `ALPACA_PAPER=false` **and**
 `ALLOW_LIVE_TRADING=true` in the environment (see `.env.example`).
 
+## Running it automatically (GitHub Actions)
+
+Two workflows in `.github/workflows/` run this without you having to keep a
+computer on:
+
+- **`daily-trading.yml`** — runs `scripts/run_paper_trading.py` on a
+  schedule (weekdays, shortly after US market open). Fully automatic.
+- **`manual-command.yml`** — a `workflow_dispatch` you (or Claude, on your
+  behalf, when you ask in chat) can trigger anytime to check status,
+  pause/resume the daily bot, or place a one-off buy/sell. Runs
+  `scripts/cli.py` with whatever command you give it.
+
+Both are hardcoded to `ALPACA_PAPER=true`, so neither can place a live order
+even by accident, regardless of what's in your secrets.
+
+**One-time setup, on GitHub.com** (this step can't be done for you — it
+needs your own Alpaca keys, which should never be pasted into chat or
+committed to the repo):
+
+1. Go to the repo → **Settings → Secrets and variables → Actions**.
+2. Add two repository secrets: `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`,
+   using your **paper** account's keys from the Alpaca dashboard.
+3. That's it — the daily workflow will start running on its own schedule,
+   and you can trigger the manual one anytime (via the Actions tab, or by
+   asking in chat).
+
+### Pausing/resuming
+
+`state/bot_state.json` holds a single `paused` flag that the daily workflow
+checks before trading. `python scripts/cli.py pause` / `resume` (run
+locally, or via the manual-command workflow) flips it; the manual workflow
+commits the change back to the repo automatically.
+
 ## Tests
 
 ```bash
@@ -104,9 +137,16 @@ src/trading/
   execution/
     broker.py               # Alpaca order placement (paper by default)
     scheduler.py            # one strategy evaluation + order pass
+    state.py                # paused/resumed flag shared with the daily workflow
 scripts/
   run_backtest.py
-  run_paper_trading.py
+  run_paper_trading.py       # used by the daily-trading.yml workflow
+  cli.py                      # status / pause / resume / buy / sell -- used by manual-command.yml
+.github/workflows/
+  daily-trading.yml
+  manual-command.yml
+state/
+  bot_state.json
 tests/
 ```
 

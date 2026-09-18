@@ -1,0 +1,70 @@
+name: Manual Trading Command
+
+# Triggered on demand -- normally by Claude, via the GitHub Actions API, when
+# you ask for something in chat ("check my portfolio", "pause the bot", "buy
+# some TSLA"). Can also be run by hand from the Actions tab.
+#
+# Always runs against the PAPER account: ALPACA_PAPER is hardcoded to "true"
+# below regardless of any secret, so this workflow can never place a live
+# order even by accident.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "What to do"
+        required: true
+        type: choice
+        options: [status, pause, resume, buy, sell]
+      symbol:
+        description: "Symbol (required for buy/sell)"
+        required: false
+        type: string
+      qty:
+        description: "Exact share count for buy (optional -- omit to size by risk %)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  run-command:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run command
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          ALPACA_PAPER: "true"
+          CMD: ${{ inputs.command }}
+          SYMBOL: ${{ inputs.symbol }}
+          QTY: ${{ inputs.qty }}
+        run: |
+          set -e
+          case "$CMD" in
+            status|pause|resume)
+              python scripts/cli.py "$CMD"
+              ;;
+            buy)
+              python scripts/cli.py buy "$SYMBOL" --qty "${QTY:-0}"
+              ;;
+            sell)
+              python scripts/cli.py sell "$SYMBOL"
+              ;;
+            *)
+              echo "Unknown command: $CMD" >&2
+              exit 1
+              ;;
+          esac
+      - name: Commit state changes (if any)
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/bot_state.json
+          git diff --cached --quiet || git commit -m "Update bot state via manual command: ${{ inputs.command }}"
+          git diff --cached --quiet || git push

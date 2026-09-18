@@ -3,6 +3,7 @@ import pandas as pd
 from trading.config import settings
 from trading.data.market_data import load_watchlist_bars
 from trading.execution.broker import AlpacaBroker
+from trading.execution.state import load_state
 from trading.logging_utils import get_logger
 from trading.risk.risk_manager import RiskManager
 from trading.strategy.base import Action
@@ -18,6 +19,10 @@ def run_once(lookback_days: int = 250):
     Meant to be invoked once per trading day shortly after market open, e.g.
     via cron or a scheduled GitHub Actions workflow.
     """
+    if load_state().get("paused"):
+        logger.info("Bot is paused (state/bot_state.json) -- skipping this run.")
+        return
+
     broker = AlpacaBroker()
     equity = broker.account_equity()
     risk = RiskManager(
