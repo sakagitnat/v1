@@ -225,11 +225,13 @@ Both are undone (`include-symbol` / `resume`) once Claude judges the
 concern has passed, checked again at the next scheduled run. This is
 paper trading only, reversible, and scoped to *not opening new positions*
 -- it never closes a position, changes risk sizing, or touches real
-money. Set up as a recurring Routine that fires into a fresh session on
-its own schedule (not tied to any one chat staying open), so it keeps
-running independent of any particular conversation. Ask in chat anytime
-to check the news yourself on demand, change the schedule, or turn it
-off.
+money. Set up as a recurring Routine (weekdays, ~75 min before the daily
+trading run) bound to the chat session that set it up, so it reuses that
+session's already-authorized GitHub access rather than needing to
+re-request it fresh each time. Routines on this platform auto-expire
+after 7 days, so it needs to be periodically recreated to keep running --
+ask in chat anytime to check the news yourself on demand, change the
+schedule, recreate it, or turn it off.
 
 ### Capital floor + risk ladder (protecting the original principal)
 
