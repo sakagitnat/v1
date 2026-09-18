@@ -24,10 +24,12 @@ def run_once(lookback_days: int = 150):
     calendar days (~100 trading days), comfortably more than the 30-day
     entry window / 14-day ATR window Breakout's indicators need to warm up.
     """
-    if load_state().get("paused"):
+    state = load_state()
+    if state.get("paused"):
         logger.info("Bot is paused (state/bot_state.json) -- skipping this run.")
         return
 
+    capital_floor = state.get("capital_floor")
     broker = AlpacaBroker()
     equity = broker.account_equity()
     risk = RiskManager(
@@ -35,7 +37,14 @@ def run_once(lookback_days: int = 150):
         risk_per_trade=settings.risk_per_trade,
         max_open_positions=settings.max_open_positions,
         max_daily_loss_pct=settings.max_daily_loss_pct,
+        capital_floor=capital_floor,
+        ladder=capital_floor is not None,
     )
+    if risk.at_or_below_floor():
+        logger.info(
+            "Equity %.2f is at or below the capital floor %.2f -- no new positions will open this run.",
+            equity, capital_floor,
+        )
 
     end = pd.Timestamp.today().normalize()
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")

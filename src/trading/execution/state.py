@@ -1,15 +1,36 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 _STATE_PATH = Path(__file__).resolve().parents[3] / "state" / "bot_state.json"
+
+_DEFAULTS = {"paused": False, "capital_floor": None}
 
 
 def load_state() -> dict:
     if not _STATE_PATH.exists():
-        return {"paused": False}
-    return json.loads(_STATE_PATH.read_text())
+        return dict(_DEFAULTS)
+    state = json.loads(_STATE_PATH.read_text())
+    for key, default in _DEFAULTS.items():
+        state.setdefault(key, default)
+    return state
+
+
+def _write_state(state: dict) -> None:
+    _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _STATE_PATH.write_text(json.dumps(state, indent=2) + "\n")
 
 
 def set_paused(paused: bool) -> None:
-    _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_PATH.write_text(json.dumps({"paused": paused}, indent=2) + "\n")
+    state = load_state()
+    state["paused"] = paused
+    _write_state(state)
+
+
+def set_capital_floor(floor: Optional[float]) -> None:
+    """Set (or, with None, clear) the equity floor: once account equity
+    drops to or below this, the live bot stops opening new positions until
+    equity recovers above it. See RiskManager.capital_floor / ladder."""
+    state = load_state()
+    state["capital_floor"] = floor
+    _write_state(state)

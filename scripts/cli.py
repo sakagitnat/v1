@@ -1,4 +1,5 @@
-"""Manual control for the trading bot: status, pause/resume, and one-off orders.
+"""Manual control for the trading bot: status, pause/resume, capital floor,
+and one-off orders.
 
 Meant to be run by the "Manual Trading Command" GitHub Actions workflow
 (workflow_dispatch), which Claude triggers on your behalf when you ask for
@@ -9,6 +10,8 @@ Usage:
   python scripts/cli.py status
   python scripts/cli.py pause
   python scripts/cli.py resume
+  python scripts/cli.py set-floor AMOUNT
+  python scripts/cli.py clear-floor
   python scripts/cli.py buy SYMBOL [--qty N] [--risk-pct 0.01] [--stop-pct 0.05]
   python scripts/cli.py sell SYMBOL
 """
@@ -18,9 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from trading.config import settings
 from trading.data.market_data import load_daily_bars_yfinance
 from trading.execution.broker import AlpacaBroker
-from trading.execution.state import load_state, set_paused
+from trading.execution.state import load_state, set_capital_floor, set_paused
+from trading.risk.risk_manager import RiskManager
 
 
 def cmd_status(_args):
@@ -28,11 +33,27 @@ def cmd_status(_args):
     account = broker.client.get_account()
     positions = broker.client.get_all_positions()
     state = load_state()
+    equity = float(account.equity)
+    capital_floor = state.get("capital_floor")
 
     print(f"Paused: {state.get('paused', False)}")
     print(f"Equity: {account.equity} {getattr(account, 'currency', 'USD')}")
     print(f"Cash: {account.cash}")
     print(f"Buying power: {account.buying_power}")
+
+    if capital_floor:
+        risk = RiskManager(
+            equity=equity, risk_per_trade=settings.risk_per_trade, capital_floor=capital_floor, ladder=True
+        )
+        status = "AT/BELOW FLOOR -- new entries halted" if risk.at_or_below_floor() else "above floor"
+        print(
+            f"Capital floor: {capital_floor} ({status}); "
+            f"effective risk per trade: {risk.effective_risk_per_trade() * 100:.2f}% "
+            f"(base {settings.risk_per_trade * 100:.2f}%)"
+        )
+    else:
+        print("Capital floor: not set")
+
     print(f"Open positions ({len(positions)}):")
     for p in positions:
         print(f"  {p.symbol}: {p.qty} shares @ avg {p.avg_entry_price}, unrealized P&L {p.unrealized_pl}")
@@ -46,6 +67,20 @@ def cmd_pause(_args):
 def cmd_resume(_args):
     set_paused(False)
     print("Resumed. The daily automated run will trade again.")
+
+
+def cmd_set_floor(args):
+    set_capital_floor(args.amount)
+    print(
+        f"Capital floor set to {args.amount}. The daily run will stop opening new positions "
+        f"if/while equity is at or below this, and will scale risk per trade by how far above "
+        f"it equity has grown (see RiskManager.effective_risk_per_trade)."
+    )
+
+
+def cmd_clear_floor(_args):
+    set_capital_floor(None)
+    print("Capital floor cleared. Risk per trade reverts to the fixed RISK_PER_TRADE setting.")
 
 
 def cmd_buy(args):
@@ -96,6 +131,12 @@ def main():
     sub.add_parser("status").set_defaults(func=cmd_status)
     sub.add_parser("pause").set_defaults(func=cmd_pause)
     sub.add_parser("resume").set_defaults(func=cmd_resume)
+
+    floor_parser = sub.add_parser("set-floor")
+    floor_parser.add_argument("amount", type=float)
+    floor_parser.set_defaults(func=cmd_set_floor)
+
+    sub.add_parser("clear-floor").set_defaults(func=cmd_clear_floor)
 
     buy_parser = sub.add_parser("buy")
     buy_parser.add_argument("symbol")

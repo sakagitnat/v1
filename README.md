@@ -169,10 +169,31 @@ committed to the repo):
 
 ### Pausing/resuming
 
-`state/bot_state.json` holds a single `paused` flag that the daily workflow
+`state/bot_state.json` holds a `paused` flag that the daily workflow
 checks before trading. `python scripts/cli.py pause` / `resume` (run
 locally, or via the manual-command workflow) flips it; the manual workflow
 commits the change back to the repo automatically.
+
+### Capital floor + risk ladder (protecting the original principal)
+
+```bash
+python scripts/cli.py set-floor 100    # e.g. "never trade below my starting $100"
+python scripts/cli.py clear-floor
+```
+
+When a floor is set, the live bot:
+- **Stops opening new positions** while equity is at or below it (existing
+  positions still close normally on their own stop-loss/target).
+- **Scales risk per trade** by how big a cushion equity has above the floor
+  (`RiskManager.effective_risk_per_trade`): half the configured
+  `RISK_PER_TRADE` while the cushion is under 20%, the full amount between
+  20-50%, and 1.5x once the cushion exceeds 50% -- trading more of the
+  profit built up, not more of the original principal.
+
+This is a strong protection, not an absolute guarantee: an overnight gap
+past a stop-loss can still land below the floor in one move, since a
+stop-loss order fills at the next available price, not necessarily its
+trigger price.
 
 ## Tests
 

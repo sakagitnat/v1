@@ -45,3 +45,39 @@ def test_position_size_with_no_stop_still_respects_max_positions():
     rm = RiskManager(equity=100_000, max_open_positions=1)
     rm.register_open()
     assert rm.position_size(entry_price=100, stop_price=None) == 0
+
+
+def test_capital_floor_blocks_new_entries_at_or_below_it():
+    rm = RiskManager(equity=100, risk_per_trade=0.01, capital_floor=100)
+    assert rm.at_or_below_floor() is True
+    assert rm.position_size(entry_price=10, stop_price=9) == 0
+
+
+def test_capital_floor_does_not_block_above_it():
+    rm = RiskManager(equity=101, risk_per_trade=0.01, capital_floor=100)
+    assert rm.at_or_below_floor() is False
+
+
+def test_ladder_reduces_risk_with_thin_cushion():
+    rm = RiskManager(equity=110, risk_per_trade=0.02, capital_floor=100, ladder=True)  # 10% cushion
+    assert rm.effective_risk_per_trade() == 0.01  # halved
+
+
+def test_ladder_keeps_base_risk_with_moderate_cushion():
+    rm = RiskManager(equity=130, risk_per_trade=0.02, capital_floor=100, ladder=True)  # 30% cushion
+    assert rm.effective_risk_per_trade() == 0.02
+
+
+def test_ladder_increases_risk_with_large_cushion():
+    rm = RiskManager(equity=160, risk_per_trade=0.02, capital_floor=100, ladder=True)  # 60% cushion
+    assert rm.effective_risk_per_trade() == 0.03  # 1.5x
+
+
+def test_ladder_has_no_effect_when_disabled():
+    rm = RiskManager(equity=160, risk_per_trade=0.02, capital_floor=100, ladder=False)
+    assert rm.effective_risk_per_trade() == 0.02
+
+
+def test_ladder_has_no_effect_without_a_floor():
+    rm = RiskManager(equity=160, risk_per_trade=0.02, ladder=True)
+    assert rm.effective_risk_per_trade() == 0.02
