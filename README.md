@@ -225,12 +225,38 @@ Both are undone (`include-symbol` / `resume`) once Claude judges the
 concern has passed, checked again at the next scheduled run. This is
 paper trading only, reversible, and scoped to *not opening new positions*
 -- it never closes a position, changes risk sizing, or touches real
-money. Set up as a recurring Routine (weekdays, ~75 min before the daily
-trading run) bound to the chat session that set it up, so it reuses that
-session's already-authorized GitHub access rather than needing to
-re-request it fresh each time. Routines on this platform auto-expire
-after 7 days, so it needs to be periodically recreated to keep running --
-ask in chat anytime to check the news yourself on demand, change the
+money.
+
+**Schedule.** The daily trading run fires at 15:00 UTC on weekdays. That
+specific time isn't arbitrary: US market open is always 9:30 ET, but
+9:30 ET is a different UTC time depending on whether US daylight saving
+is in effect (13:30 UTC vs 14:30 UTC), and GitHub Actions cron doesn't
+shift for DST on its own. 15:00 UTC sits safely after either case
+year-round, so it never needs manual adjustment twice a year. The news
+check runs at 13:42 UTC -- about 75 minutes earlier -- to leave enough
+slack for the search-and-decide step plus the manual-command workflow's
+own commit-back-to-the-repo step to land *before* the trading run reads
+`state/bot_state.json` at 15:00. (The odd `:42` minute, rather than a
+round `:00`/`:30`, is just to avoid every scheduled job on the platform
+landing on the same instant -- no significance to the number itself.)
+
+**How it runs, and its limits.** Set up as a recurring Routine bound to
+the chat session that set it up, so it reuses that session's
+already-authorized GitHub access rather than needing to re-request it
+fresh every firing (a *fresh*-session Routine would have no GitHub tools
+at all, which was tried first and doesn't work). Two consequences of that
+choice:
+- Routines on this platform auto-expire after 7 days regardless of type,
+  so this one needs to be periodically recreated to keep running --
+  Claude will flag it on what looks like the last scheduled firing.
+- Session-bound Routines don't get the platform's own automatic
+  push/email notification (that only exists for fresh-session Routines).
+  So each firing that takes an action, or finds something concerning
+  enough to flag even without acting, explicitly sends a phone/desktop
+  push notification -- a firing that finds nothing notable just leaves a
+  short note in the chat instead, without pinging you.
+
+Ask in chat anytime to check the news yourself on demand, change the
 schedule, recreate it, or turn it off.
 
 ### Capital floor + risk ladder (protecting the original principal)
