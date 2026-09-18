@@ -1,0 +1,27 @@
+name: Optimize Strategy
+
+# On-demand parameter grid-search (train/test split) for one sub-strategy,
+# aimed at raising win rate without giving up profitability. No secrets
+# needed -- historical price data comes free from yfinance.
+on:
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: "Which strategy to optimize"
+        required: true
+        type: choice
+        options: [breakout, mean_reversion, macd_trend]
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python scripts/optimize_strategy.py --strategy "${{ inputs.strategy }}"
