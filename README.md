@@ -82,7 +82,9 @@ ALPACA_PAPER=true
 ```
 
 Edit `WATCHLIST` in `.env` to the symbols you want the strategy to trade
-(defaults to SPY, AAPL, MSFT, GOOGL, AMZN, NVDA).
+(defaults to SPY, AAPL, MSFT, GOOGL, AMZN, NVDA, GLD -- GLD is the SPDR
+Gold Shares ETF, trading like any other equity, so it needs no special
+commodities access).
 
 ## Backtest first
 

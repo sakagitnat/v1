@@ -14,7 +14,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 def _default_watchlist() -> list[str]:
-    raw = os.getenv("WATCHLIST", "SPY,AAPL,MSFT,GOOGL,AMZN,NVDA")
+    # GLD = SPDR Gold Shares ETF -- trades like any other equity on Alpaca
+    # (no separate commodities/futures access needed), so it slots in here.
+    raw = os.getenv("WATCHLIST", "SPY,AAPL,MSFT,GOOGL,AMZN,NVDA,GLD")
     return [s.strip().upper() for s in raw.split(",") if s.strip()]
 
 
