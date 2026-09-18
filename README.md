@@ -187,9 +187,49 @@ committed to the repo):
 ### Pausing/resuming
 
 `state/bot_state.json` holds a `paused` flag that the daily workflow
-checks before trading. `python scripts/cli.py pause` / `resume` (run
-locally, or via the manual-command workflow) flips it; the manual workflow
-commits the change back to the repo automatically.
+checks before trading. `python scripts/cli.py pause [--reason "..."]` /
+`resume` (run locally, or via the manual-command workflow) flips it; the
+manual workflow commits the change back to the repo automatically. The
+reason (if given) is stored as `pause_reason` and shown by `cli.py status`
+while paused, so it's clear later why trading was halted.
+
+### Excluding a symbol from new entries
+
+```bash
+python scripts/cli.py exclude-symbol TSLA --reason "CEO scandal breaking"
+python scripts/cli.py include-symbol TSLA
+```
+
+Blocks *new* entries into that symbol (any position already open in it is
+left alone -- its stop/target keep managing the exit as normal) until
+explicitly re-included. This is the manual, judgment-based counterpart to
+the automatic `has_upcoming_earnings` check above -- for news too fresh or
+too specific for a mechanical rule to catch. Claude uses this (via the
+manual-command workflow) when asked to react to breaking news about a
+specific holding, or on its own initiative within a narrow, reversible
+scope -- see "Ongoing news monitoring" below.
+
+### Ongoing news monitoring
+
+Beyond the mechanical `has_upcoming_earnings` check, Claude periodically
+checks broader news (per-symbol and macro) on its own and acts within a
+narrow, reversible scope you've authorized:
+- **excluding a single symbol** from new entries (never closes an existing
+  position) when it finds material, fresh news about that company --
+  earnings surprise, guidance cut, lawsuit, executive scandal, etc.
+- **pausing the whole bot** (new entries only, same as above) for
+  macro/systemic risk -- e.g. an unscheduled Fed action, a geopolitical
+  shock.
+
+Both are undone (`include-symbol` / `resume`) once Claude judges the
+concern has passed, checked again at the next scheduled run. This is
+paper trading only, reversible, and scoped to *not opening new positions*
+-- it never closes a position, changes risk sizing, or touches real
+money. Set up as a recurring Routine that fires into a fresh session on
+its own schedule (not tied to any one chat staying open), so it keeps
+running independent of any particular conversation. Ask in chat anytime
+to check the news yourself on demand, change the schedule, or turn it
+off.
 
 ### Capital floor + risk ladder (protecting the original principal)
 

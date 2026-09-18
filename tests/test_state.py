@@ -6,7 +6,8 @@ from trading.execution import state
 def test_load_state_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
     assert state.load_state() == {
-        "paused": False, "capital_floor": None, "initial_floor": None, "milestone_reached": False
+        "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
+        "milestone_reached": False, "excluded_symbols": {},
     }
 
 
@@ -18,12 +19,21 @@ def test_set_paused_then_load_roundtrips(tmp_path, monkeypatch):
     assert state.load_state()["paused"] is False
 
 
+def test_set_paused_with_reason_then_load_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
+    state.set_paused(True, "macro risk: unscheduled Fed announcement")
+    assert state.load_state()["pause_reason"] == "macro risk: unscheduled Fed announcement"
+    state.set_paused(False)
+    assert state.load_state()["pause_reason"] == ""
+
+
 def test_state_file_is_valid_json(tmp_path, monkeypatch):
     path = tmp_path / "bot_state.json"
     monkeypatch.setattr(state, "_STATE_PATH", path)
     state.set_paused(True)
     assert json.loads(path.read_text()) == {
-        "paused": True, "capital_floor": None, "initial_floor": None, "milestone_reached": False
+        "paused": True, "pause_reason": "", "capital_floor": None, "initial_floor": None,
+        "milestone_reached": False, "excluded_symbols": {},
     }
 
 
@@ -49,7 +59,8 @@ def test_loading_old_state_file_without_newer_keys(tmp_path, monkeypatch):
     path.write_text(json.dumps({"paused": False}))
     monkeypatch.setattr(state, "_STATE_PATH", path)
     assert state.load_state() == {
-        "paused": False, "capital_floor": None, "initial_floor": None, "milestone_reached": False
+        "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
+        "milestone_reached": False, "excluded_symbols": {},
     }
 
 
@@ -87,3 +98,30 @@ def test_set_milestone_reached_then_load_roundtrips(tmp_path, monkeypatch):
     assert state.load_state()["milestone_reached"] is True
     state.set_milestone_reached(False)
     assert state.load_state()["milestone_reached"] is False
+
+
+def test_exclude_symbol_then_load_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
+    state.exclude_symbol("aapl", "bad earnings surprise")
+    result = state.load_state()
+    assert result["excluded_symbols"] == {"AAPL": "bad earnings surprise"}
+
+
+def test_exclude_symbol_without_reason_defaults_to_empty_string(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
+    state.exclude_symbol("TSLA")
+    assert state.load_state()["excluded_symbols"] == {"TSLA": ""}
+
+
+def test_include_symbol_removes_exclusion(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
+    state.exclude_symbol("AAPL", "news")
+    state.exclude_symbol("TSLA", "news")
+    state.include_symbol("aapl")
+    assert state.load_state()["excluded_symbols"] == {"TSLA": "news"}
+
+
+def test_include_symbol_not_excluded_is_a_no_op(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "bot_state.json")
+    state.include_symbol("AAPL")
+    assert state.load_state()["excluded_symbols"] == {}

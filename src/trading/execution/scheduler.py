@@ -108,10 +108,14 @@ def run_once(lookback_days: int = 150):
     start = (end - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     bars = load_watchlist_bars(settings.watchlist, start=start)
 
+    excluded = state.get("excluded_symbols") or {}
+    if excluded:
+        logger.info("Symbols excluded from new entries (manual): %s", excluded)
+
     if state.get("milestone_reached"):
-        _run_bucket_mode(broker, bars, equity, capital_floor)
+        _run_bucket_mode(broker, bars, equity, capital_floor, excluded)
     else:
-        _run_single_strategy_mode(broker, bars, equity, capital_floor)
+        _run_single_strategy_mode(broker, bars, equity, capital_floor, excluded)
 
 
 def _manage_tracked_positions(broker: AlpacaBroker, buckets: dict | None) -> dict:
@@ -174,7 +178,7 @@ def _try_enter(broker, symbol, signal, notional, bucket_name=None) -> bool:
     return True
 
 
-def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor):
+def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor, excluded: dict | None = None):
     risk = RiskManager(
         equity=equity,
         risk_per_trade=settings.risk_per_trade,
@@ -198,6 +202,9 @@ def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, c
     for symbol, df in bars.items():
         if symbol in open_symbols or df.empty:
             continue
+        if excluded and symbol in excluded:
+            logger.debug("%s: excluded from new entries (%s)", symbol, excluded[symbol] or "no reason given")
+            continue
         prepared = strategy.prepare(df)
         last_row = prepared.iloc[-1]
         signal = strategy.signal_for_row(symbol, last_row, in_position=False)
@@ -214,7 +221,7 @@ def _run_single_strategy_mode(broker: AlpacaBroker, bars: dict, equity: float, c
             open_symbols.add(symbol)
 
 
-def _run_bucket_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor: float):
+def _run_bucket_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_floor: float, excluded: dict | None = None):
     buckets = init_buckets_if_needed()
     buckets = _manage_tracked_positions(broker, buckets=buckets)
 
@@ -242,6 +249,8 @@ def _run_bucket_mode(broker: AlpacaBroker, bars: dict, equity: float, capital_fl
 
         for symbol, df in bars.items():
             if symbol in open_symbols or df.empty:
+                continue
+            if excluded and symbol in excluded:
                 continue
             if bucket_open_counts.get(bucket_name, 0) >= BUCKET_MAX_OPEN_POSITIONS:
                 break

@@ -14,13 +14,17 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, set-floor, clear-floor, buy, sell, cancel]
+        options: [status, pause, resume, set-floor, clear-floor, buy, sell, cancel, exclude-symbol, include-symbol]
       symbol:
-        description: "Symbol (required for buy/sell)"
+        description: "Symbol (required for buy/sell/cancel/exclude-symbol/include-symbol)"
         required: false
         type: string
       amount:
         description: "Dollar amount -- required for set-floor; optional for buy (omit to size by risk %)"
+        required: false
+        type: string
+      reason:
+        description: "Why (optional, for pause/exclude-symbol -- e.g. 'bad earnings surprise')"
         required: false
         type: string
 
@@ -44,11 +48,15 @@ jobs:
           CMD: ${{ inputs.command }}
           SYMBOL: ${{ inputs.symbol }}
           AMOUNT: ${{ inputs.amount }}
+          REASON: ${{ inputs.reason }}
         run: |
           set -e
           case "$CMD" in
-            status|pause|resume|clear-floor)
+            status|resume|clear-floor)
               python scripts/cli.py "$CMD"
+              ;;
+            pause)
+              python scripts/cli.py pause --reason "$REASON"
               ;;
             set-floor)
               python scripts/cli.py set-floor "$AMOUNT"
@@ -61,6 +69,12 @@ jobs:
               ;;
             cancel)
               python scripts/cli.py cancel "$SYMBOL"
+              ;;
+            exclude-symbol)
+              python scripts/cli.py exclude-symbol "$SYMBOL" --reason "$REASON"
+              ;;
+            include-symbol)
+              python scripts/cli.py include-symbol "$SYMBOL"
               ;;
             *)
               echo "Unknown command: $CMD" >&2

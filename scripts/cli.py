@@ -14,6 +14,9 @@ Usage:
   python scripts/cli.py clear-floor
   python scripts/cli.py buy SYMBOL [--notional 50] [--risk-pct 0.01] [--stop-pct 0.05]
   python scripts/cli.py sell SYMBOL
+  python scripts/cli.py cancel SYMBOL
+  python scripts/cli.py exclude-symbol SYMBOL [--reason "..."]
+  python scripts/cli.py include-symbol SYMBOL
 """
 import argparse
 import sys
@@ -26,7 +29,14 @@ from trading.data.market_data import load_daily_bars_yfinance
 from trading.execution.broker import AlpacaBroker
 from trading.execution.buckets import load_buckets
 from trading.execution.positions import record_close, record_open
-from trading.execution.state import banked_profit, load_state, set_capital_floor, set_paused
+from trading.execution.state import (
+    banked_profit,
+    exclude_symbol,
+    include_symbol,
+    load_state,
+    set_capital_floor,
+    set_paused,
+)
 from trading.risk.risk_manager import RiskManager
 
 
@@ -38,7 +48,8 @@ def cmd_status(_args):
     equity = float(account.equity)
     capital_floor = state.get("capital_floor")
 
-    print(f"Paused: {state.get('paused', False)}")
+    pause_note = f" ({state.get('pause_reason')})" if state.get("paused") and state.get("pause_reason") else ""
+    print(f"Paused: {state.get('paused', False)}{pause_note}")
     print(f"Equity: {account.equity} {getattr(account, 'currency', 'USD')}")
     print(f"Cash: {account.cash}")
     print(f"Buying power: {account.buying_power}")
@@ -71,13 +82,17 @@ def cmd_status(_args):
     else:
         print("Bucket mode: not yet (activates once equity passes 2x the initial floor)")
 
+    excluded = state.get("excluded_symbols") or {}
+    if excluded:
+        print(f"Excluded from new entries (manual): {excluded}")
+
     print(f"Open positions ({len(positions)}):")
     for p in positions:
         print(f"  {p.symbol}: {p.qty} shares @ avg {p.avg_entry_price}, unrealized P&L {p.unrealized_pl}")
 
 
-def cmd_pause(_args):
-    set_paused(True)
+def cmd_pause(args):
+    set_paused(True, getattr(args, "reason", "") or "")
     print("Paused. The daily automated run will skip trading until resumed.")
 
 
@@ -163,12 +178,31 @@ def cmd_cancel(args):
     print(f"Cancelled any open orders for {symbol} (no position to close, just pending orders).")
 
 
+def cmd_exclude_symbol(args):
+    symbol = args.symbol.upper()
+    exclude_symbol(symbol, args.reason or "")
+    print(
+        f"{symbol} excluded from new entries until included again. Existing open positions in it, "
+        f"if any, are unaffected -- their stop/target keep managing the exit as normal."
+    )
+
+
+def cmd_include_symbol(args):
+    symbol = args.symbol.upper()
+    include_symbol(symbol)
+    print(f"{symbol} is eligible for new entries again.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Manual control for the trading bot")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("status").set_defaults(func=cmd_status)
-    sub.add_parser("pause").set_defaults(func=cmd_pause)
+
+    pause_parser = sub.add_parser("pause")
+    pause_parser.add_argument("--reason", default="", help="Why (e.g. 'macro risk: unscheduled Fed announcement')")
+    pause_parser.set_defaults(func=cmd_pause)
+
     sub.add_parser("resume").set_defaults(func=cmd_resume)
 
     floor_parser = sub.add_parser("set-floor")
@@ -191,6 +225,15 @@ def main():
     cancel_parser = sub.add_parser("cancel")
     cancel_parser.add_argument("symbol")
     cancel_parser.set_defaults(func=cmd_cancel)
+
+    exclude_parser = sub.add_parser("exclude-symbol")
+    exclude_parser.add_argument("symbol")
+    exclude_parser.add_argument("--reason", default="", help="Why (e.g. 'bad earnings surprise', 'CEO scandal')")
+    exclude_parser.set_defaults(func=cmd_exclude_symbol)
+
+    include_parser = sub.add_parser("include-symbol")
+    include_parser.add_argument("symbol")
+    include_parser.set_defaults(func=cmd_include_symbol)
 
     args = parser.parse_args()
     args.func(args)
