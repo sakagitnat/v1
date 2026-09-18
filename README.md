@@ -17,7 +17,12 @@ by default, with backtesting on free historical data.
 1. **Strategies** (`src/trading/strategy/`) — six long-only strategies
    sharing one interface (`prepare()` + `signal_for_row()`), so the backtest
    engine and live execution work with any of them unchanged. The default
-   used by both the backtest and the live/paper bot is **`regime_adaptive`**:
+   used by both the backtest and the live/paper bot is **`breakout`**:
+   - **`breakout`** (default) — classic Donchian-channel/"Turtle Trading"
+     breakout: buy a new N-day high, exit on a new M-day low. Parameters
+     tuned by `optimize_strategy.py --objective calmar` for the most total
+     profit per unit of max drawdown, not for win rate -- see that file's
+     docstring and `breakout.py`'s for the numbers.
    - **`trend_momentum`** — enter when the 20-day EMA is above the 50-day
      EMA, price is above the 50-day EMA, and RSI(14) is 40–70 (momentum
      without chasing an overbought move).
@@ -25,24 +30,21 @@ by default, with backtesting on free historical data.
      by an oversold RSI, sell once price reverts to the average.
    - **`macd_trend`** — MACD crossover, but only taken when price is above
      the 200-day SMA, to filter out whipsaws against the dominant trend.
-   - **`breakout`** — classic Donchian-channel/"Turtle Trading" breakout:
-     buy a new N-day high, exit on a new M-day low.
    - **`buy_and_hold`** — not a real strategy; a benchmark to check whether
      an active strategy is actually earning its complexity.
-   - **`regime_adaptive`** (default) — switches between the sub-strategies
-     above based on the broad market's trend (`REGIME_SYMBOL`, SPY by
-     default): **bull → breakout**, **bear → mean_reversion**,
-     **neutral → macd_trend**. This mapping came out of backtesting all
-     five individually across 2020-2026's different market regimes (see
-     `compare_strategies.py` below) — breakout had the best risk-adjusted
-     returns in trending markets, mean_reversion was the only strategy that
-     didn't lose money in the 2022 bear market, and macd_trend is a more
-     conservative pick for the turning points between the two.
+   - **`regime_adaptive`** — switches between breakout/mean_reversion/
+     macd_trend based on the broad market's trend (`REGIME_SYMBOL`, SPY by
+     default: bull → breakout, bear → mean_reversion, neutral → macd_trend).
+     Tried as the default first, but a full 2020-present comparison (see
+     `compare_strategies.py`) showed plain `breakout` alone beating it on
+     CAGR, Sharpe, *and* max drawdown simultaneously once breakout itself
+     was tuned -- the extra complexity of switching wasn't earning its
+     keep, so it was dropped back to an available-but-not-default option.
 
    All the entry-based strategies (everything but buy-and-hold) exit on an
    ATR-based stop-loss / take-profit in addition to their signal-based exit.
    Swap the `strategy=` argument in `scripts/run_backtest.py` /
-   `trading/execution/scheduler.py` to use a single strategy instead.
+   `trading/execution/scheduler.py` to use a different one.
 2. **Risk management** (`src/trading/risk/risk_manager.py`) — position size
    is capped so a stopped-out trade only loses `RISK_PER_TRADE` (default 1%)
    of account equity; a hard cap on concurrent open positions
@@ -95,13 +97,34 @@ risking any money, even simulated money.
 python scripts/compare_strategies.py
 ```
 
-Backtests all five strategies over 2019-present, then breaks the results
+Backtests all six strategies over 2019-present, then breaks the results
 down by period (2020-21 COVID crash/recovery, 2022 bear market, 2023-24
 recovery, 2025-present, and the full span) so you can see which strategy
 held up best in which kind of market -- a strategy that wins over the full
 span can still be the worst performer in a bear market, and this is where
 that shows up. Also runnable on demand via the **Compare Strategies**
 GitHub Actions workflow.
+
+## Tuning a strategy's parameters
+
+```bash
+python scripts/optimize_strategy.py --strategy breakout --objective calmar
+python scripts/optimize_strategy.py --strategy breakout --objective win_rate
+```
+
+Grid-searches a strategy's parameters on a 2019-2023 TRAIN period, then
+validates the winning combination once against a 2024-present TEST period
+it never touched during the search -- a combination that only looks good
+because it's curve-fit to TRAIN gets flagged as overfit here, not shipped.
+Two objectives:
+- **`calmar`** (default) -- the most total profit per unit of max drawdown;
+  rejects any combination whose drawdown breaches -25%, regardless of its
+  return. This is what picked `breakout`'s current defaults.
+- **`win_rate`** -- the highest fraction of winning trades among
+  combinations that keep TRAIN CAGR positive. Trades average win size for
+  consistency; a strategy optimized this way will win more often but make
+  less per win. Also runnable via the **Optimize Strategy** GitHub Actions
+  workflow (pick the strategy and objective as inputs).
 
 ## Paper trading
 
@@ -165,12 +188,12 @@ src/trading/
   indicators.py           # SMA, EMA, RSI, MACD, ATR, Bollinger Bands, Donchian channel
   regime.py                # bull/bear/neutral classifier used by regime_adaptive
   strategy/
+    breakout.py              # Donchian channel / Turtle-style breakout (default)
     trend_momentum.py     # EMA cross + RSI filter
     mean_reversion.py      # Bollinger Band dip-buy
     macd_trend.py           # MACD cross filtered by 200-day trend
-    breakout.py              # Donchian channel / Turtle-style breakout
     buy_and_hold.py           # benchmark, not a real strategy
-    regime_adaptive.py        # switches between the above by market regime (default)
+    regime_adaptive.py        # switches between the sub-strategies by market regime (available, not default)
   risk/
     risk_manager.py        # position sizing, daily-loss circuit breaker
   backtest/
@@ -185,13 +208,15 @@ src/trading/
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
-  run_paper_trading.py         # used by the daily-trading.yml workflow
-  cli.py                        # status / pause / resume / buy / sell -- used by manual-command.yml
+  optimize_strategy.py         # train/test parameter grid search (calmar or win_rate)
+  run_paper_trading.py          # used by the daily-trading.yml workflow
+  cli.py                         # status / pause / resume / buy / sell -- used by manual-command.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
   backtest.yml
   compare-strategies.yml
+  optimize-strategy.yml
 state/
   bot_state.json
 tests/

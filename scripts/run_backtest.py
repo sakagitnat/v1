@@ -1,9 +1,11 @@
 """Backtest the strategy over the configured watchlist.
 
-Uses the regime-adaptive strategy by default: it switches between Breakout,
-Mean Reversion, and MACD Trend sub-strategies based on the broad market's
-trend (see src/trading/strategy/regime_adaptive.py). Swap `strategy=` below
-to backtest a single strategy instead.
+Uses Breakout by default: in a full comparison across 2020-present, it beat
+regime_adaptive (and every other strategy except the far-riskier buy-and-hold)
+on CAGR, Sharpe, and max drawdown all at once -- the added complexity of
+switching strategies by market regime wasn't earning its keep once Breakout
+itself was tuned for profit-per-drawdown-risk (see optimize_strategy.py
+--objective calmar). Swap `strategy=` below to backtest a different one.
 
 Usage: python scripts/run_backtest.py
 """
@@ -14,20 +16,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.backtest.engine import BacktestEngine
 from trading.config import settings
-from trading.data.market_data import load_daily_bars_yfinance, load_watchlist_bars
-from trading.strategy.regime_adaptive import RegimeAdaptiveStrategy
+from trading.data.market_data import load_watchlist_bars
+from trading.strategy.breakout import BreakoutStrategy
 
-FETCH_START = "2019-01-01"  # buffer before 2020 so 200-day indicators are already warm
+FETCH_START = "2019-01-01"  # buffer before 2020 so indicators are already warm
 
 
 def main():
     symbols = settings.watchlist
-    print(f"Backtesting {symbols} (regime reference: {settings.regime_symbol}) ...")
+    print(f"Backtesting {symbols} ...")
     bars = load_watchlist_bars(symbols, start=FETCH_START)
-    regime_bars = load_daily_bars_yfinance(settings.regime_symbol, start=FETCH_START)
 
     engine = BacktestEngine(
-        strategy=RegimeAdaptiveStrategy(regime_bars=regime_bars),
+        strategy=BreakoutStrategy(),
         starting_equity=100_000.0,
         risk_per_trade=settings.risk_per_trade,
         max_open_positions=settings.max_open_positions,
