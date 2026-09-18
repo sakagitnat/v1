@@ -4,7 +4,5 @@
   "initial_floor": 100.0,
   "pause_reason": "",
   "milestone_reached": false,
-  "excluded_symbols": {
-    "TSLA": "live-validation test, will be removed immediately"
-  }
+  "excluded_symbols": {}
 }
