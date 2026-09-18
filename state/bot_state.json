@@ -1,4 +1,5 @@
 {
   "paused": false,
-  "capital_floor": null
+  "capital_floor": 100.0,
+  "initial_floor": 100.0
 }
