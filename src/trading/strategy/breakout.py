@@ -12,15 +12,21 @@ class BreakoutStrategy:
     Entry: today's close is above the highest high of the prior
     `entry_window` bars. Exit: close drops below the lowest low of the prior
     `exit_window` bars, or an ATR-based stop-loss / take-profit is hit.
+
+    Defaults tuned by scripts/optimize_strategy.py (2026-09-18): grid-searched
+    on 2019-2023, validated on the untouched 2024-present holdout, where it
+    raised win rate from 45.5% to 68.6% (Sharpe 1.26 -> 0.94, CAGR 13.9% ->
+    8.1% -- a deliberate trade: smaller, more frequent wins over fewer,
+    larger ones). See that script's docstring for the train/test methodology.
     """
 
     def __init__(
         self,
-        entry_window: int = 20,
-        exit_window: int = 10,
+        entry_window: int = 10,
+        exit_window: int = 15,
         atr_window: int = 14,
-        atr_stop_mult: float = 2.0,
-        atr_target_mult: float = 4.0,
+        atr_stop_mult: float = 2.5,
+        atr_target_mult: float = 1.5,
     ):
         self.entry_window = entry_window
         self.exit_window = exit_window
