@@ -14,11 +14,25 @@ by default, with backtesting on free historical data.
 
 ## How it works
 
-1. **Strategy** (`src/trading/strategy/trend_momentum.py`) — long-only trend
-   following: enter when the 20-day EMA is above the 50-day EMA, price is
-   above the 50-day EMA, and RSI(14) is between 40–70 (confirms momentum
-   without chasing an overbought move). Exit when the trend flips, or when
-   an ATR-based stop-loss / take-profit is hit.
+1. **Strategies** (`src/trading/strategy/`) — five long-only strategies
+   sharing one interface (`prepare()` + `signal_for_row()`), so the backtest
+   engine and live execution work with any of them unchanged. `WATCHLIST`'s
+   default strategy is `trend_momentum`; swap it in `scripts/run_backtest.py`
+   / `run_paper_trading.py` to try another:
+   - **`trend_momentum`** — enter when the 20-day EMA is above the 50-day
+     EMA, price is above the 50-day EMA, and RSI(14) is 40–70 (momentum
+     without chasing an overbought move).
+   - **`mean_reversion`** — buy a dip to the lower Bollinger Band confirmed
+     by an oversold RSI, sell once price reverts to the average.
+   - **`macd_trend`** — MACD crossover, but only taken when price is above
+     the 200-day SMA, to filter out whipsaws against the dominant trend.
+   - **`breakout`** — classic Donchian-channel/"Turtle Trading" breakout:
+     buy a new N-day high, exit on a new M-day low.
+   - **`buy_and_hold`** — not a real strategy; a benchmark to check whether
+     an active strategy is actually earning its complexity.
+
+   All (except buy-and-hold) exit on an ATR-based stop-loss / take-profit
+   in addition to their signal-based exit.
 2. **Risk management** (`src/trading/risk/risk_manager.py`) — position size
    is capped so a stopped-out trade only loses `RISK_PER_TRADE` (default 1%)
    of account equity; a hard cap on concurrent open positions
@@ -64,6 +78,20 @@ Prints total return, CAGR, Sharpe ratio, max drawdown, win rate, and trade
 count for the configured watchlist since 2020. Tune the strategy's
 parameters (EMA windows, RSI bounds, ATR multipliers) and re-run before
 risking any money, even simulated money.
+
+## Comparing strategies across market regimes
+
+```bash
+python scripts/compare_strategies.py
+```
+
+Backtests all five strategies over 2019-present, then breaks the results
+down by period (2020-21 COVID crash/recovery, 2022 bear market, 2023-24
+recovery, 2025-present, and the full span) so you can see which strategy
+held up best in which kind of market -- a strategy that wins over the full
+span can still be the worst performer in a bear market, and this is where
+that shows up. Also runnable on demand via the **Compare Strategies**
+GitHub Actions workflow.
 
 ## Paper trading
 
@@ -124,9 +152,13 @@ pytest
 ```
 src/trading/
   config.py              # environment-driven settings, incl. the live-trading safety switch
-  indicators.py           # SMA, EMA, RSI, MACD, ATR
+  indicators.py           # SMA, EMA, RSI, MACD, ATR, Bollinger Bands, Donchian channel
   strategy/
-    trend_momentum.py     # default strategy
+    trend_momentum.py     # EMA cross + RSI filter (default)
+    mean_reversion.py      # Bollinger Band dip-buy
+    macd_trend.py           # MACD cross filtered by 200-day trend
+    breakout.py              # Donchian channel / Turtle-style breakout
+    buy_and_hold.py           # benchmark, not a real strategy
   risk/
     risk_manager.py        # position sizing, daily-loss circuit breaker
   backtest/
@@ -140,11 +172,14 @@ src/trading/
     state.py                # paused/resumed flag shared with the daily workflow
 scripts/
   run_backtest.py
-  run_paper_trading.py       # used by the daily-trading.yml workflow
-  cli.py                      # status / pause / resume / buy / sell -- used by manual-command.yml
+  compare_strategies.py       # all strategies x several market regimes
+  run_paper_trading.py         # used by the daily-trading.yml workflow
+  cli.py                        # status / pause / resume / buy / sell -- used by manual-command.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
+  backtest.yml
+  compare-strategies.yml
 state/
   bot_state.json
 tests/

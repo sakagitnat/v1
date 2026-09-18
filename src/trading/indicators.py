@@ -43,3 +43,21 @@ def atr(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> 
         axis=1,
     ).max(axis=1)
     return true_range.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+
+
+def bollinger_bands(
+    series: pd.Series, window: int = 20, num_std: float = 2.0
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    mid = sma(series, window)
+    std = series.rolling(window=window, min_periods=window).std()
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    return upper, mid, lower
+
+
+def donchian_channel(high: pd.Series, low: pd.Series, window: int = 20) -> tuple[pd.Series, pd.Series]:
+    """Highest high / lowest low over the prior `window` bars (excludes the current bar,
+    so a breakout is measured against bars already closed -- no lookahead)."""
+    upper = high.shift(1).rolling(window=window, min_periods=window).max()
+    lower = low.shift(1).rolling(window=window, min_periods=window).min()
+    return upper, lower

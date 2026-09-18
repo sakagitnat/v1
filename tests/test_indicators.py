@@ -1,6 +1,6 @@
 import pandas as pd
 
-from trading.indicators import atr, ema, macd, rsi, sma
+from trading.indicators import atr, bollinger_bands, donchian_channel, ema, macd, rsi, sma
 
 
 def test_sma_basic():
@@ -33,3 +33,18 @@ def test_macd_shapes_match():
     s = pd.Series(range(1, 60)).astype(float)
     macd_line, signal_line, hist = macd(s)
     assert len(macd_line) == len(signal_line) == len(hist) == len(s)
+
+
+def test_bollinger_bands_ordering():
+    s = pd.Series([10.0, 12.0, 9.0, 15.0, 8.0, 14.0, 11.0, 13.0, 9.5, 12.5] * 3)
+    upper, mid, lower = bollinger_bands(s, window=10, num_std=2.0)
+    valid = upper.notna()
+    assert (upper[valid] >= mid[valid]).all()
+    assert (mid[valid] >= lower[valid]).all()
+
+
+def test_donchian_channel_excludes_current_bar():
+    high = pd.Series([10.0] * 5 + [100.0])  # breakout only visible on the bar AFTER it happens
+    low = pd.Series([9.0] * 6)
+    upper, _ = donchian_channel(high, low, window=5)
+    assert upper.iloc[5] == 10.0  # today's spike to 100 shouldn't count against itself

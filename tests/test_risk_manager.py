@@ -33,3 +33,15 @@ def test_max_open_positions_enforced():
     rm = RiskManager(equity=100_000, risk_per_trade=0.5, max_open_positions=1)
     rm.register_open()
     assert rm.position_size(entry_price=100, stop_price=95) == 0
+
+
+def test_position_size_with_no_stop_uses_equal_weight_allocation():
+    rm = RiskManager(equity=100_000, max_open_positions=5)
+    shares = rm.position_size(entry_price=100, stop_price=None)
+    assert shares == 200  # (100,000 / 5 slots) / 100 per share
+
+
+def test_position_size_with_no_stop_still_respects_max_positions():
+    rm = RiskManager(equity=100_000, max_open_positions=1)
+    rm.register_open()
+    assert rm.position_size(entry_price=100, stop_price=None) == 0

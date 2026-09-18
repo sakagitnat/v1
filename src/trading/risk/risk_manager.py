@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -15,11 +16,18 @@ class RiskManager:
     def __post_init__(self):
         self._daily_start_equity = self.equity
 
-    def position_size(self, entry_price: float, stop_price: float) -> int:
-        if self._halted or self._open_positions >= self.max_open_positions:
+    def position_size(self, entry_price: float, stop_price: Optional[float]) -> int:
+        if self._halted or self._open_positions >= self.max_open_positions or entry_price <= 0:
             return 0
+
+        if stop_price is None:
+            # No stop-loss defined (e.g. a buy-and-hold strategy) -- size as
+            # an equal-weight slice of equity instead of a risk-based amount.
+            allocation = self.equity / self.max_open_positions
+            return max(0, int(allocation // entry_price))
+
         per_share_risk = entry_price - stop_price
-        if per_share_risk <= 0 or entry_price <= 0:
+        if per_share_risk <= 0:
             return 0
         risk_amount = self.equity * self.risk_per_trade
         shares_by_risk = int(risk_amount // per_share_risk)
