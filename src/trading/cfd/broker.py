@@ -42,17 +42,21 @@ class DerivBroker:
     dead end for API access (see "CFD/forex trading (Deriv)").
 
     Safety gate: since there's no separate practice/live base URL to
-    force, the check happens right after step 1 -- refuses to proceed on
-    a real (non-virtual) account unless CFD_ALLOW_LIVE_TRADING is
-    explicitly set, same protective intent as the Alpaca/OANDA dual gate.
+    force, the check happens right after step 1 -- picks the demo
+    (is_virtual) account among the ones this token authorizes unless
+    CFD_ALLOW_LIVE_TRADING is explicitly set, same protective intent as
+    the Alpaca/OANDA dual gate. This matters because Deriv gives every
+    signup an unverified real-money account automatically alongside any
+    demo account, even for users who only ever use demo -- so a token can
+    authorize both, and accounts[0] is not necessarily the demo one.
 
-    UNTESTED against the real API as of writing -- exact JSON field names
-    in the /accounts and /otp responses (account_id, is_virtual, etc.) are
-    a best-effort guess from documentation search, not yet confirmed
-    against a live response. Validate this, and separately
-    submit_multiplier_order's stop_loss/take_profit unit conversion
-    (dollar amounts, not price levels -- see scheduler.py), before
-    trusting it with even demo money.
+    Connection flow and field names (account_id, is_virtual, the /accounts
+    and /otp response shapes) are confirmed against the live API -- this
+    class has successfully connected to a real Deriv account. Still
+    unverified against live responses: submit_multiplier_order's proposal/
+    buy flow and stop_loss/take_profit dollar-amount conversion (see
+    scheduler.py) -- validate those before trusting it with even demo
+    money.
     """
 
     def __init__(self):
@@ -78,16 +82,26 @@ class DerivBroker:
         accounts = accounts_resp.json().get("data") or []
         if not accounts:
             raise RuntimeError("Deriv API: no accounts found for this token (GET /accounts returned none)")
-        account = accounts[0]
-        account_id = account["account_id"]
-        is_virtual = bool(account.get("is_virtual"))
 
-        if not is_virtual and not settings.cfd_allow_live_trading:
+        # A Deriv token can authorize several accounts at once (Deriv creates
+        # an unverified real-money account for every signup automatically,
+        # alongside any demo account -- even for users who never touch it).
+        # Pick the account matching the safety mode explicitly instead of
+        # blindly taking accounts[0], which could silently select the real
+        # account when a demo one was intended.
+        wanted_virtual = not settings.cfd_allow_live_trading
+        account = next((a for a in accounts if bool(a.get("is_virtual")) == wanted_virtual), None)
+        if account is None:
             raise RuntimeError(
-                "Refusing to start: this API token authorizes a REAL (non-virtual) Deriv "
-                "account, but CFD_ALLOW_LIVE_TRADING is not true. Set CFD_ALLOW_LIVE_TRADING=true "
-                "explicitly to trade with real money."
+                f"Deriv API: this token has no {'DEMO' if wanted_virtual else 'REAL'} account "
+                f"among {len(accounts)} account(s) it authorizes. "
+                + (
+                    "Set CFD_ALLOW_LIVE_TRADING=true explicitly to trade with real money."
+                    if wanted_virtual
+                    else "Create/use a token scoped to a real account, or unset CFD_ALLOW_LIVE_TRADING."
+                )
             )
+        account_id = account["account_id"]
 
         otp_resp = requests.post(f"{OPTIONS_API_BASE}/accounts/{account_id}/otp", headers=self._auth_headers())
         if not otp_resp.ok:
