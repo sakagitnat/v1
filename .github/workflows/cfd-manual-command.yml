@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, burn-demo-balance]
+        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, burn-demo-balance, sweep-risk-synthetic]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
@@ -97,6 +97,9 @@ jobs:
               ;;
             burn-demo-balance)
               python scripts/burn_demo_balance.py --target 100 --tolerance 30
+              ;;
+            sweep-risk-synthetic)
+              python scripts/sweep_cfd_risk_synthetic.py --granularity "${MULTIPLIER:-3600}"
               ;;
             *)
               echo "Unknown command: $CMD" >&2
