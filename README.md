@@ -526,6 +526,39 @@ the live bot's own accumulated trade history, once there's enough of
 it) stays a reasonable future step, not a requirement -- H1 is a fully
 valid, deliberately-chosen granularity now, not a placeholder.
 
+**Risk-per-trade sweep (`scripts/sweep_cfd_risk.py`).** After validating
+the strategy above, there was a request to reach a much faster
+capital-doubling timeline than the validated ~3-5%/year CAGR implies
+(months rather than the ~15-21 years that CAGR works out to). Rather
+than guess a bigger `CFD_RISK_PER_TRADE`, this script holds
+`EmaCrossoverStrategy` fixed at its validated defaults and backtests a
+grid of `risk_per_trade` values (1% to 50%) on both TRAIN and TEST,
+alongside a blunt "equity left after N consecutive full-stop losses in
+a row" figure for each.
+
+**Result: raising risk_per_trade doesn't trade a bit more risk for a
+lot more return here -- it makes the return worse too**, not just the
+drawdown. CAGR fell from -2.3% (TRAIN, 1% risk) to -84.0% (TRAIN, 50%
+risk) essentially monotonically, with max drawdown sliding from -24.9%
+to -99.0% over the same range -- a Kelly-criterion / volatility-drag
+effect: this strategy's edge (win rate ~46-48%, Sharpe mostly under 1)
+is too thin to support leveraging past a small risk fraction; sizing
+bets larger than the edge supports actively destroys long-run growth,
+it doesn't just add variance around a bigger number. A run of 10
+ordinary losses (unremarkable for a ~47% win-rate strategy) leaves as
+little as 35% of equity at 10% risk/trade, and under 1% at 30%+.
+
+Also notable: re-running the baseline (1% risk, same validated params)
+against a slightly later data window than the original validation shows
+TRAIN CAGR slipping to -2.3% (from the original +3.4%) -- the edge is
+real but not large or perfectly stable across time, another reason not
+to lean on it harder rather than less. **Conclusion: no risk_per_trade
+value gets this strategy to a months-scale doubling goal without a high
+probability of ruin; `CFD_RISK_PER_TRADE` stays at its conservative
+default (0.01) rather than being raised.** A faster timeline, if wanted
+later, needs a higher-edge strategy (or an entirely different approach),
+not a bigger bet size on this one.
+
 ## Tests
 
 ```bash
