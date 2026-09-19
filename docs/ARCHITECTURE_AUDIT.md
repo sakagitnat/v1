@@ -6,13 +6,9 @@ for the target) against what actually exists on
 no trading logic was changed while writing it.
 
 **Status as of the last entry below: all five phases of the original
-roadmap (Phase 0 through Phase 5) are complete.** None of this has been
-exercised against the real Deriv demo account yet under this
-architecture -- see the progress log's final entries and, going forward,
-whatever real-run findings get added after this audit. "Complete" means
-every named piece of code exists, is unit-tested, and is wired together
-correctly in isolation; it does not yet mean "confirmed correct against
-live Deriv data," which is a different, still-open claim.
+roadmap (Phase 0 through Phase 5) are complete, and the pipeline has now
+been exercised against the real Deriv demo account** -- see the final
+progress log entry.
 
 ## Progress log
 
@@ -146,6 +142,36 @@ live Deriv data," which is a different, still-open claim.
   within a narrow, pre-authorized scope or flag larger decisions to the
   user, that's a deliberate *operational* choice to set up later, not
   something this phase's code does on its own.
+
+- **2026-09-19 — First live runs against the real Deriv demo account.**
+  Triggered `CFD Manual Command` (`status`, `list-strategies`) and
+  `CFD Trading` (the actual scheduler, twice) via GitHub Actions
+  workflow_dispatch. Results:
+  - `status` connected and read the real account: broker balance
+    $3,169.49 (not Deriv's $10,000 default -- this account has prior
+    testing history from before this architecture, including the
+    now-deprecated `burn_demo_balance.py`).
+  - First scheduler run: `broker_baseline` correctly recorded at
+    3169.49, `capital_floor` correctly set to 100.0 (virtual). Committed
+    `state/cfd_bot_state.json` with exactly those values -- Phase 0's
+    core fix confirmed working against live data, not just unit tests.
+  - `status` afterward correctly showed broker balance vs. virtual
+    equity as two distinct, labeled numbers.
+  - Second scheduler run: no state changes at all -- baseline's set-once
+    guard held, and no ACTIVE strategy's regime matched at that moment
+    (a correct NO TRADE, not a failure). No exceptions in either run.
+  - `frxXAUUSD`/`frxEURUSD`/etc. candle fetches succeeded with no
+    "market closed" errors -- resolved the README's prior "still not
+    validated" note about forex/gold instruments specifically (see that
+    file's CFD section). On that basis, `cfd-trading.yml`'s cron
+    schedule (hourly, weekdays) was enabled -- previously commented out.
+  - Not yet exercised live: an actual entry (no regime matched an
+    ACTIVE strategy's `suited_regimes` during these two runs), Paper
+    Trading (nothing is in `PAPER` state yet), Research Lab's live-data
+    path (`research-strategy` was built and unit-tested but not run
+    against real fetched history), and `manager-report`/`failures`
+    with anything but empty data. These will only be exercisable once
+    real trade history accumulates from the now-enabled schedule.
 
   Everything else below is still an accurate account of what's missing.
 

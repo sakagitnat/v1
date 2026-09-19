@@ -686,22 +686,26 @@ markets are shut, as they were when this was run. Confirmed multiplier
 values differ by instrument yet again: `cryBTCUSD` accepts
 100/200/300/500/800, not `risk.py`'s default of 20.
 
-**Still not validated:** the real forex/gold instruments in
-`CFD_INSTRUMENTS` (`frxXAUUSD` etc.) *themselves* -- testing happened
-on a weekend, so those markets were closed before an actual order
-could be placed there specifically (confirmed as far as the request
-being schema-valid, via a "market closed" response rather than a
-validation error). Deriv caps which `multiplier` values it accepts per
-instrument, unchecked for these specific instruments. The order
-*mechanism* is proven correct now (crypto test above), so this
-remaining gap is narrower than before: forex/gold's own market hours
-and multiplier values, not an unproven code path. The cron schedule in
-`cfd-trading.yml` stays commented out until this is checked. (Crypto
-itself isn't a drop-in fix for this -- `EmaCrossoverStrategy`'s
-parameters were validated on forex/gold data only, not crypto's
-different volatility profile, so `cryBTCUSD`/`cryETHUSD` need their
-own backtest before joining `CFD_INSTRUMENTS` for real trading, even
-though their order mechanism already works.)
+**Update 2026-09-19: forex/gold instruments confirmed too.** Two full
+scheduler runs (`scripts/run_cfd_trading.py`, via the `CFD Trading`
+workflow's manual dispatch) against the real configured instruments
+(`frxXAUUSD` etc.) completed cleanly -- candle fetches succeeded, no
+"market closed" errors, no exceptions. The first run also confirmed the
+virtual-equity baseline capture (`trading.cfd.capital`) and capital
+floor set correctly against the live account; the second run's
+set-once baseline logic correctly made no changes. The `cfd-trading.yml`
+cron schedule is now enabled on that basis (previously commented out --
+see git history for that earlier caution, from before this system had
+the virtual equity model, Trade Database, or any of the safety layers
+described above it in this section). Deriv's per-instrument `multiplier`
+caps are still discovered empirically as each one is actually used
+(same "confirm against a live response, never guess" discipline as
+everywhere else in this file), not exhaustively pre-verified. (Crypto
+isn't a drop-in fix for forex/gold's own validated parameters --
+`EmaCrossoverStrategy`'s params were validated on forex/gold data only,
+not crypto's different volatility profile, so `cryBTCUSD`/`cryETHUSD`
+still need their own backtest before joining `CFD_INSTRUMENTS`, even
+though their order mechanism works.)
 
 **Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
 in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s

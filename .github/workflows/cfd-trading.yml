@@ -19,19 +19,19 @@ name: CFD Trading (Deriv)
 #
 # Connection and order flow (connect, buy, portfolio read, sell) are
 # confirmed end-to-end against a real Deriv demo account -- see
-# src/trading/cfd/broker.py's docstring. Still not yet confirmed: placing
-# a real order on the actual configured instruments (frxXAUUSD etc,
-# rather than a synthetic index used for the connection test) -- blocked
-# by forex/gold markets being closed over a weekend when that was last
-# attempted. The "schedule" trigger stays commented out until that's
-# checked -- a live cron against instruments that might reject the
-# trade would just fail every run and burn CI minutes on a guaranteed
-# failure. Trigger manually (workflow_dispatch) to confirm first, then
-# uncomment the schedule.
+# src/trading/cfd/broker.py's docstring. Two manual (workflow_dispatch)
+# runs against the real configured instruments (frxXAUUSD etc, not just
+# a synthetic index) completed cleanly on 2026-09-19: first run recorded
+# the virtual-equity baseline correctly (see trading.cfd.capital) and set
+# the capital floor; second run made no unwanted state changes (baseline
+# is set-once, as designed) and took no action (no ACTIVE strategy's
+# suited_regimes matched at that moment -- a correct NO TRADE, not an
+# error). No errors, no market-closed failures. Schedule enabled on that
+# basis.
 on:
   workflow_dispatch: {}
-  # schedule:
-  #   - cron: "5 * * * 1-5"
+  schedule:
+    - cron: "5 * * * 1-5"
 
 permissions:
   contents: write
