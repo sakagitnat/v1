@@ -44,3 +44,9 @@ def test_only_disappeared_contracts_are_included():
     records = _reconcile_closed_trades(tracked, currently_open_ids={2}, equity_now=90.0)
     assert len(records) == 1
     assert records[0].contract_id == 1
+
+
+def test_reconciled_record_carries_over_the_regime_recorded_at_entry():
+    tracked = {"1": _meta(regime="trending")}
+    records = _reconcile_closed_trades(tracked, currently_open_ids=set(), equity_now=100.0)
+    assert records[0].regime == "trending"

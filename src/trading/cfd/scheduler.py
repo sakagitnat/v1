@@ -72,6 +72,7 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 equity_before=equity_before,
                 equity_after=equity_now if pnl is not None else None,
                 exit_reason="closed_externally (stop-loss/take-profit or manual close)",
+                regime=meta.get("regime"),
             )
         )
     return records
@@ -248,6 +249,7 @@ async def run_once():
                             equity_before=equity_before,
                             equity_after=new_equity,
                             exit_reason="signal_exit: " + signal.reason,
+                            regime=meta.get("regime"),
                         )
                     )
                 else:
@@ -310,6 +312,7 @@ async def run_once():
                         "stake": stake,
                         "risk_amount": stop_loss_amount,
                         "equity_before": risk.equity,
+                        "regime": regime,
                     },
                 )
     finally:

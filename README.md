@@ -526,6 +526,25 @@ managed to its exit by the *exact* strategy version that opened it
 the time it closes -- so promoting or pausing a strategy can never
 retroactively change how an existing position gets closed out.
 
+**Failure Analysis.** `trading/cfd/failure_analysis.py`
+(`cfd_cli.py failures`) reads the Trade Database and classifies every
+losing trade as `normal_statistical_loss` (lost about its budgeted
+`risk_amount` -- the ordinary cost of the edge), `excessive_risk` (lost
+notably more than budgeted -- a gap, slippage, or sizing issue), or
+`regime_mismatch` (the regime recorded at entry wasn't in the strategy's
+`suited_regimes` -- only possible for a trade predating the Strategy
+Selector's regime gate). It also flags **strategy degradation**: a
+registered strategy whose most recent trades' expectancy has fallen
+sharply versus its own earlier history. Three of the vision's loss
+categories -- abnormal market/news event, execution problem, data
+problem -- are **never guessed at**: this project doesn't capture the
+news, latency, or data-quality signals they'd need, so a trade that might
+be one of those is classified `normal_statistical_loss` rather than a
+fabricated specific cause (see `docs/ARCHITECTURE_AUDIT.md`). A
+degradation flag is a prompt to look, never an automatic pause -- acting
+on it still goes through `cfd_cli.py promote-strategy ... PAUSED` like
+every other lifecycle change.
+
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a
 stop-loss/take-profit between runs -- is logged to
@@ -722,6 +741,7 @@ src/trading/
     strategy_registry.py              # Strategy Registry -- name@version, lifecycle states, promotion audit trail
     regime.py                          # Market Regime Engine -- per-instrument trending/ranging/unknown via ADX
     selector.py                         # Strategy Selector -- matches regime against ACTIVE strategies' suited_regimes
+    failure_analysis.py                  # Failure Analysis -- loss classification + strategy degradation detection
     trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
     performance.py                      # Performance Engine -- metrics computed from the trade log
     scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)

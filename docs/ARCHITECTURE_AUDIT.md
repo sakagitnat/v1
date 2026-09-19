@@ -51,6 +51,26 @@ no trading logic was changed while writing it.
   strategies are trend-following (`suited_regimes=["trending"]`), so this
   mostly acts as a NO TRADE gate during `ranging` markets today -- still
   no mean-reversion/range strategy in the pool to fill that gap.
+- **2026-09-19 — Phase 4, first slice: Failure Analysis done.**
+  `trading/cfd/failure_analysis.py` (`cfd_cli.py failures`): classifies
+  every losing trade as `normal_statistical_loss`, `excessive_risk` (loss
+  notably exceeded its budgeted `risk_amount` -- R multiple <= -1.5), or
+  `regime_mismatch` (entry regime wasn't in the strategy's
+  `suited_regimes` -- only reachable for a trade predating the regime
+  gate). Also `detect_degradation()`: flags a registered strategy whose
+  recent trades' expectancy has fallen sharply vs. its own earlier
+  history (never auto-acted on -- a human still has to
+  `promote-strategy ... PAUSED`). Fixed a real gap this surfaced:
+  `scheduler.py` computed each entry's regime (Phase 3) but never
+  persisted it onto the trade record -- now every new/closed trade
+  carries the `regime` it was opened in, so `performance.py`'s
+  `by_regime` breakdown finally has real data too. Three of the vision's
+  loss categories (abnormal market/news event, execution problem, data
+  problem) are still not classified -- no news/latency/data-quality
+  signal exists to base them on, so they're deliberately never guessed at
+  (see "Other vision requirements not yet met" below). Walk-forward +
+  Monte Carlo validation, Research Lab candidate generation, and
+  Operating Modes are still open -- Phase 4 continues in a later pass.
   Everything else below is still an accurate account of what's missing.
 
 ## Executive summary
@@ -120,7 +140,7 @@ Execution Engine           -> EXISTS (scheduler.py + broker.py; now also actuall
 Deriv                      -> EXISTS
 Trade Database             -> DONE for Phase 1's scope (trade_log.py, state/cfd_trades.jsonl) -- one known gap: a trade Deriv auto-closes via stop-loss/take-profit is only priced exactly when it's the sole one that closed between two runs; simultaneous external closes log with pnl=null rather than a guessed split (no profit_table API integration yet -- see "Still not validated" thread in the CFD README section)
 Performance Engine         -> DONE for Phase 1's scope (performance.py, `cfd_cli.py performance`): net return, expectancy, profit factor, win rate, avg win/loss, R multiple, Sharpe, Sortino, Calmar, max drawdown, longest losing streak, by-strategy/regime/session/side breakdowns, exposure. by_regime is schema-ready but always "unknown" until the Market Regime Engine (Phase 3) exists.
-Failure Analysis            -> MISSING entirely
+Failure Analysis            -> PARTIAL: loss classification + strategy degradation detection DONE (trading.cfd.failure_analysis, `cfd_cli.py failures`), covering normal_statistical_loss/excessive_risk/regime_mismatch. abnormal market/news event, execution problem, and data problem are NOT classified -- no news/latency/data-quality signal exists to base them on, so they're never guessed at (see below)
 Research / Improvement Lab -> MISSING entirely (no automatic candidate generation; new strategies are hand-written)
 Validation                  -> PARTIAL (TRAIN/TEST split with an overfit check exists; no walk-forward, no Monte Carlo/stress test, no paper-trading promotion gate)
 Strategy Registry            -> DONE for Phase 2's scope (name@version, full lifecycle, enforced transitions, audit trail) -- the validation pipeline that's meant to gate promotion through it (walk-forward, Monte Carlo, paper trading) is still missing, so promotion is manual/audited today, not automatically earned
@@ -128,6 +148,13 @@ Strategy Registry            -> DONE for Phase 2's scope (name@version, full lif
 
 ## Other vision requirements not yet met
 
+- **Three Failure Analysis categories are unclassifiable today**:
+  abnormal market/news event needs a news feed, execution problem needs
+  order latency/fill-quality data, data problem needs data-quality checks
+  on the candles used -- none of this project's current data supports
+  any of them, so `failure_analysis.classify_loss()` never returns them;
+  a trade that might be one of these lands in `normal_statistical_loss`
+  instead of a fabricated specific cause.
 - **Strategy pool breadth**: only Trend/Momentum (EMA crossover) and
   Breakout (unvalidated) exist for CFD, both tagged `suited_regimes=
   ["trending"]`. Missing: Mean Reversion, Volatility Expansion, Pullback,

@@ -12,6 +12,7 @@ Instrument names are Deriv's own, mixed-case and case-sensitive
 Usage:
   python scripts/cfd_cli.py status
   python scripts/cfd_cli.py performance
+  python scripts/cfd_cli.py failures
   python scripts/cfd_cli.py list-strategies
   python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
@@ -30,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
+from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.performance import compute_performance
 from trading.cfd.state import (
     exclude_instrument,
@@ -102,6 +104,41 @@ def cmd_performance(_args):
         print(f"By {label}:")
         for name, stats in metrics[key].items():
             print(f"  {name}: {stats}")
+
+
+def cmd_failures(_args):
+    """Prints the Failure Analysis breakdown (trading.cfd.failure_analysis)
+    computed from the Trade Database: why losing trades lost, and whether
+    any registered strategy's recent performance looks degraded versus
+    its own history. Offline: no Deriv connection needed. Never changes
+    anything -- a degradation flag here is a prompt to look, not an
+    automatic pause; use `promote-strategy ... PAUSED` yourself if it
+    warrants it."""
+    trades = load_trades()
+    if not trades:
+        print("No trades recorded yet.")
+        return
+
+    summary = summarize_losses(trades)
+    if not summary:
+        print("No losing trades yet.")
+    else:
+        print("Loss breakdown:")
+        for category, stats in sorted(summary.items(), key=lambda kv: kv[1]["total_pnl"]):
+            print(f"  {category}: {stats['count']} trade(s), total {stats['total_pnl']:+.2f}, contracts={stats['contract_ids']}")
+
+    print("\nStrategy degradation check:")
+    strategy_tags = sorted({t["strategy"] for t in trades if t.get("strategy")})
+    if not strategy_tags:
+        print("  (no tagged trades yet)")
+    for tag in strategy_tags:
+        result = detect_degradation(trades, tag)
+        if result is None:
+            print(f"  {tag}: not enough history yet")
+        elif result["degraded"]:
+            print(f"  {tag}: DEGRADED -- {result['reason']}")
+        else:
+            print(f"  {tag}: OK (recent expectancy {result['recent_expectancy']:+.2f} vs prior {result['prior_expectancy']:+.2f})")
 
 
 def cmd_list_strategies(_args):
@@ -260,6 +297,8 @@ def main():
     sub.add_parser("status").set_defaults(func=cmd_status, is_async=True)
 
     sub.add_parser("performance").set_defaults(func=cmd_performance, is_async=False)
+
+    sub.add_parser("failures").set_defaults(func=cmd_failures, is_async=False)
 
     sub.add_parser("list-strategies").set_defaults(func=cmd_list_strategies, is_async=False)
 
