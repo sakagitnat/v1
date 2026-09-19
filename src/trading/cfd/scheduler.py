@@ -12,7 +12,7 @@ from trading.cfd.state import (
     set_broker_baseline,
     set_capital_floor,
 )
-from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.strategy_registry import get_active_strategy
 from trading.cfd.trade_log import TradeRecord, record_trade
 from trading.config import settings
 from trading.logging_utils import get_logger
@@ -22,7 +22,6 @@ logger = get_logger(__name__)
 
 GRANULARITY_SECONDS = 3600  # 1 hour -- see EmaCrossoverStrategy's docstring for why H1, not M15
 CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
-STRATEGY_NAME = "ema_crossover"  # tags every logged trade -- see trading.cfd.trade_log.TradeRecord.strategy
 
 
 def _now_iso() -> str:
@@ -88,11 +87,19 @@ async def run_once():
     Every risk/sizing decision here uses *virtual* equity on a demo
     account, never the raw ~$10,000 Deriv demo balance -- see
     trading.cfd.capital and docs/VISION.md's "Capital model" section.
+
+    Which strategy actually trades is resolved from the Strategy Registry
+    (trading.cfd.strategy_registry) -- exactly one strategy must be marked
+    ACTIVE, or this raises rather than guessing. See `cfd_cli.py
+    list-strategies` / `promote-strategy`.
     """
     state = load_state()
     if state.get("paused"):
         logger.info("CFD bot is paused (state/cfd_bot_state.json) -- skipping this run.")
         return
+
+    active_entry = get_active_strategy()  # raises if zero or >1 ACTIVE -- fail fast, before spending an API call
+    strategy_tag = f"{active_entry.name}@{active_entry.version}"
 
     broker = DerivBroker()
     try:
@@ -147,7 +154,7 @@ async def run_once():
 
         excluded = state.get("excluded_instruments") or {}
         open_positions = await broker.open_positions()
-        strategy = EmaCrossoverStrategy()
+        strategy = active_entry.build()
 
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
@@ -188,7 +195,7 @@ async def run_once():
                             TradeRecord(
                                 contract_id=contract_id,
                                 instrument=instrument,
-                                strategy=meta.get("strategy", STRATEGY_NAME),
+                                strategy=meta.get("strategy", strategy_tag),
                                 side=in_position,
                                 entry_time=meta.get("entry_time", ""),
                                 exit_time=_now_iso(),
@@ -240,7 +247,7 @@ async def run_once():
                     contract_id,
                     {
                         "instrument": instrument,
-                        "strategy": STRATEGY_NAME,
+                        "strategy": strategy_tag,
                         "side": side,
                         "entry_time": _now_iso(),
                         "entry_price": signal.price,

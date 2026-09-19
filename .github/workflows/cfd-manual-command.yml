@@ -16,15 +16,29 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, performance, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
+        options: [status, performance, list-strategies, promote-strategy, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
         type: string
       reason:
-        description: "Why (optional, for pause/exclude-instrument)"
+        description: "Why (optional, for pause/exclude-instrument; REQUIRED for promote-strategy)"
         required: false
         type: string
+      strategy_name:
+        description: "For promote-strategy only: registered strategy name, e.g. ema_crossover"
+        required: false
+        type: string
+      strategy_version:
+        description: "For promote-strategy only: registered version, e.g. v1"
+        required: false
+        type: string
+      strategy_state:
+        description: "For promote-strategy only: target lifecycle state"
+        required: false
+        type: choice
+        options: [RESEARCH, CANDIDATE, VALIDATED, PAPER, ACTIVE, PAUSED, RETIRED]
+        default: RESEARCH
       side:
         description: "For test-order only: long or short"
         required: false
@@ -60,11 +74,17 @@ jobs:
           REASON: ${{ inputs.reason }}
           SIDE: ${{ inputs.side }}
           MULTIPLIER: ${{ inputs.multiplier }}
+          STRATEGY_NAME: ${{ inputs.strategy_name }}
+          STRATEGY_VERSION: ${{ inputs.strategy_version }}
+          STRATEGY_STATE: ${{ inputs.strategy_state }}
         run: |
           set -e
           case "$CMD" in
-            status|resume|performance)
+            status|resume|performance|list-strategies)
               python scripts/cfd_cli.py "$CMD"
+              ;;
+            promote-strategy)
+              python scripts/cfd_cli.py promote-strategy "$STRATEGY_NAME" "$STRATEGY_VERSION" "$STRATEGY_STATE" --reason "$REASON"
               ;;
             pause)
               python scripts/cfd_cli.py pause --reason "$REASON"
@@ -113,7 +133,7 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in state/cfd_bot_state.json state/cfd_trades.jsonl; do
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_strategy_registry.json; do
             [ -f "$f" ] && git add "$f"
           done
           if ! git diff --cached --quiet; then

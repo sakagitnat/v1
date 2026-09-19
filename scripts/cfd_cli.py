@@ -12,6 +12,8 @@ Instrument names are Deriv's own, mixed-case and case-sensitive
 Usage:
   python scripts/cfd_cli.py status
   python scripts/cfd_cli.py performance
+  python scripts/cfd_cli.py list-strategies
+  python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
   python scripts/cfd_cli.py resume
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
@@ -35,6 +37,7 @@ from trading.cfd.state import (
     load_state,
     set_paused,
 )
+from trading.cfd.strategy_registry import LifecycleState, list_all, set_state
 from trading.cfd.trade_log import load_trades
 from trading.config import settings
 
@@ -99,6 +102,43 @@ def cmd_performance(_args):
         print(f"By {label}:")
         for name, stats in metrics[key].items():
             print(f"  {name}: {stats}")
+
+
+def cmd_list_strategies(_args):
+    """Prints every strategy registered in the Strategy Registry
+    (state/cfd_strategy_registry.json) with its current lifecycle state --
+    see trading.cfd.strategy_registry and docs/VISION.md's "Strategy
+    lifecycle" section. Offline: no Deriv connection needed."""
+    entries = list_all()
+    if not entries:
+        print("No strategies registered yet. Run scripts/seed_strategy_registry.py first.")
+        return
+    for e in sorted(entries, key=lambda e: (e.name, e.version)):
+        print(f"{e.name}@{e.version}: {e.state}  (updated {e.updated_at})")
+        print(f"  params: {e.params}")
+        last = e.history[-1] if e.history else None
+        if last:
+            print(f"  last change: {last['from']} -> {last['to']} ({last['reason']})")
+
+
+def cmd_promote_strategy(args):
+    """Transitions a registered strategy to a new lifecycle state. Enforces
+    the pipeline order (RESEARCH -> CANDIDATE -> VALIDATED -> PAPER ->
+    ACTIVE, one stage at a time; PAUSED only from/to ACTIVE; RETIRED from
+    anywhere but nowhere back out of it) -- see trading.cfd.
+    strategy_registry.set_state()'s docstring. A reason is required."""
+    try:
+        target_state = LifecycleState(args.state)
+    except ValueError:
+        valid = ", ".join(s.value for s in LifecycleState)
+        print(f"Invalid state {args.state!r} -- must be one of: {valid}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        entry = set_state(args.name, args.version, target_state, args.reason)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"{entry.name}@{entry.version} is now {entry.state}.")
 
 
 async def cmd_list_symbols(args):
@@ -220,6 +260,15 @@ def main():
     sub.add_parser("status").set_defaults(func=cmd_status, is_async=True)
 
     sub.add_parser("performance").set_defaults(func=cmd_performance, is_async=False)
+
+    sub.add_parser("list-strategies").set_defaults(func=cmd_list_strategies, is_async=False)
+
+    promote_parser = sub.add_parser("promote-strategy")
+    promote_parser.add_argument("name")
+    promote_parser.add_argument("version")
+    promote_parser.add_argument("state", help="Target lifecycle state: RESEARCH, CANDIDATE, VALIDATED, PAPER, ACTIVE, PAUSED, or RETIRED")
+    promote_parser.add_argument("--reason", required=True)
+    promote_parser.set_defaults(func=cmd_promote_strategy, is_async=False)
 
     list_symbols_parser = sub.add_parser("list-symbols")
     list_symbols_parser.add_argument("--filter", default="", help="Case-insensitive substring match against symbol/display_name/market/submarket")

@@ -479,6 +479,30 @@ balance down or up to hit a target number -- see `docs/VISION.md` -- so
 it's kept only as documented history and refuses to run without an
 explicit override flag.)
 
+**Strategy Registry & lifecycle.** Every CFD strategy is a registered
+`name@version` tracked through the lifecycle `docs/VISION.md` defines --
+`RESEARCH -> CANDIDATE -> VALIDATED -> PAPER -> ACTIVE -> PAUSED ->
+RETIRED` (`trading/cfd/strategy_registry.py`, persisted to
+`state/cfd_strategy_registry.json`). The live scheduler no longer
+hardcodes which strategy it trades: each run it asks the registry for
+whichever single strategy is marked `ACTIVE` and refuses to guess if zero
+or more than one are (a real misconfiguration, not something to trade
+through silently). `scripts/seed_strategy_registry.py` seeded the two
+strategies that already existed in code: `ema_crossover@v1` went straight
+into `ACTIVE` (grandfathered -- it was already the live strategy, backed
+by the real TRAIN/TEST validation in "Backtesting" below, just predating
+this registry) and `donchian_breakout@v1` into `CANDIDATE` (implemented,
+not yet run through `optimize_cfd_breakout.py`'s TRAIN/TEST validation).
+Every *later* transition goes through `cfd_cli.py promote-strategy NAME
+VERSION STATE --reason "..."`, which enforces the pipeline order (one
+stage forward at a time -- no skipping straight to `ACTIVE`) and requires
+a stated reason, logged in the entry's audit trail
+(`cfd_cli.py list-strategies` to see it). This registry doesn't yet
+include the actual validation pipeline that's meant to gate each
+promotion (walk-forward, Monte Carlo/stress test, real paper trading) --
+promotion today is a deliberate manual, audited action, not an automatic
+gate; see `docs/ARCHITECTURE_AUDIT.md`'s later phases for that.
+
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a
 stop-loss/take-profit between runs -- is logged to
@@ -672,11 +696,12 @@ src/trading/
     breakout.py                    # Donchian channel breakout, long or short (unvalidated as of writing)
     capital.py                      # virtual equity model -- rebases demo P&L onto $100, see "Capital model" above
     risk.py                          # stake/multiplier sizing, capital floor, daily-loss circuit breaker, min-stake SKIP TRADE guard
-    trade_log.py                      # Trade Database -- append-only JSONL log of closed trades
-    performance.py                     # Performance Engine -- metrics computed from the trade log
-    scheduler.py                        # one strategy evaluation + order pass, every ~1h (async)
-    state.py                             # paused flag, capital floor, broker baseline, open-trade tracking, excluded instruments
-    backtest.py                           # CfdBacktestEngine -- TRAIN/TEST discipline, mirrors backtest/engine.py
+    strategy_registry.py              # Strategy Registry -- name@version, lifecycle states, promotion audit trail
+    trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
+    performance.py                      # Performance Engine -- metrics computed from the trade log
+    scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)
+    state.py                              # paused flag, capital floor, broker baseline, open-trade tracking, excluded instruments
+    backtest.py                            # CfdBacktestEngine -- TRAIN/TEST discipline, mirrors backtest/engine.py
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
@@ -699,6 +724,7 @@ state/
   buckets.json
   cfd_bot_state.json
   cfd_trades.jsonl        # Trade Database -- see "Trade Database & Performance Engine" above
+  cfd_strategy_registry.json  # Strategy Registry -- see "Strategy Registry & lifecycle" above
 docs/
   VISION.md                # master vision for the AI Trading Manager -- read this first
   ARCHITECTURE_AUDIT.md      # what exists vs. the vision, and what's still missing

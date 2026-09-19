@@ -1,0 +1,48 @@
+{
+  "ema_crossover@v1": {
+    "name": "ema_crossover",
+    "version": "v1",
+    "params": {
+      "fast_span": 15,
+      "slow_span": 34,
+      "atr_window": 14,
+      "atr_stop_mult": 2.0,
+      "atr_target_mult": 2.0,
+      "adx_window": 14,
+      "adx_threshold": 0.0
+    },
+    "state": "ACTIVE",
+    "created_at": "2026-09-19T14:10:52.993325+00:00",
+    "updated_at": "2026-09-19T14:10:52.993341+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "ACTIVE",
+        "reason": "Grandfathered: already the live strategy before the registry existed; TRAIN/TEST-validated (see README).",
+        "at": "2026-09-19T14:10:52.993344+00:00"
+      }
+    ]
+  },
+  "donchian_breakout@v1": {
+    "name": "donchian_breakout",
+    "version": "v1",
+    "params": {
+      "entry_window": 30,
+      "exit_window": 10,
+      "atr_window": 14,
+      "atr_stop_mult": 2.5,
+      "atr_target_mult": 4.0
+    },
+    "state": "CANDIDATE",
+    "created_at": "2026-09-19T14:10:52.993709+00:00",
+    "updated_at": "2026-09-19T14:10:52.993717+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
+        "at": "2026-09-19T14:10:52.993720+00:00"
+      }
+    ]
+  }
+}

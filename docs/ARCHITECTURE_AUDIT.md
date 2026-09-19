@@ -16,8 +16,23 @@ no trading logic was changed while writing it.
   (`trading/cfd/performance.py`, `cfd_cli.py performance`) are all live.
   `scheduler.py` now also actually calls `risk.register_open()`/
   `register_close()` (it didn't before this change — the daily-loss
-  circuit breaker was dead code in production until now). Everything
-  else below is still an accurate account of what's missing.
+  circuit breaker was dead code in production until now).
+- **2026-09-19 — Phase 2 done.** Strategy Registry
+  (`trading/cfd/strategy_registry.py`, `state/cfd_strategy_registry.json`)
+  with the full lifecycle (`RESEARCH -> CANDIDATE -> VALIDATED -> PAPER ->
+  ACTIVE -> PAUSED -> RETIRED`), enforced one-stage-at-a-time transitions,
+  and a required-reason audit trail on every promotion/demotion.
+  `scripts/seed_strategy_registry.py` registered the two existing
+  strategies (`ema_crossover@v1` grandfathered into `ACTIVE`,
+  `donchian_breakout@v1` into `CANDIDATE`). `scheduler.py` now resolves
+  which strategy to trade from the registry (`get_active_strategy()`,
+  requires exactly one `ACTIVE` entry) instead of hardcoding
+  `EmaCrossoverStrategy()`. `cfd_cli.py list-strategies` /
+  `promote-strategy` manage it. The registry does not yet include the
+  actual validation pipeline that's meant to gate promotion (walk-forward,
+  Monte Carlo/stress test, real paper trading) -- that's still Phase 4;
+  promotion today is a deliberate manual action, not an automatic gate.
+  Everything else below is still an accurate account of what's missing.
 
 ## Executive summary
 
@@ -89,7 +104,7 @@ Performance Engine         -> DONE for Phase 1's scope (performance.py, `cfd_cli
 Failure Analysis            -> MISSING entirely
 Research / Improvement Lab -> MISSING entirely (no automatic candidate generation; new strategies are hand-written)
 Validation                  -> PARTIAL (TRAIN/TEST split with an overfit check exists; no walk-forward, no Monte Carlo/stress test, no paper-trading promotion gate)
-Strategy Registry            -> MISSING entirely (no versioning, no lifecycle states -- strategies are just importable classes)
+Strategy Registry            -> DONE for Phase 2's scope (name@version, full lifecycle, enforced transitions, audit trail) -- the validation pipeline that's meant to gate promotion through it (walk-forward, Monte Carlo, paper trading) is still missing, so promotion is manual/audited today, not automatically earned
 ```
 
 ## Other vision requirements not yet met
