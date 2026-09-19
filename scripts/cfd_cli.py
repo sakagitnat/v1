@@ -74,7 +74,7 @@ async def cmd_test_order(args):
         print(f"Connected: account_id={account.get('account_id')} account_type={account.get('account_type')}")
 
         stake, stop_loss_amount, take_profit_amount = 1.0, 0.50, 1.00
-        multiplier = 20
+        multiplier = args.multiplier
         print(
             f"Submitting {args.side} {args.instrument} stake=${stake:.2f} multiplier={multiplier} "
             f"(stop-loss $-{stop_loss_amount:.2f}, take-profit $+{take_profit_amount:.2f})..."
@@ -145,6 +145,7 @@ def main():
     test_order_parser = sub.add_parser("test-order")
     test_order_parser.add_argument("--instrument", default=settings.cfd_instruments[0] if settings.cfd_instruments else "frxXAUUSD")
     test_order_parser.add_argument("--side", choices=["long", "short"], default="long")
+    test_order_parser.add_argument("--multiplier", type=int, default=20, help="Deriv caps which multipliers are offered per instrument -- override if the default 20 isn't accepted.")
     test_order_parser.set_defaults(func=cmd_test_order, is_async=True)
 
     args = parser.parse_args()

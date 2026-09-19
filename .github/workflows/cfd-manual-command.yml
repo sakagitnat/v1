@@ -31,6 +31,11 @@ on:
         type: choice
         options: [long, short]
         default: long
+      multiplier:
+        description: "For test-order only: Deriv caps which multipliers are offered per instrument -- override if 20 isn't accepted"
+        required: false
+        type: string
+        default: "20"
 
 permissions:
   contents: write
@@ -53,6 +58,7 @@ jobs:
           INSTRUMENT: ${{ inputs.instrument }}
           REASON: ${{ inputs.reason }}
           SIDE: ${{ inputs.side }}
+          MULTIPLIER: ${{ inputs.multiplier }}
         run: |
           set -e
           case "$CMD" in
@@ -69,7 +75,7 @@ jobs:
               python scripts/cfd_cli.py include-instrument "$INSTRUMENT"
               ;;
             test-order)
-              ARGS="--side ${SIDE:-long}"
+              ARGS="--side ${SIDE:-long} --multiplier ${MULTIPLIER:-20}"
               if [ -n "$INSTRUMENT" ]; then ARGS="$ARGS --instrument $INSTRUMENT"; fi
               python scripts/cfd_cli.py test-order $ARGS
               ;;
