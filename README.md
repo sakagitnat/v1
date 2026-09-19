@@ -386,9 +386,15 @@ put up.
 
 No separate account ID needed *from you*: `broker.py` discovers it itself
 (`GET {OPTIONS_API_BASE}/accounts` with the token) as part of connecting.
-`DERIV_APP_ID` defaults to `1089`, Deriv's shared public ID for testing/
-personal use -- no separate app registration needed unless you want your
-own later.
+`DERIV_APP_ID` must be a **registered application's ID**, not the shared
+public `1089` -- that shared ID only works against Deriv's classic
+WebSocket API, and returns "Invalid application" (401) against the newer
+`/trading/v1/options` REST API this system uses. Register one (free, no
+approval wait) at https://developers.deriv.com -> "Register new
+application" -> **Native apps** (tagged `PAT`, matching the PAT-style
+tokens this system uses) -> any name without "Binary"/"Deriv" in it,
+0% markup, no website URL needed. The resulting App ID is not secret
+(like an OAuth client_id) -- safe to paste directly.
 
 **Connection flow is not the classic one most Deriv API examples show.**
 The commonly-documented `wss://ws.derivws.com/websockets/v3` +
@@ -398,7 +404,7 @@ token tried returned "The token is invalid" from that endpoint, confirmed
 with Deriv support to be a wrong-flow issue, not an account problem.
 The actual PAT flow (`broker.py`'s `connect()`): `GET
 {OPTIONS_API_BASE}/accounts` (Bearer token + `Deriv-App-ID` header) to
-find the account and check `is_virtual`, then `POST
+find the account and check `account_type`, then `POST
 {OPTIONS_API_BASE}/accounts/{id}/otp` (same headers) for a short-lived,
 single-use one-time-password and a ready-to-use WebSocket URL with it
 attached -- connecting to *that* URL is already authenticated, no
@@ -407,6 +413,13 @@ Deriv support confirmed Multipliers contracts use this same flow (it's
 the name of the whole newer API surface, not a restriction to binary
 options) -- but MT5 leveraged forex/CFDs is a different product and must
 not use this endpoint.
+
+A token can authorize more than one account at once -- Deriv creates an
+unverified real-money account for every signup automatically, alongside
+any demo account, even for users who only ever use demo. `connect()`
+picks the account whose `account_type` is `"demo"` explicitly (or
+`"real"` if `CFD_ALLOW_LIVE_TRADING` is set), rather than assuming
+`accounts[0]` is the right one.
 
 **How it works:** `src/trading/cfd/strategy.py`'s `EmaCrossoverStrategy`
 (fast/slow EMA crossover, long or short, ATR-based stop/target -- same
@@ -436,32 +449,40 @@ account model is: Alpaca/OANDA use one base URL with a paper/live flag
 that can be forced in the workflow regardless of secrets; Deriv's API
 token is already scoped to one specific account (demo or real) the
 moment it's created, so there's no URL to force. Instead, `broker.py`'s
-`connect()` reads the accounts response's `is_virtual` field and refuses
-to proceed on a real (non-virtual) account unless `CFD_ALLOW_LIVE_TRADING`
+`connect()` picks the account whose `account_type` is `"demo"` and
+refuses to proceed on a real account unless `CFD_ALLOW_LIVE_TRADING`
 is explicitly true -- which both CFD workflows still hardcode to
 `"false"` regardless of secrets, as defense-in-depth on top of that
 check.
 
-**Status: scaffolded but not yet validated against a real account.**
-`broker.py` was rewritten once already after live testing showed the
-first connection approach didn't work at all (see above) -- exact JSON
-field names in the `/accounts` and `/otp` responses (`account_id`,
-`is_virtual`, etc.) are still a best-effort guess from documentation
-search, not yet confirmed against a live response. Do not trust it with
-even demo money until it's been run end-to-end and its logs checked --
-same discipline the stock system used throughout (this sandbox can't
-reach external APIs, so every change needs validating via a real GitHub
-Actions run). Particularly worth checking first: `stake_and_limits()`'s
-dollar-amount conversion (get this wrong and the risk-per-trade
-protection is wrong), and whether Deriv accepts the `multiplier` value
-`risk.py` defaults to for each instrument (Deriv caps which multipliers
-are offered per instrument; that cap isn't checked against the live API
-yet). Also not yet backtested/tuned:
-`EmaCrossoverStrategy`'s parameters are a reasonable starting guess, not
-the result of the train/test-split, calmar-optimized process
-`optimize_strategy.py` used for the stock system's Breakout strategy --
-that needs Deriv's candle history, which also needs a live token to
-fetch.
+**Status: connection and order flow confirmed end-to-end against a live
+demo account.** `scripts/cfd_cli.py test-order` (opens a minimal-size
+real order and closes it right away -- diagnostic only, not part of the
+automated strategy loop) round-tripped successfully: connect, buy,
+portfolio read, and sell all confirmed against live responses. Getting
+there took several rounds of fixing assumptions that didn't match the
+real API (each found by reading actual error responses/payloads, never
+guessed): `DERIV_APP_ID` needs a registered application, not the shared
+`1089`; account selection needed `account_type` ("demo"/"real"), not the
+commonly-documented `is_virtual` field; the proposal request and
+portfolio response both use `underlying_symbol`, not `symbol`; and a
+brand-new contract can't be sold until Deriv processes its first price
+tick (`test-order` retries on that specific transient error).
+
+**Still not validated:** the real forex/gold instruments in
+`CFD_INSTRUMENTS` (`frxXAUUSD` etc.) -- testing happened on a weekend,
+so those markets were closed before an actual order could be placed
+(confirmed as far as the request being schema-valid, via a "market
+closed" response rather than a validation error). Deriv caps which
+`multiplier` values it accepts per instrument (a synthetic index tested
+instead accepted only 40/100/200/300/400, not `risk.py`'s default of
+20) -- unchecked for the real trading instruments. Also not yet
+backtested/tuned: `EmaCrossoverStrategy`'s parameters are a reasonable
+starting guess, not the result of the train/test-split, calmar-optimized
+process `optimize_strategy.py` used for the stock system's Breakout
+strategy -- that needs Deriv's candle history, which also needs a live
+token to fetch. The cron schedule in `cfd-trading.yml` stays commented
+out until these are checked.
 
 ## Tests
 
