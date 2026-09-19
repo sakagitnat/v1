@@ -166,7 +166,13 @@ class DerivBroker:
 
     async def open_positions(self) -> dict:
         """Returns {symbol: {"contract_id": int, "side": "long"|"short"}}
-        for every open multiplier contract."""
+        for every open multiplier contract. Assumes at most one open
+        contract per symbol (true for the live strategy's own trading,
+        which never opens a second position in a symbol it's already
+        in) -- for anything that might hold several simultaneous
+        contracts on the SAME symbol (e.g. scripts/burn_demo_balance.py),
+        use open_contract_ids() instead, which doesn't collapse by
+        symbol."""
         resp = await self._request({"portfolio": 1})
         positions = {}
         for c in resp["portfolio"]["contracts"]:
@@ -178,6 +184,13 @@ class DerivBroker:
                 "side": "long" if c["contract_type"] == "MULTUP" else "short",
             }
         return positions
+
+    async def open_contract_ids(self) -> set[int]:
+        """Returns the raw set of open contract_ids, without collapsing
+        by symbol -- unlike open_positions(), this correctly reflects
+        several simultaneous open contracts on the same symbol."""
+        resp = await self._request({"portfolio": 1})
+        return {c["contract_id"] for c in resp["portfolio"]["contracts"]}
 
     async def get_candles(
         self, symbol: str, granularity_seconds: int = 900, count: int = 200, end: str | int = "latest"

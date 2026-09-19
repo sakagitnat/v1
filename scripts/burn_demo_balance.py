@@ -12,26 +12,27 @@ docs/community, no API for an arbitrary amount) -- trading it down is
 the documented workaround, so that's what this does, deliberately and
 transparently.
 
-How it stays roughly on target rather than swinging unpredictably:
-each position opens with stop_loss_amount == its stake (so the worst
-case loses exactly the stake, per Deriv's capped-loss guarantee) and
-take_profit_amount == stake * TAKE_PROFIT_RATIO (several times farther
-away in price-move terms, since P&L moves roughly linearly with price
-for a Multiplier contract -- see backtest.py's _pnl). That makes the
-stop-loss threshold far more likely to be crossed first on a volatile,
-directionless instrument, so most positions end in a small loss, not a
-rare large win. Each round's total stake is a fraction of the
-remaining distance to target, so even a worst-case string of max-loss
-rounds converges toward the target rather than overshooting far past
-it, and the loop stops as soon as equity is within TOLERANCE of
-TARGET_BALANCE regardless.
+Second attempt -- the first version (multiple different Volatility
+indices, stop_loss_amount == full stake, 90s timeout) mostly FAILED to
+converge: nearly every position timed out at 90s without ever hitting
+either threshold, so the force-close realized whatever P&L happened to
+exist at an arbitrary moment -- not biased toward loss at all, hence
+equity oscillating instead of trending down. Root cause, worked out
+from that run's numbers: R_100's typical move over 90s is roughly
+0.17%, but stop_loss_amount == stake requires a 1/multiplier = 0.25%
+move (multiplier=400) to trigger -- bigger than what usually happens
+in that window, so timeouts (not stop-losses) dominated.
 
-Runs CONCURRENT_INSTRUMENTS positions at once per round (one each on
-Volatility 10/25/50/75/100 -- all always-open synthetic indices, so a
-single Deriv account can hold several simultaneously without the "one
-position per symbol" ambiguity a real trading strategy would have) so
-each round's wait is one shared poll loop instead of N sequential
-waits -- roughly N times faster wall-clock for the same amount burned.
+Fix: stop_loss_amount is now a SMALL fraction of the stake (so the
+required price move is much smaller and triggers quickly and
+reliably), take_profit_amount stays TAKE_PROFIT_RATIO times farther
+(preserving the loss-bias), and the timeout is generous (rarely
+needed, just a safety net for the unlucky tail). Also switched to
+running several SIMULTANEOUS positions on R_100 alone (the fastest
+mover, and the one instrument with a confirmed-accepted multiplier of
+400) via open_contract_ids() rather than mixing in slower Volatility
+indices whose accepted multipliers/dynamics weren't confirmed and, per
+the first run's log, kept timing out too.
 
 Only ever runs against a DEMO account -- broker.connect()'s existing
 safety gate refuses a real account unless CFD_ALLOW_LIVE_TRADING is
@@ -48,14 +49,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
 
-CONCURRENT_INSTRUMENTS = ["R_100", "R_75", "R_50", "R_25", "R_10"]
-LOSS_FRACTION_OF_REMAINING = 0.20  # each round's TOTAL stake (across all concurrent positions) is this fraction of (equity - target)
-TAKE_PROFIT_RATIO = 8.0  # take_profit_amount = stake * this -- far enough that stop_loss wins most of the time
+INSTRUMENT = "R_100"  # confirmed: fastest-moving of the Volatility indices tried, accepts multiplier 400
+CONCURRENT_POSITIONS = 5
+LOSS_FRACTION_OF_REMAINING = 0.25  # each round's TOTAL stake (across all concurrent positions) is this fraction of (equity - target)
+STOP_LOSS_FRACTION_OF_STAKE = 0.4  # stop_loss_amount = per_stake * this -- required price move = this/multiplier (0.4/400 = 0.1%, well within R_100's ~0.17%/90s typical move)
+TAKE_PROFIT_RATIO = 8.0  # take_profit_amount = stop_loss_amount * this -- far enough that stop_loss wins most of the time
 MIN_STAKE = 1.0
-MAX_STAKE = 1000.0  # confirmed live: "Maximum stake allowed is 1000.00" -- not documented ahead of time, discovered via the real error
-MAX_ROUNDS = 20  # fewer rounds needed now that each round burns ~5x more per wait cycle
+MAX_STAKE = 1000.0  # confirmed live: "Maximum stake allowed is 1000.00"
+MAX_ROUNDS = 30
 POLL_INTERVAL_SECONDS = 5
-MAX_WAIT_PER_ROUND_SECONDS = 90  # force-close whatever's still open after this long
+MAX_WAIT_PER_ROUND_SECONDS = 240  # safety net -- most positions should close well before this now
 
 
 async def main(target: float, tolerance: float, multiplier: int):
@@ -73,26 +76,29 @@ async def main(target: float, tolerance: float, multiplier: int):
         while equity - target > tolerance and rounds < MAX_ROUNDS:
             rounds += 1
             remaining = equity - target
-            total_stake = max(MIN_STAKE, min(remaining * LOSS_FRACTION_OF_REMAINING, remaining, MAX_STAKE * len(CONCURRENT_INSTRUMENTS)))
-            per_stake = round(max(MIN_STAKE, min(total_stake / len(CONCURRENT_INSTRUMENTS), MAX_STAKE)), 2)
-            stop_loss_amount = per_stake
-            take_profit_amount = round(per_stake * TAKE_PROFIT_RATIO, 2)
+            total_stake = max(MIN_STAKE, min(remaining * LOSS_FRACTION_OF_REMAINING, remaining, MAX_STAKE * CONCURRENT_POSITIONS))
+            per_stake = round(max(MIN_STAKE, min(total_stake / CONCURRENT_POSITIONS, MAX_STAKE)), 2)
+            stop_loss_amount = round(per_stake * STOP_LOSS_FRACTION_OF_STAKE, 2)
+            take_profit_amount = round(stop_loss_amount * TAKE_PROFIT_RATIO, 2)
 
-            print(f"\nRound {rounds}: equity={equity:.2f}, remaining={remaining:.2f}, per_stake={per_stake:.2f} across {len(CONCURRENT_INSTRUMENTS)} instruments")
+            print(
+                f"\nRound {rounds}: equity={equity:.2f}, remaining={remaining:.2f}, per_stake={per_stake:.2f} "
+                f"(stop=-{stop_loss_amount:.2f}, target=+{take_profit_amount:.2f}) x{CONCURRENT_POSITIONS} on {INSTRUMENT}"
+            )
 
-            opened: dict[str, int] = {}
-            for i, instrument in enumerate(CONCURRENT_INSTRUMENTS):
+            opened: set[int] = set()
+            for i in range(CONCURRENT_POSITIONS):
                 side = "long" if (rounds + i) % 2 == 0 else "short"  # alternate, no reason to bias one way
                 try:
-                    result = await broker.submit_multiplier_order(instrument, side, per_stake, multiplier, stop_loss_amount, take_profit_amount)
+                    result = await broker.submit_multiplier_order(INSTRUMENT, side, per_stake, multiplier, stop_loss_amount, take_profit_amount)
                     contract_id = result.get("buy", {}).get("contract_id")
                     if contract_id is None:
-                        print(f"  {instrument}: no contract_id in response -- skipping: {result!r}")
+                        print(f"  slot {i}: no contract_id in response -- skipping: {result!r}")
                         continue
-                    opened[instrument] = contract_id
-                    print(f"  Opened {side} {instrument} stake={per_stake:.2f} contract_id={contract_id}")
+                    opened.add(contract_id)
+                    print(f"  Opened {side} contract_id={contract_id}")
                 except RuntimeError as e:
-                    print(f"  {instrument}: failed to open ({e}) -- skipping this slot")
+                    print(f"  slot {i}: failed to open ({e}) -- skipping this slot")
 
             if not opened:
                 print("  No positions opened this round -- retrying next round")
@@ -103,18 +109,14 @@ async def main(target: float, tolerance: float, multiplier: int):
             while waited < MAX_WAIT_PER_ROUND_SECONDS and opened:
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
                 waited += POLL_INTERVAL_SECONDS
-                positions = await broker.open_positions()
-                still_open = {}
-                for instrument, cid in opened.items():
-                    pos = positions.get(instrument)
-                    if pos is not None and pos.get("contract_id") == cid:
-                        still_open[instrument] = cid
-                    else:
-                        print(f"  {instrument} (contract {cid}) closed on its own after {waited}s")
-                opened = still_open
+                still_open_ids = await broker.open_contract_ids()
+                closed_now = opened - still_open_ids
+                for cid in closed_now:
+                    print(f"  contract {cid} closed on its own after {waited}s")
+                opened &= still_open_ids
 
-            for instrument, cid in opened.items():
-                print(f"  {instrument} (contract {cid}) still open after {MAX_WAIT_PER_ROUND_SECONDS}s -- closing manually")
+            for cid in opened:
+                print(f"  contract {cid} still open after {MAX_WAIT_PER_ROUND_SECONDS}s -- closing manually")
                 try:
                     await broker.close_position(cid)
                 except RuntimeError as e:
@@ -134,6 +136,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=float, default=100.0)
     parser.add_argument("--tolerance", type=float, default=30.0)
-    parser.add_argument("--multiplier", type=int, default=400, help="R_100's highest accepted multiplier (confirmed earlier: 40/100/200/300/400) -- applied to all CONCURRENT_INSTRUMENTS; if one rejects it, that slot is skipped for the round (see the RuntimeError handling) rather than crashing the whole run")
+    parser.add_argument("--multiplier", type=int, default=400, help="R_100's highest accepted multiplier (confirmed earlier: 40/100/200/300/400)")
     args = parser.parse_args()
     asyncio.run(main(args.target, args.tolerance, args.multiplier))
