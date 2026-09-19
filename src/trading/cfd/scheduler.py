@@ -5,6 +5,7 @@ from typing import Optional
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
+from trading.cfd.paper_trading import run_paper_trading
 from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
@@ -128,6 +129,13 @@ async def run_once():
     regime is an explicit NO TRADE, not a guess. An already-open position
     is always managed by the exact strategy version that opened it (see
     _resolve_exit_strategy_entry), regardless of what's ACTIVE now.
+
+    Every PAPER-state strategy also gets evaluated on the same candles
+    (trading.cfd.paper_trading.run_paper_trading), simulating fills
+    without ever placing a real order -- see that module's docstring.
+    Paper trading stops whenever the bot is paused too, same as real
+    trading -- simplest, safest default; nothing (real or simulated)
+    opens a new position while a human has explicitly halted the bot.
     """
     state = load_state()
     if state.get("paused"):
@@ -212,6 +220,14 @@ async def run_once():
                 logger.debug("%s: not enough candles yet", instrument)
                 continue
 
+            regime = classify_regime(bars, settings.cfd_regime_adx_window, settings.cfd_regime_trend_threshold)
+
+            # Paper Trading runs independently of the real position below
+            # -- every PAPER-state strategy gets evaluated on this same
+            # instrument/candles/regime regardless of what's happening
+            # with real (or virtual-real) capital.
+            run_paper_trading(instrument, bars, regime)
+
             position = open_positions.get(instrument)
             in_position = position["side"] if position else None
 
@@ -281,7 +297,6 @@ async def run_once():
             # Flat -- decide whether to open a new position, per the
             # Strategy Selector: current regime matched against whichever
             # strategy (if any) is ACTIVE for it. No match is NO TRADE.
-            regime = classify_regime(bars, settings.cfd_regime_adx_window, settings.cfd_regime_trend_threshold)
             entry_candidate = select_for_entry(regime)
             if entry_candidate is None:
                 logger.debug("%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it)", instrument, regime)

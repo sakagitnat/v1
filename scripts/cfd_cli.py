@@ -12,7 +12,9 @@ Instrument names are Deriv's own, mixed-case and case-sensitive
 Usage:
   python scripts/cfd_cli.py status
   python scripts/cfd_cli.py performance
+  python scripts/cfd_cli.py paper-performance
   python scripts/cfd_cli.py failures
+  python scripts/cfd_cli.py manager-report
   python scripts/cfd_cli.py list-strategies
   python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
@@ -33,7 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
+from trading.cfd.manager_report import build_report
 from trading.cfd.operating_mode import VALID_MODES
+from trading.cfd.paper_trading import PAPER_LOG_PATH
 from trading.cfd.performance import compute_performance
 from trading.cfd.state import (
     exclude_instrument,
@@ -110,6 +114,58 @@ def cmd_performance(_args):
         print(f"By {label}:")
         for name, stats in metrics[key].items():
             print(f"  {name}: {stats}")
+
+
+def cmd_paper_performance(_args):
+    """Same as `performance`, but for the separate Paper Trading log
+    (state/cfd_paper_trades.jsonl) -- see trading.cfd.paper_trading.
+    Every PAPER-state strategy's simulated results, never mixed with the
+    real Trade Database."""
+    trades = load_trades(PAPER_LOG_PATH)
+    if not trades:
+        print("No paper trades recorded yet (no strategy is in PAPER state, or none has traded yet).")
+        return
+    metrics = compute_performance(trades, starting_equity=settings.cfd_virtual_starting_capital)
+    print(f"Paper trades: {metrics['trade_count']} ({metrics['priced_trade_count']} priced)")
+    print(f"Net return: {metrics['net_return']:+.2f}  Expectancy: {metrics['expectancy']:+.2f} per trade")
+    print(f"Win rate: {metrics['win_rate_pct']:.1f}%  Profit factor: {metrics['profit_factor']}")
+    print(f"Max drawdown: {metrics['max_drawdown_pct']:.2f}%")
+    print("By strategy:")
+    for name, stats in metrics["by_strategy"].items():
+        print(f"  {name}: {stats}")
+
+
+def cmd_manager_report(_args):
+    """Prints the AI Trading Manager's consolidated report
+    (trading.cfd.manager_report): overall performance, loss breakdown,
+    every registered strategy grouped by lifecycle state, and concrete
+    recommended cfd_cli.py commands -- never applied automatically. See
+    that module's docstring for why lifecycle changes always stay a
+    human's deliberate, audited decision."""
+    trades = load_trades()
+    paper_trades = load_trades(PAPER_LOG_PATH)
+    report = build_report(trades, paper_trades)
+
+    perf = report["overall_performance"]
+    print(f"Overall: {perf['trade_count']} trades, net return {perf['net_return']:+.2f}, expectancy {perf['expectancy']:+.2f}")
+
+    print("\nRegistry summary:")
+    for state_name, tags in report["registry_summary"].items():
+        if tags:
+            print(f"  {state_name}: {', '.join(tags)}")
+
+    print("\nLoss breakdown:")
+    if not report["loss_breakdown"]:
+        print("  (no losing trades yet)")
+    for category, stats in report["loss_breakdown"].items():
+        print(f"  {category}: {stats['count']} trade(s), total {stats['total_pnl']:+.2f}")
+
+    print("\nRecommendations:")
+    if not report["recommendations"]:
+        print("  (none -- nothing needs attention right now)")
+    for rec in report["recommendations"]:
+        print(f"  [{rec['type']}] {rec['strategy']}: {rec['reason']}")
+        print(f"    -> {rec['command']}")
 
 
 def cmd_failures(_args):
@@ -318,7 +374,11 @@ def main():
 
     sub.add_parser("performance").set_defaults(func=cmd_performance, is_async=False)
 
+    sub.add_parser("paper-performance").set_defaults(func=cmd_paper_performance, is_async=False)
+
     sub.add_parser("failures").set_defaults(func=cmd_failures, is_async=False)
+
+    sub.add_parser("manager-report").set_defaults(func=cmd_manager_report, is_async=False)
 
     sub.add_parser("list-strategies").set_defaults(func=cmd_list_strategies, is_async=False)
 

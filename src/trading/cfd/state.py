@@ -15,6 +15,9 @@ _DEFAULTS = {
     "open_trades": {},
     "operating_mode": "normal",
     "operating_mode_reason": "",
+    "paper_positions": {},
+    "paper_equity": {},
+    "paper_trade_counter": 0,
 }
 
 
@@ -96,6 +99,47 @@ def pop_open_trade(contract_id: int) -> Optional[dict]:
 
 def list_open_trades() -> dict:
     return load_state().get("open_trades", {})
+
+
+def next_paper_contract_id() -> int:
+    """A synthetic, always-negative id for a paper trade -- see
+    trading.cfd.paper_trading. Negative so it can never collide with a
+    real Deriv contract_id (always a positive number from Deriv's own
+    system), keeping paper and real trades unambiguous even if their
+    records were ever compared side by side."""
+    state = load_state()
+    state["paper_trade_counter"] = state.get("paper_trade_counter", 0) + 1
+    counter = state["paper_trade_counter"]
+    _write_state(state)
+    return -counter
+
+
+def get_paper_equity(strategy_tag: str, default: float) -> float:
+    return load_state().get("paper_equity", {}).get(strategy_tag, default)
+
+
+def set_paper_equity(strategy_tag: str, equity: float) -> None:
+    state = load_state()
+    state.setdefault("paper_equity", {})[strategy_tag] = equity
+    _write_state(state)
+
+
+def get_paper_position(strategy_tag: str, instrument: str) -> Optional[dict]:
+    return load_state().get("paper_positions", {}).get(f"{strategy_tag}|{instrument}")
+
+
+def set_paper_position(strategy_tag: str, instrument: str, meta: dict) -> None:
+    state = load_state()
+    state.setdefault("paper_positions", {})[f"{strategy_tag}|{instrument}"] = meta
+    _write_state(state)
+
+
+def pop_paper_position(strategy_tag: str, instrument: str) -> Optional[dict]:
+    state = load_state()
+    positions = state.setdefault("paper_positions", {})
+    meta = positions.pop(f"{strategy_tag}|{instrument}", None)
+    _write_state(state)
+    return meta
 
 
 def exclude_instrument(instrument: str, reason: str = "") -> None:

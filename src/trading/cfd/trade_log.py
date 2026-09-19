@@ -48,15 +48,19 @@ class TradeRecord:
     equity_after: Optional[float] = None
     exit_reason: str = ""
     regime: Optional[str] = None
-    """Not populated yet -- no CFD Market Regime Engine exists as of this
-    writing (see docs/ARCHITECTURE_AUDIT.md). Present now so
-    performance.py's by-regime breakdown and the trade schema don't need
-    to change again once one does."""
+    """The trading.cfd.regime classification (e.g. "trending") in effect
+    when this trade was opened -- set by scheduler.py from the same
+    regime the Strategy Selector used to pick this trade's strategy."""
 
 
-def record_trade(trade: TradeRecord) -> None:
-    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _LOG_PATH.open("a") as f:
+def record_trade(trade: TradeRecord, path: Optional[Path] = None) -> None:
+    """path defaults to the real Trade Database (_LOG_PATH) -- pass a
+    different path to log elsewhere, e.g. trading.cfd.paper_trading's
+    separate paper-trade log, so paper and real P&L are never mixed in
+    the same file."""
+    p = path or _LOG_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as f:
         f.write(json.dumps(asdict(trade)) + "\n")
 
 

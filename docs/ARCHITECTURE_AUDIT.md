@@ -5,6 +5,15 @@ for the target) against what actually exists on
 `claude/ai-trading-manager-deriv-pmay2v`. The audit itself is read-only —
 no trading logic was changed while writing it.
 
+**Status as of the last entry below: all five phases of the original
+roadmap (Phase 0 through Phase 5) are complete.** None of this has been
+exercised against the real Deriv demo account yet under this
+architecture -- see the progress log's final entries and, going forward,
+whatever real-run findings get added after this audit. "Complete" means
+every named piece of code exists, is unit-tested, and is wired together
+correctly in isolation; it does not yet mean "confirmed correct against
+live Deriv data," which is a different, still-open claim.
+
 ## Progress log
 
 - **2026-09-19 — Phase 0 + Phase 1 done.** Virtual equity model
@@ -88,9 +97,56 @@ no trading logic was changed while writing it.
   run's risk sizing. Mode *selection* is still manual -- an AI deciding
   when to enter Recovery/Defensive on its own is Phase 5's job. This
   closes out every item docs/ARCHITECTURE_AUDIT.md's original Phase 4
-  bullet named. What's left across the whole roadmap is Phase 5: the
-  AI Trading Manager decision layer itself, reasoning end-to-end over
-  everything Phases 0-4 built.
+  bullet named.
+- **2026-09-19 — Phase 5, scoped and closed within that scope.** Two
+  pieces, both read as "what does an AI Trading Manager actually get to
+  decide on its own, vs. what a human must still approve" -- the same
+  question every earlier phase already answered the same way (Risk
+  Governor over the AI, no hot-editing without validation, no promotion
+  on backtest results alone):
+  - **Paper Trading** (`trading/cfd/paper_trading.py`, `state/
+    cfd_paper_trades.jsonl`, `cfd_cli.py paper-performance`): every
+    `PAPER`-state strategy now actually runs -- same regime-gated
+    selection logic as `ACTIVE`, on the same live candles, simulated
+    fills only. Before this, `PAPER` was a lifecycle label with no
+    operational behavior behind it (flagged as a real gap in the Phase 4
+    entry above); this closes it.
+  - **AI Trading Manager Report** (`trading/cfd/manager_report.py`,
+    `cfd_cli.py manager-report`): the layer that actually reads across
+    the Trade Database, Paper Trading log, and Strategy Registry, and
+    turns Failure Analysis's degradation flags, Research Lab's
+    `VALIDATED` candidates, and Paper Trading's results into concrete,
+    named `cfd_cli.py` commands -- e.g. "pause this degraded `ACTIVE`
+    strategy," "start paper trading this `VALIDATED` candidate," "this
+    `PAPER` strategy looks ready for `ACTIVE`." This is the automated
+    synthesis step docs/VISION.md's pipeline implies but never
+    named outright.
+
+  **What Phase 5 deliberately did NOT build: an AI that autonomously
+  executes lifecycle changes** (pausing/promoting/retiring a strategy on
+  its own). Every recommendation above still requires a human to run the
+  named command -- doing otherwise would be exactly the
+  AI-overrides-the-Risk-Governor / hot-edit-without-validation pattern
+  docs/VISION.md forbids, the same principle Phases 2-4 already built
+  around (Strategy Registry transitions always need a reason; Research
+  Lab only ever lands a candidate at `VALIDATED`, never higher). What
+  *is* fully automated, unchanged from Phase 3: BUY/SELL/NO TRADE and
+  strategy selection among already-`ACTIVE` entries, every run, no human
+  in that loop -- because that's the part of "the AI decides" the vision
+  actually asks for; which strategies get to be `ACTIVE` in the first
+  place stays a human's call.
+
+  Also worth being explicit about: this AI Trading Manager is a
+  deterministic, rule-based synthesis layer -- not an LLM reasoning over
+  the data. Nothing here writes to the registry, applies a mode change,
+  or acts autonomously between runs on its own initiative. If an LLM
+  (e.g. a scheduled Claude session, mirroring the stock system's
+  "Ongoing news monitoring" routine -- see this README's stock section)
+  should periodically read `manager-report`'s output and either act
+  within a narrow, pre-authorized scope or flag larger decisions to the
+  user, that's a deliberate *operational* choice to set up later, not
+  something this phase's code does on its own.
+
   Everything else below is still an accurate account of what's missing.
 
 ## Executive summary
@@ -152,7 +208,7 @@ See "Decisions needed" at the end.
 ```
 Deriv Market Data          -> EXISTS (broker.get_candles)
 Market Regime Engine       -> DONE for Phase 3's scope (trending/ranging/unknown per instrument via ADX) -- taxonomy is deliberately narrow (only what the 2-strategy pool can act on); no volatility/multi-timeframe dimensions yet
-AI Trading Manager         -> MISSING entirely (no decision-making layer above "run the one configured strategy")
+AI Trading Manager         -> DONE for what's automated by design (BUY/SELL/NO TRADE + strategy selection among ACTIVE entries, every run, no human in that loop -- trading.cfd.selector) PLUS a synthesis/reporting layer (trading.cfd.manager_report) that turns Performance/Failure Analysis/Research Lab/Paper Trading results into concrete recommended commands. Strategy lifecycle changes (pause/promote/retire) are deliberately NOT autonomous -- always a human's `promote-strategy` call, per docs/VISION.md's rule against hot-editing/promoting without validation. This is a deterministic rule-based layer, not an LLM reasoning over the data -- see the Phase 5 progress log entry.
 Strategy Selector          -> DONE for Phase 3's scope (regime-matched against ACTIVE strategies' suited_regimes); only ever picks among trend-following strategies today since that's all that's registered
 BUY/SELL/NO TRADE          -> DONE for new entries (Phase 3): no ACTIVE strategy suited to the current regime is now an explicit, logged NO TRADE decision, not just an absence of signal. Not yet persisted to the Trade Database as its own record (only closed trades are) -- see "Other vision requirements not yet met" below.
 Risk Governor              -> PARTIAL (CfdRiskManager is now sized off virtual equity and has a min-stake SKIP TRADE guard -- Phase 0, done; still nothing stops a future AI Trading Manager layer from bypassing it, because that layer doesn't exist yet)
@@ -162,7 +218,7 @@ Trade Database             -> DONE for Phase 1's scope (trade_log.py, state/cfd_
 Performance Engine         -> DONE for Phase 1's scope (performance.py, `cfd_cli.py performance`): net return, expectancy, profit factor, win rate, avg win/loss, R multiple, Sharpe, Sortino, Calmar, max drawdown, longest losing streak, by-strategy/regime/session/side breakdowns, exposure. by_regime is schema-ready but always "unknown" until the Market Regime Engine (Phase 3) exists.
 Failure Analysis            -> PARTIAL: loss classification + strategy degradation detection DONE (trading.cfd.failure_analysis, `cfd_cli.py failures`), covering normal_statistical_loss/excessive_risk/regime_mismatch. abnormal market/news event, execution problem, and data problem are NOT classified -- no news/latency/data-quality signal exists to base them on, so they're never guessed at (see below)
 Research / Improvement Lab -> DONE for Phase 4's scope (trading.cfd.research_lab, scripts/research_cfd_strategy.py): searches an existing strategy class's parameter grid, runs every candidate through Backtest->TEST->Walk-Forward->Monte Carlo, auto-registers passing ones as VALIDATED (never higher). No new strategy LOGIC is generated (no code synthesis) -- "candidate" means a new parameter set for a strategy class already in trading.cfd.strategy_registry.STRATEGY_CLASSES, not a genuinely new strategy family (that still needs a human to write the class, e.g. a future mean-reversion strategy).
-Validation                  -> DONE for Phase 4's scope (trading.cfd.validation): walk-forward (fixed-params consistency across sequential folds) and Monte Carlo/stress test (trade-reshuffle ruin-probability + drawdown/equity percentiles) both implemented, pure functions over existing backtest output, wired into Research Lab's auto-gate. A live paper-trading promotion GATE (as opposed to the manual PAPER lifecycle state, which already exists) still doesn't auto-advance PAPER->ACTIVE based on real paper-trading results -- that transition is still a human's call via cfd_cli.py promote-strategy.
+Validation                  -> DONE (Phase 4 + Phase 5): walk-forward (fixed-params consistency across sequential folds) and Monte Carlo/stress test (trade-reshuffle ruin-probability + drawdown/equity percentiles), pure functions over existing backtest output, wired into Research Lab's auto-gate (Phase 4); PAPER now has real operational meaning via trading.cfd.paper_trading (Phase 5), not just a label. PAPER->ACTIVE is still always a human's `promote-strategy` call -- by design (docs/VISION.md's rule against promoting without validation), not a gap.
 Strategy Registry            -> DONE (Phase 2 + Phase 4): name@version, full lifecycle, enforced transitions, audit trail (Phase 2); now also a real automated path feeding it (Research Lab, Phase 4) that lands candidates at VALIDATED. PAPER->ACTIVE promotion is still always a human decision -- by design, not a gap (see docs/VISION.md's rule against promoting on backtest results alone).
 ```
 

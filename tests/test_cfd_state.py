@@ -9,6 +9,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
         "excluded_instruments": {}, "broker_baseline": None, "open_trades": {},
         "operating_mode": "normal", "operating_mode_reason": "",
+        "paper_positions": {}, "paper_equity": {}, "paper_trade_counter": 0,
     }
 
 
@@ -57,6 +58,32 @@ def test_set_operating_mode_rejects_unknown_mode(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         state.set_operating_mode("yolo")
     assert state.load_state()["operating_mode"] == "normal"  # unchanged
+
+
+def test_next_paper_contract_id_is_negative_and_increments(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    first = state.next_paper_contract_id()
+    second = state.next_paper_contract_id()
+    assert first == -1
+    assert second == -2
+
+
+def test_paper_equity_defaults_then_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_paper_equity("ema_crossover@v1", default=100.0) == 100.0
+    state.set_paper_equity("ema_crossover@v1", 110.5)
+    assert state.get_paper_equity("ema_crossover@v1", default=100.0) == 110.5
+    assert state.get_paper_equity("other@v1", default=100.0) == 100.0
+
+
+def test_paper_position_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") is None
+    state.set_paper_position("ema_crossover@v1", "frxXAUUSD", {"side": "long"})
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") == {"side": "long"}
+    popped = state.pop_paper_position("ema_crossover@v1", "frxXAUUSD")
+    assert popped == {"side": "long"}
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") is None
 
 
 def test_set_broker_baseline_only_sets_once(tmp_path, monkeypatch):

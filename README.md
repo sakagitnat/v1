@@ -593,6 +593,46 @@ visible, even though the numeric effect is identical today. `aggressive`
 ceiling no mode may ever cross, regardless of `CFD_RISK_PER_TRADE` or
 which mode is set.
 
+**Paper Trading.** `trading/cfd/paper_trading.py` runs every strategy
+sitting in the Strategy Registry's `PAPER` state through the same
+regime-gated Strategy Selector logic as `ACTIVE` strategies, on the same
+real-time candles the live scheduler already fetched -- but never places
+a real (or demo-account) Deriv order. A paper position's stop/target are
+checked against each new candle's high/low locally (the same no-slippage
+exact-fill logic `CfdBacktestEngine` uses for a historical backtest,
+just run incrementally live instead of once over history, since there's
+no real broker managing a paper position's stop-loss/take-profit). Each
+`PAPER` strategy tracks its own independent virtual equity, seeded at
+`CFD_VIRTUAL_STARTING_CAPITAL`, and its results land in a **separate**
+log (`state/cfd_paper_trades.jsonl`, `cfd_cli.py paper-performance`) --
+never mixed with the real Trade Database. This is genuinely the
+"Paper Trading" pipeline stage docs/VISION.md calls for -- real
+forward-looking validation on data no backtest ever saw, between
+automated validation (Research Lab, which only ever lands a candidate at
+`VALIDATED`) and a human's decision to promote to `ACTIVE`.
+
+**AI Trading Manager: Management Report.** `trading/cfd/manager_report.py`
+(`cfd_cli.py manager-report`) is the layer that actually ties Phases 0-4
+together: it reads the Trade Database, the Paper Trading log, and the
+Strategy Registry, and produces a consolidated report -- overall
+performance, the loss breakdown, every strategy grouped by lifecycle
+state, and **concrete, copy-pasteable recommended commands** (e.g. "this
+`ACTIVE` strategy shows degradation, run `promote-strategy ... PAUSED`",
+"this `VALIDATED` candidate is ready to start paper trading, run
+`promote-strategy ... PAPER`", "this `PAPER` strategy has 25 trades and a
+positive expectancy, worth reviewing for `ACTIVE`"). **It never applies
+any of these itself.** Every lifecycle change still goes through the
+same deliberate, audited `promote-strategy` call as any other manual
+change -- handing an AI unrestricted authority to pause/promote
+strategies on its own would be exactly the AI-overrides-the-Risk-Governor
+/ hot-edit-without-validation behavior docs/VISION.md forbids. What *is*
+already fully automated, per the vision, is the AI choosing BUY/SELL/NO
+TRADE and selecting among already-`ACTIVE` strategies each run (see
+"Market Regime Engine & Strategy Selector" above) -- the distinction
+this report is built to respect is between deciding *how to trade with
+what's already approved* (automatic) and deciding *what gets approved*
+(always a human).
+
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a
 stop-loss/take-profit between runs -- is logged to
@@ -793,6 +833,8 @@ src/trading/
     validation.py                         # Walk-Forward + Monte Carlo / Stress Test
     research_lab.py                        # Research Lab -- candidate generation/evaluation, auto-registers passing ones as VALIDATED
     operating_mode.py                       # Defensive/Normal/Aggressive/Recovery risk-sizing multipliers, hard-capped
+    paper_trading.py                         # Paper Trading -- runs PAPER-state strategies on live candles, no real orders
+    manager_report.py                         # AI Trading Manager report -- consolidated view + recommended commands, never auto-applied
     trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
     performance.py                      # Performance Engine -- metrics computed from the trade log
     scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)
@@ -820,6 +862,7 @@ state/
   buckets.json
   cfd_bot_state.json
   cfd_trades.jsonl        # Trade Database -- see "Trade Database & Performance Engine" above
+  cfd_paper_trades.jsonl   # Paper Trading log -- separate from the real Trade Database, see "Paper Trading" above
   cfd_strategy_registry.json  # Strategy Registry -- see "Strategy Registry & lifecycle" above
 docs/
   VISION.md                # master vision for the AI Trading Manager -- read this first
