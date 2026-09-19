@@ -226,17 +226,20 @@ class DerivBroker:
     async def close_position(self, contract_id: int) -> dict:
         return await self._request({"sell": contract_id, "price": 0})
 
-    async def list_active_symbols(self, product_type: str = "basic") -> list[dict]:
+    async def list_active_symbols(self) -> list[dict]:
         """Returns Deriv's own list of tradable symbols (each a dict with
         at least "symbol" and "display_name", plus market/submarket
         grouping) -- used to discover real instrument names (e.g. for
         crypto) rather than guessing them, the same "confirm against a
         live response, don't assume" discipline as everything else in
-        this file. UNTESTED as of writing: this request type is
-        documented for Deriv's classic API; not yet confirmed against
-        this project's newer /trading/v1/options flow the way
-        Multipliers orders themselves were confirmed with Deriv
-        support -- if it errors, that's diagnostic information, not
-        necessarily a bug."""
-        resp = await self._request({"active_symbols": "brief", "product_type": product_type})
+        this file.
+
+        No "product_type" param (unlike Deriv's classic/legacy API docs,
+        which show one) -- confirmed by a live error against this
+        project's newer /trading/v1/options flow: "Input validation
+        failed: Properties not allowed: product_type." Same pattern as
+        every other field-name surprise in this file: this newer API
+        surface doesn't always match older documentation, so it's
+        checked against the real response rather than assumed."""
+        resp = await self._request({"active_symbols": "brief"})
         return resp.get("active_symbols", [])
