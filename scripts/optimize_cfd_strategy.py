@@ -10,10 +10,15 @@ better number. The winning candidate also has to beat the untouched
 default params' own TEST performance, not just clear CAGR>0 and the
 drawdown cap in isolation -- a candidate that passes that bar in
 isolation but does worse than doing nothing on real holdout data is
-not an improvement, whatever its TRAIN numbers looked like (found this
-the hard way on the first real run: a "recommended" candidate scored
-72% TRAIN CAGR but only 1.8% TEST CAGR, well under the default params'
-31% TEST CAGR).
+not an improvement, whatever its TRAIN numbers looked like. Ranking by
+TRAIN calmar alone isn't enough either: the TRAIN-calmar #1 candidate
+is evaluated on TEST like everything else, and can still lose to a
+lower-ranked-on-TRAIN candidate that holds up better -- TOP_N_TO_TEST
+candidates get evaluated on TEST, and whichever both clears the gate
+and beats baseline, ranked by TEST calmar, wins (found this the hard
+way: the TRAIN-calmar #1 candidate scored 35% TRAIN CAGR but -46% TEST
+CAGR against a wider grid on ~2 years of data -- a catastrophic
+overfit a naive "just take #1" selection would have missed).
 
 Backtests all configured instruments together, sharing one
 CfdRiskManager -- matching how the live scheduler actually trades them
@@ -61,7 +66,8 @@ CHUNKS_PER_INSTRUMENT = 8  # up to 8 requests per instrument, paged backward
 
 TRAIN_FRACTION = 0.7  # proportional, not fixed calendar dates -- history depth isn't known ahead of a live fetch
 MIN_TRADES = 20  # ignore combos too thin to trust their metrics
-MAX_DRAWDOWN_CAP = -25.0  # reject any combo whose TRAIN max drawdown is worse than this
+MAX_DRAWDOWN_CAP = -25.0  # reject any combo whose TRAIN or TEST max drawdown is worse than this
+TOP_N_TO_TEST = 10  # how many TRAIN-qualified candidates to also evaluate on TEST, not just the TRAIN-calmar winner
 
 PARAM_GRID = {
     # Widened after the first ~2-year yfinance run: defaults (12/26/1.5/2.5)
@@ -222,35 +228,45 @@ async def main(granularity_seconds: int, source: str):
     pool = [r for r in results if r[1]["cagr_pct"] > 0 and r[1]["max_drawdown_pct"] >= MAX_DRAWDOWN_CAP]
     pool.sort(key=lambda r: calmar(r[1]), reverse=True)
     print(
-        f"\nTop 5 by TRAIN calmar (cagr/|maxdd|) among combos with CAGR > 0 "
+        f"\nTop {TOP_N_TO_TEST} by TRAIN calmar (cagr/|maxdd|) among combos with CAGR > 0 "
         f"and drawdown no worse than {MAX_DRAWDOWN_CAP}% ({len(pool)}/{len(results)} qualify):"
     )
-    for kwargs, m in pool[:5]:
+    for kwargs, m in pool[:TOP_N_TO_TEST]:
         print(f"  calmar={calmar(m):.2f}  {kwargs} -> {fmt(m)}")
 
     if not pool:
         print(f"\nNo combination qualified (min {MIN_TRADES} trades, CAGR>0, drawdown cap). Keeping current defaults.")
         return
 
-    best_kwargs, best_train = pool[0]
-    best_test = run_backtest(best_kwargs, test_bars)
+    # Ranking by TRAIN calmar alone picks whichever combo best fit TRAIN's
+    # noise -- evaluate the top N on TEST too, and only ever recommend one
+    # that ALSO clears the gate and beats baseline out-of-sample. Ranking
+    # the survivors by TEST calmar, not TRAIN calmar, so a worse-on-TRAIN
+    # but genuinely-robust-on-TEST candidate can still win.
+    print(f"\nEvaluating top {min(TOP_N_TO_TEST, len(pool))} TRAIN candidates on TEST...")
+    robust = []
+    for kwargs, train_m in pool[:TOP_N_TO_TEST]:
+        test_m = run_backtest(kwargs, test_bars)
+        overfit = test_m["cagr_pct"] <= 0 or test_m["max_drawdown_pct"] < MAX_DRAWDOWN_CAP
+        underperforms_baseline = test_m["cagr_pct"] < baseline_test["cagr_pct"]
+        verdict = "OVERFIT" if overfit else ("UNDERPERFORMS BASELINE" if underperforms_baseline else "ROBUST")
+        print(f"  {kwargs}\n    TRAIN {fmt(train_m)}\n    TEST  {fmt(test_m)}  [{verdict}]")
+        if not overfit and not underperforms_baseline:
+            robust.append((kwargs, train_m, test_m))
 
-    print(f"\n=== Best candidate: {best_kwargs} ===")
+    if not robust:
+        print(
+            "\n  None of the top candidates hold up out-of-sample and beat the default params on TEST. "
+            "NOT recommending any change -- keep the current defaults."
+        )
+        return
+
+    robust.sort(key=lambda r: calmar(r[2]), reverse=True)
+    best_kwargs, best_train, best_test = robust[0]
+    print(f"\n=== Recommended: {best_kwargs} ===")
     print(f"  TRAIN {fmt(best_train)}")
     print(f"  TEST  {fmt(best_test)}")
-
-    overfit = best_test["cagr_pct"] <= 0 or best_test["max_drawdown_pct"] < MAX_DRAWDOWN_CAP
-    underperforms_baseline = best_test["cagr_pct"] < baseline_test["cagr_pct"]
-    if overfit:
-        print("\n  WARNING: does not hold up out-of-sample -- likely overfit to TRAIN. NOT recommended as-is.")
-    elif underperforms_baseline:
-        print(
-            f"\n  Clears the drawdown/CAGR>0 gate, but underperforms the untouched default params on "
-            f"TEST ({best_test['cagr_pct']:.1f}% vs baseline's {baseline_test['cagr_pct']:.1f}%). "
-            "NOT recommended -- keep the current defaults instead."
-        )
-    else:
-        print("\n  Holds up out-of-sample and beats the default params on TEST -- recommended.")
+    print("\n  Holds up out-of-sample and beats the default params on TEST -- recommended.")
 
 
 if __name__ == "__main__":
