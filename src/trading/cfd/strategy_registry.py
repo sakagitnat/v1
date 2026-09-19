@@ -76,6 +76,15 @@ class StrategyEntry:
     first, never truncated -- the audit trail that makes docs/VISION.md's
     "no hot-editing a live strategy without validation" rule checkable,
     not just assumed."""
+    suited_regimes: list = field(default_factory=list)
+    """Which trading.cfd.regime labels (e.g. "trending", "ranging") this
+    strategy is meant to trade in -- trading.cfd.selector.select_for_entry
+    matches the current regime against every ACTIVE entry's
+    suited_regimes to decide what (if anything) trades an instrument this
+    run. Empty by default -- an entry with no regimes declared is never
+    selected for a new entry, rather than being treated as "suited to
+    everything," so a strategy registered without this set explicitly
+    can't accidentally start trading."""
 
     def build(self):
         """Instantiates the actual strategy object (EmaCrossoverStrategy,
@@ -105,12 +114,29 @@ def _key(name: str, version: str) -> str:
     return f"{name}@{version}"
 
 
+def _conflicting_active_entry(data: dict, exclude_key: str, regimes: list[str]) -> Optional[StrategyEntry]:
+    """Finds an already-ACTIVE entry (other than exclude_key) whose
+    suited_regimes overlaps regimes -- used to keep "at most one ACTIVE
+    strategy per regime" true at every promotion, so
+    trading.cfd.selector.select_for_entry() can never find more than one
+    match and have to guess."""
+    if not regimes:
+        return None
+    for key, raw in data.items():
+        if key == exclude_key or raw.get("state") != LifecycleState.ACTIVE.value:
+            continue
+        if set(raw.get("suited_regimes") or []) & set(regimes):
+            return StrategyEntry(**raw)
+    return None
+
+
 def register(
     name: str,
     version: str,
     params: dict,
     initial_state: LifecycleState = LifecycleState.RESEARCH,
     note: str = "",
+    regimes: Optional[list[str]] = None,
 ) -> StrategyEntry:
     """Adds a new strategy version to the registry. Refuses to overwrite
     an existing (name, version) -- register a new version instead of
@@ -124,11 +150,25 @@ def register(
     straight into ACTIVE (see scripts/seed_strategy_registry.py) since it
     was already the live strategy before this registry existed. Every
     *later* transition goes through set_state(), which does enforce the
-    pipeline order."""
+    pipeline order.
+
+    Seeding directly into ACTIVE still enforces "at most one ACTIVE
+    strategy per regime" (see _conflicting_active_entry) -- the same rule
+    set_state() enforces for every later promotion -- so this can't be
+    used to sneak in an ambiguous regime match either."""
     data = _load_all()
     key = _key(name, version)
     if key in data:
         raise ValueError(f"{key} is already registered -- register a new version instead of overwriting one.")
+    regimes = regimes or []
+    if initial_state == LifecycleState.ACTIVE:
+        conflict = _conflicting_active_entry(data, key, regimes)
+        if conflict:
+            overlap = set(conflict.suited_regimes) & set(regimes)
+            raise ValueError(
+                f"Can't seed {key} as ACTIVE: regime overlap {overlap} with already-ACTIVE "
+                f"{conflict.name}@{conflict.version}."
+            )
     entry = StrategyEntry(
         name=name,
         version=version,
@@ -137,6 +177,7 @@ def register(
         created_at=_now_iso(),
         updated_at=_now_iso(),
         history=[{"from": None, "to": initial_state.value, "reason": note or "registered", "at": _now_iso()}],
+        suited_regimes=regimes,
     )
     data[key] = asdict(entry)
     _write_all(data)
@@ -177,7 +218,12 @@ def set_state(name: str, version: str, to_state: LifecycleState, reason: str) ->
     reason is required: every promotion or demotion needs a stated
     justification recorded in the entry's history, not a bare state
     flip -- this is the "why" a future Failure Analysis or human review
-    needs when asking "why was this strategy trading real money?"."""
+    needs when asking "why was this strategy trading real money?".
+
+    Promoting to ACTIVE also enforces "at most one ACTIVE strategy per
+    regime" (see _conflicting_active_entry) -- trading.cfd.selector.
+    select_for_entry() relies on that to never find more than one ACTIVE
+    strategy suited to the same regime."""
     if not reason:
         raise ValueError("set_state requires a non-empty reason -- every lifecycle change needs an audited justification.")
     data = _load_all()
@@ -189,29 +235,17 @@ def set_state(name: str, version: str, to_state: LifecycleState, reason: str) ->
     from_state = LifecycleState(entry.state)
     if not _valid_transition(from_state, to_state):
         raise ValueError(f"Invalid transition {from_state.value} -> {to_state.value} for {key}.")
+    if to_state == LifecycleState.ACTIVE:
+        conflict = _conflicting_active_entry(data, key, entry.suited_regimes)
+        if conflict:
+            overlap = set(conflict.suited_regimes) & set(entry.suited_regimes)
+            raise ValueError(
+                f"Can't promote {key} to ACTIVE: regime overlap {overlap} with already-ACTIVE "
+                f"{conflict.name}@{conflict.version}. Pause or retire it first."
+            )
     entry.history.append({"from": from_state.value, "to": to_state.value, "reason": reason, "at": _now_iso()})
     entry.state = to_state.value
     entry.updated_at = _now_iso()
     data[key] = asdict(entry)
     _write_all(data)
     return entry
-
-
-def get_active_strategy() -> StrategyEntry:
-    """The scheduler's single source of truth for which strategy to
-    actually trade. Raises rather than guessing if zero or more than one
-    strategy is marked ACTIVE -- a future regime-based Strategy Selector
-    (docs/ARCHITECTURE_AUDIT.md's phase 3) will replace this with real
-    logic for running several ACTIVE strategies at once; until then,
-    exactly one ACTIVE strategy is required so there's never ambiguity
-    about what's actually live."""
-    active = list_by_state(LifecycleState.ACTIVE)
-    if not active:
-        raise RuntimeError("No strategy is registered as ACTIVE -- nothing to trade. See `cfd_cli.py list-strategies`.")
-    if len(active) > 1:
-        names = ", ".join(f"{e.name}@{e.version}" for e in active)
-        raise RuntimeError(
-            f"{len(active)} strategies are marked ACTIVE ({names}) -- the scheduler can only run exactly one "
-            "until a regime-based Strategy Selector exists (see docs/ARCHITECTURE_AUDIT.md). Pause all but one."
-        )
-    return active[0]

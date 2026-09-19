@@ -24,14 +24,33 @@ no trading logic was changed while writing it.
   and a required-reason audit trail on every promotion/demotion.
   `scripts/seed_strategy_registry.py` registered the two existing
   strategies (`ema_crossover@v1` grandfathered into `ACTIVE`,
-  `donchian_breakout@v1` into `CANDIDATE`). `scheduler.py` now resolves
-  which strategy to trade from the registry (`get_active_strategy()`,
-  requires exactly one `ACTIVE` entry) instead of hardcoding
-  `EmaCrossoverStrategy()`. `cfd_cli.py list-strategies` /
+  `donchian_breakout@v1` into `CANDIDATE`). `scheduler.py` initially
+  resolved which strategy to trade from the registry (superseded the same
+  day by Phase 3's per-regime selection -- see below) instead of
+  hardcoding `EmaCrossoverStrategy()`. `cfd_cli.py list-strategies` /
   `promote-strategy` manage it. The registry does not yet include the
   actual validation pipeline that's meant to gate promotion (walk-forward,
   Monte Carlo/stress test, real paper trading) -- that's still Phase 4;
   promotion today is a deliberate manual action, not an automatic gate.
+- **2026-09-19 — Phase 3 done.** Market Regime Engine
+  (`trading/cfd/regime.py`): classifies each instrument's own candles as
+  `trending`/`ranging`/`unknown` via ADX, independently per instrument
+  (no single reference symbol works across forex/gold/synthetics the way
+  SPY does for the stock system's `trading/regime.py`). Strategy Selector
+  (`trading/cfd/selector.py`): matches that regime against `ACTIVE`
+  strategies' new `suited_regimes` field and picks the one that fits, or
+  returns an explicit NO TRADE. `strategy_registry.py` now enforces "at
+  most one ACTIVE strategy per regime" at promotion time
+  (`register()`/`set_state()`), replacing Phase 2's stricter "at most one
+  ACTIVE strategy, period" (`get_active_strategy()`, removed -- its
+  premise no longer held once multiple ACTIVE strategies partitioned by
+  regime became valid). `scheduler.py` resolves the entry strategy per
+  instrument, per run (not once globally), and always manages an existing
+  open position with the exact strategy version that opened it (tagged in
+  its trade metadata), regardless of what's `ACTIVE` now. Both registered
+  strategies are trend-following (`suited_regimes=["trending"]`), so this
+  mostly acts as a NO TRADE gate during `ranging` markets today -- still
+  no mean-reversion/range strategy in the pool to fill that gap.
   Everything else below is still an accurate account of what's missing.
 
 ## Executive summary
@@ -92,10 +111,10 @@ See "Decisions needed" at the end.
 
 ```
 Deriv Market Data          -> EXISTS (broker.get_candles)
-Market Regime Engine       -> MISSING for CFD (stock-only regime.py, wrong asset class)
+Market Regime Engine       -> DONE for Phase 3's scope (trending/ranging/unknown per instrument via ADX) -- taxonomy is deliberately narrow (only what the 2-strategy pool can act on); no volatility/multi-timeframe dimensions yet
 AI Trading Manager         -> MISSING entirely (no decision-making layer above "run the one configured strategy")
-Strategy Selector          -> MISSING (strategy is a fixed config choice, not a runtime decision)
-BUY/SELL/NO TRADE          -> PARTIAL (each strategy emits BUY/SELL/HOLD; "NO TRADE" is not a first-class strategy/decision, just an absence of signal)
+Strategy Selector          -> DONE for Phase 3's scope (regime-matched against ACTIVE strategies' suited_regimes); only ever picks among trend-following strategies today since that's all that's registered
+BUY/SELL/NO TRADE          -> DONE for new entries (Phase 3): no ACTIVE strategy suited to the current regime is now an explicit, logged NO TRADE decision, not just an absence of signal. Not yet persisted to the Trade Database as its own record (only closed trades are) -- see "Other vision requirements not yet met" below.
 Risk Governor              -> PARTIAL (CfdRiskManager is now sized off virtual equity and has a min-stake SKIP TRADE guard -- Phase 0, done; still nothing stops a future AI Trading Manager layer from bypassing it, because that layer doesn't exist yet)
 Execution Engine           -> EXISTS (scheduler.py + broker.py; now also actually drives CfdRiskManager's register_open/register_close, which it didn't before)
 Deriv                      -> EXISTS
@@ -110,9 +129,19 @@ Strategy Registry            -> DONE for Phase 2's scope (name@version, full lif
 ## Other vision requirements not yet met
 
 - **Strategy pool breadth**: only Trend/Momentum (EMA crossover) and
-  Breakout (unvalidated) exist for CFD. Missing: Mean Reversion, Volatility
-  Expansion, Pullback, Multi-Timeframe, and NO TRADE as an explicit,
-  trackable strategy rather than an implicit default.
+  Breakout (unvalidated) exist for CFD, both tagged `suited_regimes=
+  ["trending"]`. Missing: Mean Reversion, Volatility Expansion, Pullback,
+  Multi-Timeframe -- there's a real, waiting slot for a "ranging" regime
+  strategy (trading.cfd.selector.select_for_entry() already returns NO
+  TRADE for that regime today, for exactly this reason).
+- **NO TRADE decisions aren't persisted anywhere** (Phase 3): a regime
+  gate skipping an instrument is logged (`logger.debug`/`logger.info`)
+  but not written to the Trade Database -- only closed trades are. A
+  future Failure Analysis / Research Lab asking "how often did we sit out
+  a ranging market, and did that turn out to be the right call" has
+  nothing to read yet. A lightweight decision log (separate from the
+  Trade Database's closed-trade schema) is a reasonable Phase 4 addition,
+  not built now to keep this phase's scope to what was asked.
 - **Operating modes** (Defensive/Normal/Aggressive/Recovery/Paused): only
   `paused` exists today (`cfd_bot_state.json`). No mode concept, no
   mode-dependent tactics within the same hard risk ceiling.

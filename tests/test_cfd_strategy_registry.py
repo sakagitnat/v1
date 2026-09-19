@@ -108,26 +108,56 @@ def test_set_state_unknown_strategy_raises(tmp_path, monkeypatch):
         reg.set_state("nope", "v1", LifecycleState.CANDIDATE, reason="x")
 
 
-def test_get_active_strategy_raises_when_none_active(tmp_path, monkeypatch):
+def test_register_seeds_suited_regimes(tmp_path, monkeypatch):
     _use_tmp_registry(tmp_path, monkeypatch)
-    reg.register("s", "v1", {})  # RESEARCH, not ACTIVE
-    with pytest.raises(RuntimeError):
-        reg.get_active_strategy()
+    reg.register("a", "v1", {}, regimes=["trending"])
+    assert reg.get("a", "v1").suited_regimes == ["trending"]
 
 
-def test_get_active_strategy_raises_when_multiple_active(tmp_path, monkeypatch):
+def test_register_defaults_to_no_suited_regimes(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {})
+    assert reg.get("a", "v1").suited_regimes == []
+
+
+def test_register_active_refuses_regime_overlap_with_existing_active(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    with pytest.raises(ValueError):
+        reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+
+
+def test_register_active_allows_disjoint_regimes(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["ranging"])
+    assert reg.get("a", "v1").state == "ACTIVE"
+    assert reg.get("b", "v1").state == "ACTIVE"
+
+
+def test_register_active_ignores_entries_with_no_regimes_declared(tmp_path, monkeypatch):
+    # No regimes declared means "never selected" (see StrategyEntry.suited_regimes'
+    # docstring) -- so it can never conflict with anything either.
     _use_tmp_registry(tmp_path, monkeypatch)
     reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE)
     reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE)
-    with pytest.raises(RuntimeError):
-        reg.get_active_strategy()
 
 
-def test_get_active_strategy_returns_the_sole_active_entry(tmp_path, monkeypatch):
+def test_set_state_to_active_refuses_regime_overlap(tmp_path, monkeypatch):
     _use_tmp_registry(tmp_path, monkeypatch)
-    reg.register("a", "v1", {}, initial_state=LifecycleState.CANDIDATE)
-    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE)
-    assert reg.get_active_strategy().name == "b"
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.PAUSED, regimes=["trending"])
+    with pytest.raises(ValueError):
+        reg.set_state("b", "v1", LifecycleState.ACTIVE, reason="try to double up on trending")
+
+
+def test_set_state_to_active_allows_disjoint_regime_after_others_paused(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.PAUSED, regimes=["trending"])
+    reg.set_state("a", "v1", LifecycleState.PAUSED, reason="stepping aside")
+    resumed = reg.set_state("b", "v1", LifecycleState.ACTIVE, reason="taking over trending")
+    assert resumed.state == "ACTIVE"
 
 
 def test_list_by_state_filters_correctly(tmp_path, monkeypatch):

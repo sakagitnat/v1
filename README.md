@@ -503,6 +503,29 @@ promotion (walk-forward, Monte Carlo/stress test, real paper trading) --
 promotion today is a deliberate manual, audited action, not an automatic
 gate; see `docs/ARCHITECTURE_AUDIT.md`'s later phases for that.
 
+**Market Regime Engine & Strategy Selector.** Each run, every instrument's
+own current candles (not a single reference symbol the way the stock
+system's `trading/regime.py` uses SPY -- there's no equivalent single
+"the market" reference across forex pairs, gold, and Deriv's synthetic
+indices) are classified as `trending`, `ranging`, or `unknown`
+(`trading/cfd/regime.py`, via ADX -- the same trend-strength indicator
+`EmaCrossoverStrategy`'s own optional chop filter already uses).
+`trading/cfd/selector.py` matches that regime against every `ACTIVE`
+registered strategy's `suited_regimes` and picks the one that fits --
+**no match is an explicit NO TRADE, logged and skipped, not a fallback
+guess.** Both registered strategies (`ema_crossover`, `donchian_breakout`)
+are trend-following and tagged `suited_regimes=["trending"]`, so today
+this mostly acts as a gate that skips new entries during a `ranging`
+market -- there's no mean-reversion/range strategy registered yet to
+trade that regime instead (see `docs/ARCHITECTURE_AUDIT.md`).
+`trading.cfd.strategy_registry.set_state()`/`register()` enforce **at
+most one `ACTIVE` strategy per regime** at promotion time, so the
+selector's match is never ambiguous. An already-open position is always
+managed to its exit by the *exact* strategy version that opened it
+(tagged in its trade metadata), never whatever happens to be `ACTIVE` by
+the time it closes -- so promoting or pausing a strategy can never
+retroactively change how an existing position gets closed out.
+
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a
 stop-loss/take-profit between runs -- is logged to
@@ -697,6 +720,8 @@ src/trading/
     capital.py                      # virtual equity model -- rebases demo P&L onto $100, see "Capital model" above
     risk.py                          # stake/multiplier sizing, capital floor, daily-loss circuit breaker, min-stake SKIP TRADE guard
     strategy_registry.py              # Strategy Registry -- name@version, lifecycle states, promotion audit trail
+    regime.py                          # Market Regime Engine -- per-instrument trending/ranging/unknown via ADX
+    selector.py                         # Strategy Selector -- matches regime against ACTIVE strategies' suited_regimes
     trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
     performance.py                      # Performance Engine -- metrics computed from the trade log
     scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)

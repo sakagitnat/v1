@@ -99,6 +99,17 @@ class Settings:
     risk-budgeted stake up past this floor, which would silently risk more
     than risk_per_trade of equity on a small account."""
 
+    # Market Regime Engine (CFD) -- see trading.cfd.regime. ADX's
+    # conventional textbook cutoff for "trending" (Wilder's original
+    # interpretation); not yet walked through a TRAIN/TEST split the way
+    # strategy parameters are -- see docs/ARCHITECTURE_AUDIT.md.
+    cfd_regime_adx_window: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_ADX_WINDOW", "14"))
+    )
+    cfd_regime_trend_threshold: float = field(
+        default_factory=lambda: float(os.getenv("CFD_REGIME_TREND_THRESHOLD", "25.0"))
+    )
+
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
 

@@ -1,9 +1,12 @@
 import asyncio
 from datetime import datetime, timezone
+from typing import Optional
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
+from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
+from trading.cfd.selector import select_for_entry
 from trading.cfd.state import (
     list_open_trades,
     load_state,
@@ -12,7 +15,7 @@ from trading.cfd.state import (
     set_broker_baseline,
     set_capital_floor,
 )
-from trading.cfd.strategy_registry import get_active_strategy
+from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
 from trading.cfd.trade_log import TradeRecord, record_trade
 from trading.config import settings
 from trading.logging_utils import get_logger
@@ -74,12 +77,33 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
     return records
 
 
+def _resolve_exit_strategy_entry(meta: Optional[dict]):
+    """Which registered strategy version should evaluate an existing open
+    position's exit signal -- always the exact one that opened it (tagged
+    "name@version" in its trade metadata, see record_open_trade below),
+    never whatever's currently ACTIVE. A promotion or pause made after a
+    position opened must not retroactively change how that position gets
+    managed.
+
+    Falls back to the sole ACTIVE strategy, if there's exactly one, only
+    for a position opened before this tagging existed (meta missing or
+    its tag no longer resolves) -- best-effort so a legacy position can
+    still be managed rather than orphaned, never a substitute for the
+    normal per-trade tagging."""
+    if meta and meta.get("strategy"):
+        name, _, version = meta["strategy"].partition("@")
+        entry = get(name, version)
+        if entry is not None:
+            return entry
+    active_now = list_by_state(LifecycleState.ACTIVE)
+    return active_now[0] if len(active_now) == 1 else None
+
+
 async def run_once():
-    """Evaluate the EMA crossover strategy on the latest completed H1
-    candle for each configured instrument and place/close orders
-    accordingly. Meant to run roughly hourly during market hours via a
-    scheduled GitHub Actions workflow -- see .github/workflows/
-    cfd-trading.yml.
+    """Evaluate each configured CFD instrument on its latest completed H1
+    candle and place/close orders accordingly. Meant to run roughly
+    hourly during market hours via a scheduled GitHub Actions workflow --
+    see .github/workflows/cfd-trading.yml.
 
     Confirmed end-to-end against the real Deriv API (connect, buy,
     portfolio read, sell) -- see src/trading/cfd/broker.py's docstring.
@@ -88,18 +112,22 @@ async def run_once():
     account, never the raw ~$10,000 Deriv demo balance -- see
     trading.cfd.capital and docs/VISION.md's "Capital model" section.
 
-    Which strategy actually trades is resolved from the Strategy Registry
-    (trading.cfd.strategy_registry) -- exactly one strategy must be marked
-    ACTIVE, or this raises rather than guessing. See `cfd_cli.py
-    list-strategies` / `promote-strategy`.
+    Which strategy opens a NEW position is decided per instrument, per
+    run, by the Strategy Selector (trading.cfd.selector.select_for_entry)
+    matching the instrument's current regime (trading.cfd.regime) against
+    the Strategy Registry's ACTIVE entries -- not a single hardcoded or
+    globally-fixed strategy. No ACTIVE strategy suited to the current
+    regime is an explicit NO TRADE, not a guess. An already-open position
+    is always managed by the exact strategy version that opened it (see
+    _resolve_exit_strategy_entry), regardless of what's ACTIVE now.
     """
     state = load_state()
     if state.get("paused"):
         logger.info("CFD bot is paused (state/cfd_bot_state.json) -- skipping this run.")
         return
 
-    active_entry = get_active_strategy()  # raises if zero or >1 ACTIVE -- fail fast, before spending an API call
-    strategy_tag = f"{active_entry.name}@{active_entry.version}"
+    if not list_by_state(LifecycleState.ACTIVE):
+        raise RuntimeError("No strategy is registered as ACTIVE -- nothing to trade. See `cfd_cli.py list-strategies`.")
 
     broker = DerivBroker()
     try:
@@ -154,7 +182,6 @@ async def run_once():
 
         excluded = state.get("excluded_instruments") or {}
         open_positions = await broker.open_positions()
-        strategy = active_entry.build()
 
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
@@ -166,56 +193,84 @@ async def run_once():
                 logger.debug("%s: not enough candles yet", instrument)
                 continue
 
-            prepared = strategy.prepare(bars)
-            row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
             position = open_positions.get(instrument)
             in_position = position["side"] if position else None
 
-            signal = strategy.signal_for_row(instrument, row, prev_row, in_position)
-
             if in_position is not None:
+                contract_id = position["contract_id"]
+                meta = tracked_open.get(str(contract_id))  # peek only -- don't remove until actually closing
+                exit_entry = _resolve_exit_strategy_entry(meta)
+                if exit_entry is None:
+                    logger.warning(
+                        "%s: can't determine which strategy opened contract %d (no tracked metadata, and not "
+                        "exactly one ACTIVE strategy to fall back to) -- leaving it to Deriv's own stop-loss/"
+                        "take-profit and reconciliation next run.",
+                        instrument, contract_id,
+                    )
+                    continue
+
+                exit_strategy = exit_entry.build()
+                prepared = exit_strategy.prepare(bars)
+                row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
+                signal = exit_strategy.signal_for_row(instrument, row, prev_row, in_position)
+
                 is_exit = (in_position == "long" and signal.action == Action.SELL) or (
                     in_position == "short" and signal.action == Action.BUY
                 )
-                if is_exit:
-                    logger.info("%s: closing %s position (%s)", instrument, in_position, signal.reason)
-                    contract_id = position["contract_id"]
-                    meta = pop_open_trade(contract_id)
-                    equity_before = risk.equity
-                    await broker.close_position(contract_id)
-                    new_balance = await broker.account_equity()
-                    new_equity = equity_for_account(
-                        new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
+                if not is_exit:
+                    continue
+
+                logger.info("%s: closing %s position (%s)", instrument, in_position, signal.reason)
+                pop_open_trade(contract_id)
+                equity_before = risk.equity
+                await broker.close_position(contract_id)
+                new_balance = await broker.account_equity()
+                new_equity = equity_for_account(
+                    new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
+                )
+                pnl = round(new_equity - equity_before, 2)
+                risk.register_close(pnl)
+                equity = new_equity
+                if meta:
+                    record_trade(
+                        TradeRecord(
+                            contract_id=contract_id,
+                            instrument=instrument,
+                            strategy=meta.get("strategy", f"{exit_entry.name}@{exit_entry.version}"),
+                            side=in_position,
+                            entry_time=meta.get("entry_time", ""),
+                            exit_time=_now_iso(),
+                            entry_price=meta.get("entry_price", 0.0),
+                            stake=meta.get("stake", 0.0),
+                            risk_amount=meta.get("risk_amount", 0.0),
+                            exit_price=signal.price,
+                            pnl=pnl,
+                            equity_before=equity_before,
+                            equity_after=new_equity,
+                            exit_reason="signal_exit: " + signal.reason,
+                        )
                     )
-                    pnl = round(new_equity - equity_before, 2)
-                    risk.register_close(pnl)
-                    equity = new_equity
-                    if meta:
-                        record_trade(
-                            TradeRecord(
-                                contract_id=contract_id,
-                                instrument=instrument,
-                                strategy=meta.get("strategy", strategy_tag),
-                                side=in_position,
-                                entry_time=meta.get("entry_time", ""),
-                                exit_time=_now_iso(),
-                                entry_price=meta.get("entry_price", 0.0),
-                                stake=meta.get("stake", 0.0),
-                                risk_amount=meta.get("risk_amount", 0.0),
-                                exit_price=signal.price,
-                                pnl=pnl,
-                                equity_before=equity_before,
-                                equity_after=new_equity,
-                                exit_reason="signal_exit: " + signal.reason,
-                            )
-                        )
-                    else:
-                        logger.warning(
-                            "%s: closed contract %d with no tracked entry metadata "
-                            "(opened before trade logging existed) -- pnl not logged to the trade database.",
-                            instrument, contract_id,
-                        )
+                else:
+                    logger.warning(
+                        "%s: closed contract %d with no tracked entry metadata "
+                        "(opened before trade logging existed) -- pnl not logged to the trade database.",
+                        instrument, contract_id,
+                    )
                 continue
+
+            # Flat -- decide whether to open a new position, per the
+            # Strategy Selector: current regime matched against whichever
+            # strategy (if any) is ACTIVE for it. No match is NO TRADE.
+            regime = classify_regime(bars, settings.cfd_regime_adx_window, settings.cfd_regime_trend_threshold)
+            entry_candidate = select_for_entry(regime)
+            if entry_candidate is None:
+                logger.debug("%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it)", instrument, regime)
+                continue
+
+            strategy = entry_candidate.build()
+            prepared = strategy.prepare(bars)
+            row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
+            signal = strategy.signal_for_row(instrument, row, prev_row, None)
 
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
@@ -232,9 +287,10 @@ async def run_once():
                 continue
 
             side = "long" if signal.action == Action.BUY else "short"
+            strategy_tag = f"{entry_candidate.name}@{entry_candidate.version}"
             logger.info(
-                "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- %s",
-                side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, signal.reason,
+                "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
+                side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, regime, signal.reason, strategy_tag,
             )
             result = await broker.submit_multiplier_order(
                 instrument, side, stake, risk.multiplier, stop_loss_amount, take_profit_amount

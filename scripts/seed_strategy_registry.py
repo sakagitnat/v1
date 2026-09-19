@@ -29,15 +29,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading.cfd.strategy_registry import LifecycleState, get, register
 
 
-def _seed(name: str, version: str, params: dict, state: LifecycleState, note: str) -> None:
+def _seed(name: str, version: str, params: dict, state: LifecycleState, note: str, regimes: list) -> None:
     if get(name, version) is not None:
         print(f"{name}@{version} already registered -- skipping.")
         return
-    register(name, version, params, initial_state=state, note=note)
-    print(f"Registered {name}@{version} as {state.value}.")
+    register(name, version, params, initial_state=state, note=note, regimes=regimes)
+    print(f"Registered {name}@{version} as {state.value} (suited_regimes={regimes}).")
 
 
 def main() -> None:
+    # Both existing strategies are trend-following in nature -- see
+    # trading.cfd.regime's docstring for why "trending" is the only
+    # regime either is tagged for, and what happens (NO TRADE) in a
+    # "ranging" one until a mean-reversion/range strategy joins the pool.
     _seed(
         "ema_crossover",
         "v1",
@@ -52,6 +56,7 @@ def main() -> None:
         },
         LifecycleState.ACTIVE,
         "Grandfathered: already the live strategy before the registry existed; TRAIN/TEST-validated (see README).",
+        regimes=["trending"],
     )
     _seed(
         "donchian_breakout",
@@ -65,6 +70,7 @@ def main() -> None:
         },
         LifecycleState.CANDIDATE,
         "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
+        regimes=["trending"],
     )
 
 

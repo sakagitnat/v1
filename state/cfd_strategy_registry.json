@@ -12,15 +12,18 @@
       "adx_threshold": 0.0
     },
     "state": "ACTIVE",
-    "created_at": "2026-09-19T14:10:52.993325+00:00",
-    "updated_at": "2026-09-19T14:10:52.993341+00:00",
+    "created_at": "2026-09-19T14:58:57.511512+00:00",
+    "updated_at": "2026-09-19T14:58:57.511533+00:00",
     "history": [
       {
         "from": null,
         "to": "ACTIVE",
         "reason": "Grandfathered: already the live strategy before the registry existed; TRAIN/TEST-validated (see README).",
-        "at": "2026-09-19T14:10:52.993344+00:00"
+        "at": "2026-09-19T14:58:57.511536+00:00"
       }
+    ],
+    "suited_regimes": [
+      "trending"
     ]
   },
   "donchian_breakout@v1": {
@@ -34,15 +37,18 @@
       "atr_target_mult": 4.0
     },
     "state": "CANDIDATE",
-    "created_at": "2026-09-19T14:10:52.993709+00:00",
-    "updated_at": "2026-09-19T14:10:52.993717+00:00",
+    "created_at": "2026-09-19T14:58:57.512109+00:00",
+    "updated_at": "2026-09-19T14:58:57.512125+00:00",
     "history": [
       {
         "from": null,
         "to": "CANDIDATE",
         "reason": "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
-        "at": "2026-09-19T14:10:52.993720+00:00"
+        "at": "2026-09-19T14:58:57.512128+00:00"
       }
+    ],
+    "suited_regimes": [
+      "trending"
     ]
   }
 }
