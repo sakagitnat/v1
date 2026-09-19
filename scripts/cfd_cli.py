@@ -93,7 +93,16 @@ async def cmd_test_order(args):
         print(f"open_positions() now shows: {positions!r}")
 
         print(f"Closing contract_id={contract_id}...")
-        close_result = await broker.close_position(contract_id)
+        close_result = None
+        for attempt in range(5):
+            try:
+                close_result = await broker.close_position(contract_id)
+                break
+            except RuntimeError as e:
+                if "Waiting for entry tick" not in str(e) or attempt == 4:
+                    raise
+                print(f"  Not ready yet ({e}) -- retrying in 2s...")
+                await asyncio.sleep(2)
         print(f"Closed. Raw sell response: {close_result!r}")
 
         positions_after = await broker.open_positions()
