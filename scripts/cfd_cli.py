@@ -83,7 +83,7 @@ async def cmd_list_symbols(args):
         ]
         print(f"{len(matches)}/{len(symbols)} symbols match filter {args.filter!r}:")
         for s in matches:
-            print(f"  {s.get('symbol')}: {s.get('display_name')} (market={s.get('market')}, submarket={s.get('submarket')}, exchange_is_open={s.get('exchange_is_open')})")
+            print(f"  RAW: {s!r}")
     finally:
         await broker.close()
 
