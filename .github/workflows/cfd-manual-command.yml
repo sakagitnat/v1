@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position]
+        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead."
         required: false
@@ -81,6 +81,9 @@ jobs:
               ;;
             close-position)
               python scripts/cfd_cli.py close-position "$INSTRUMENT"
+              ;;
+            optimize-strategy)
+              python scripts/optimize_cfd_strategy.py
               ;;
             *)
               echo "Unknown command: $CMD" >&2

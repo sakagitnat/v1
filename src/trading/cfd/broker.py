@@ -165,12 +165,18 @@ class DerivBroker:
             }
         return positions
 
-    async def get_candles(self, symbol: str, granularity_seconds: int = 900, count: int = 200) -> pd.DataFrame:
+    async def get_candles(
+        self, symbol: str, granularity_seconds: int = 900, count: int = 200, end: str | int = "latest"
+    ) -> pd.DataFrame:
         """granularity_seconds must be one of Deriv's supported candle
         sizes (60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 14400, 86400)
-        -- 900 = 15 minutes."""
+        -- 900 = 15 minutes. end defaults to "latest"; pass a Unix epoch to
+        page further back in history (e.g. the oldest candle's epoch minus
+        granularity_seconds from a previous call) -- a single request
+        returns at most a few thousand candles, not a full backtest's
+        worth of history."""
         resp = await self._request(
-            {"ticks_history": symbol, "style": "candles", "granularity": granularity_seconds, "count": count, "end": "latest"}
+            {"ticks_history": symbol, "style": "candles", "granularity": granularity_seconds, "count": count, "end": end}
         )
         rows = [
             {
