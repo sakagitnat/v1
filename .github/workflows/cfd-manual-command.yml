@@ -32,7 +32,7 @@ on:
         options: [long, short]
         default: long
       multiplier:
-        description: "For test-order only: Deriv caps which multipliers are offered per instrument -- override if 20 isn't accepted"
+        description: "For test-order: Deriv caps which multipliers are offered per instrument -- override if 20 isn't accepted. For optimize-strategy: reused as the candle granularity in seconds (e.g. 3600 for hourly)."
         required: false
         type: string
         default: "20"
@@ -83,7 +83,7 @@ jobs:
               python scripts/cfd_cli.py close-position "$INSTRUMENT"
               ;;
             optimize-strategy)
-              python scripts/optimize_cfd_strategy.py
+              python scripts/optimize_cfd_strategy.py --granularity "${MULTIPLIER:-900}"
               ;;
             *)
               echo "Unknown command: $CMD" >&2

@@ -17,8 +17,9 @@ Needs a live Deriv connection to fetch candle history (this sandbox has
 no network access to Deriv) -- run via the "CFD Manual Command" GitHub
 Actions workflow (command=optimize-strategy) and read its job logs.
 
-Usage: python scripts/optimize_cfd_strategy.py
+Usage: python scripts/optimize_cfd_strategy.py [--granularity 900]
 """
+import argparse
 import asyncio
 import itertools
 import sys
@@ -33,9 +34,8 @@ from trading.cfd.broker import DerivBroker
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.config import settings
 
-GRANULARITY_SECONDS = 900  # 15 minutes, matches scheduler.py
 CHUNK_COUNT = 5000  # Deriv's approx per-request cap for ticks_history
-CHUNKS_PER_INSTRUMENT = 8  # ~8 * 5000 M15 bars -- roughly 1.5-2 years of 24/5 forex/gold history
+CHUNKS_PER_INSTRUMENT = 8  # up to 8 requests per instrument, paged backward
 
 TRAIN_FRACTION = 0.7  # proportional, not fixed calendar dates -- history depth isn't known ahead of a live fetch
 MIN_TRADES = 20  # ignore combos too thin to trust their metrics
@@ -49,17 +49,20 @@ PARAM_GRID = {
 }
 
 
-async def fetch_history(broker: DerivBroker, symbol: str) -> pd.DataFrame:
+async def fetch_history(broker: DerivBroker, symbol: str, granularity_seconds: int) -> pd.DataFrame:
     chunks = []
     end: str | int = "latest"
-    for _ in range(CHUNKS_PER_INSTRUMENT):
-        bars = await broker.get_candles(symbol, granularity_seconds=GRANULARITY_SECONDS, count=CHUNK_COUNT, end=end)
+    for i in range(CHUNKS_PER_INSTRUMENT):
+        bars = await broker.get_candles(symbol, granularity_seconds=granularity_seconds, count=CHUNK_COUNT, end=end)
         if bars.empty:
+            print(f"    chunk {i}: empty response, stopping")
             break
+        print(f"    chunk {i}: {len(bars)} bars, {bars.index[0]} to {bars.index[-1]} (requested end={end})")
         chunks.append(bars)
         oldest_epoch = int(bars.index[0].timestamp())
-        next_end = oldest_epoch - GRANULARITY_SECONDS
+        next_end = oldest_epoch - granularity_seconds
         if next_end == end:  # no progress -- hit the start of available history
+            print("    no progress from last chunk -- stopping")
             break
         end = next_end
     if not chunks:
@@ -101,16 +104,16 @@ def split(bars: dict[str, pd.DataFrame]) -> tuple[dict, dict]:
     return train, test
 
 
-async def main():
+async def main(granularity_seconds: int):
     broker = DerivBroker()
     try:
         await broker.connect()
         bars = {}
         for instrument in settings.cfd_instruments:
-            print(f"Fetching {instrument} history ({GRANULARITY_SECONDS}s bars, up to {CHUNKS_PER_INSTRUMENT} chunks)...")
-            df = await fetch_history(broker, instrument)
+            print(f"Fetching {instrument} history ({granularity_seconds}s bars, up to {CHUNKS_PER_INSTRUMENT} chunks)...")
+            df = await fetch_history(broker, instrument, granularity_seconds)
             span = f"{df.index[0]} to {df.index[-1]}" if not df.empty else "no data"
-            print(f"  {len(df)} bars, {span}")
+            print(f"  total: {len(df)} bars, {span}")
             bars[instrument] = df
     finally:
         await broker.close()
@@ -172,4 +175,13 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--granularity",
+        type=int,
+        default=900,
+        help="Candle size in seconds (Deriv-supported: 60,120,180,300,600,900,1800,3600,7200,14400,86400). "
+        "Coarser granularities may have longer history available -- use e.g. 3600 to check.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(args.granularity))
