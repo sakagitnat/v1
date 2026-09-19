@@ -94,7 +94,8 @@ class DerivBroker:
         if account is None:
             raise RuntimeError(
                 f"Deriv API: this token has no {'DEMO' if wanted_virtual else 'REAL'} account "
-                f"among {len(accounts)} account(s) it authorizes. "
+                f"among {len(accounts)} account(s) it authorizes. Raw accounts response (for "
+                f"diagnosing field names -- no secrets in this payload): {accounts!r}. "
                 + (
                     "Set CFD_ALLOW_LIVE_TRADING=true explicitly to trade with real money."
                     if wanted_virtual
