@@ -143,7 +143,10 @@ class DerivBroker:
         resp = await self._request({"portfolio": 1})
         positions = {}
         for c in resp["portfolio"]["contracts"]:
-            positions[c["symbol"]] = {
+            symbol = c.get("underlying_symbol", c.get("symbol"))
+            if symbol is None:
+                raise RuntimeError(f"Deriv API: portfolio contract has neither underlying_symbol nor symbol: {c!r}")
+            positions[symbol] = {
                 "contract_id": c["contract_id"],
                 "side": "long" if c["contract_type"] == "MULTUP" else "short",
             }
