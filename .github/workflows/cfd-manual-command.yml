@@ -16,15 +16,21 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument]
+        options: [status, pause, resume, exclude-instrument, include-instrument, test-order]
       instrument:
-        description: "Instrument (required for exclude-instrument/include-instrument, e.g. frxXAUUSD)"
+        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD)"
         required: false
         type: string
       reason:
         description: "Why (optional, for pause/exclude-instrument)"
         required: false
         type: string
+      side:
+        description: "For test-order only: long or short"
+        required: false
+        type: choice
+        options: [long, short]
+        default: long
 
 permissions:
   contents: write
@@ -46,6 +52,7 @@ jobs:
           CMD: ${{ inputs.command }}
           INSTRUMENT: ${{ inputs.instrument }}
           REASON: ${{ inputs.reason }}
+          SIDE: ${{ inputs.side }}
         run: |
           set -e
           case "$CMD" in
@@ -60,6 +67,11 @@ jobs:
               ;;
             include-instrument)
               python scripts/cfd_cli.py include-instrument "$INSTRUMENT"
+              ;;
+            test-order)
+              ARGS="--side ${SIDE:-long}"
+              if [ -n "$INSTRUMENT" ]; then ARGS="$ARGS --instrument $INSTRUMENT"; fi
+              python scripts/cfd_cli.py test-order $ARGS
               ;;
             *)
               echo "Unknown command: $CMD" >&2
