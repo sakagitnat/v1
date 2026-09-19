@@ -1,0 +1,14 @@
+{
+  "paused": false,
+  "pause_reason": "",
+  "capital_floor": 100.0,
+  "initial_floor": 100.0,
+  "excluded_instruments": {},
+  "broker_baseline": 3169.49,
+  "open_trades": {},
+  "operating_mode": "normal",
+  "operating_mode_reason": "",
+  "paper_positions": {},
+  "paper_equity": {},
+  "paper_trade_counter": 0
+}
