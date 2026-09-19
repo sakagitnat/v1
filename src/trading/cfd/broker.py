@@ -186,7 +186,7 @@ class DerivBroker:
             {
                 "proposal": 1,
                 "contract_type": contract_type,
-                "symbol": symbol,
+                "underlying_symbol": symbol,
                 "amount": round(stake, 2),
                 "basis": "stake",
                 "currency": "USD",
