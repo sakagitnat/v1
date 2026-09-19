@@ -43,7 +43,14 @@ class DerivBroker:
     async def connect(self) -> dict:
         import websockets
 
-        self._ws = await websockets.connect(WS_URL.format(app_id=self._app_id))
+        # PAT-style tokens (the "pat_..." prefix Deriv's newer account
+        # settings page issues) need the app ID sent as a header, not just
+        # the ?app_id= query param the classic API docs show -- Deriv's
+        # own docs: "Deriv-App-ID header is required for PAT tokens".
+        self._ws = await websockets.connect(
+            WS_URL.format(app_id=self._app_id),
+            additional_headers={"Deriv-App-ID": self._app_id},
+        )
         auth = await self._request({"authorize": self._token})
         is_virtual = bool(auth["authorize"].get("is_virtual"))
         if not is_virtual and not settings.cfd_allow_live_trading:
