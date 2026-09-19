@@ -42,20 +42,24 @@ class DerivBroker:
     dead end for API access (see "CFD/forex trading (Deriv)").
 
     Safety gate: since there's no separate practice/live base URL to
-    force, the check happens right after step 1 -- picks the demo
-    (is_virtual) account among the ones this token authorizes unless
-    CFD_ALLOW_LIVE_TRADING is explicitly set, same protective intent as
-    the Alpaca/OANDA dual gate. This matters because Deriv gives every
-    signup an unverified real-money account automatically alongside any
-    demo account, even for users who only ever use demo -- so a token can
-    authorize both, and accounts[0] is not necessarily the demo one.
+    force, the check happens right after step 1 -- picks the account
+    whose account_type is "demo" among the ones this token authorizes
+    unless CFD_ALLOW_LIVE_TRADING is explicitly set (which picks "real"
+    instead), same protective intent as the Alpaca/OANDA dual gate. This
+    matters because Deriv gives every signup an unverified real-money
+    account automatically alongside any demo account, even for users who
+    only ever use demo -- so a token can authorize both, and accounts[0]
+    is not necessarily the demo one.
 
-    Connection flow and field names (account_id, is_virtual, the /accounts
-    and /otp response shapes) are confirmed against the live API -- this
-    class has successfully connected to a real Deriv account. Still
-    unverified against live responses: submit_multiplier_order's proposal/
-    buy flow and stop_loss/take_profit dollar-amount conversion (see
-    scheduler.py) -- validate those before trusting it with even demo
+    Connection flow and field names are confirmed against the live API --
+    this class has successfully connected to a real Deriv account. Each
+    account in the /accounts response looks like {"account_id": str,
+    "balance": str, "currency": str, "group": str, "status": str,
+    "account_type": "demo"|"real"} -- no "is_virtual" field despite that
+    being the commonly-documented name elsewhere in Deriv's API surface.
+    Still unverified against live responses: submit_multiplier_order's
+    proposal/buy flow and stop_loss/take_profit dollar-amount conversion
+    (see scheduler.py) -- validate those before trusting it with even demo
     money.
     """
 
@@ -89,16 +93,15 @@ class DerivBroker:
         # Pick the account matching the safety mode explicitly instead of
         # blindly taking accounts[0], which could silently select the real
         # account when a demo one was intended.
-        wanted_virtual = not settings.cfd_allow_live_trading
-        account = next((a for a in accounts if bool(a.get("is_virtual")) == wanted_virtual), None)
+        wanted_type = "demo" if not settings.cfd_allow_live_trading else "real"
+        account = next((a for a in accounts if a.get("account_type") == wanted_type), None)
         if account is None:
             raise RuntimeError(
-                f"Deriv API: this token has no {'DEMO' if wanted_virtual else 'REAL'} account "
-                f"among {len(accounts)} account(s) it authorizes. Raw accounts response (for "
-                f"diagnosing field names -- no secrets in this payload): {accounts!r}. "
+                f"Deriv API: this token has no {wanted_type.upper()} account "
+                f"among {len(accounts)} account(s) it authorizes: {accounts!r}. "
                 + (
                     "Set CFD_ALLOW_LIVE_TRADING=true explicitly to trade with real money."
-                    if wanted_virtual
+                    if wanted_type == "demo"
                     else "Create/use a token scoped to a real account, or unset CFD_ALLOW_LIVE_TRADING."
                 )
             )
