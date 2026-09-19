@@ -16,6 +16,7 @@ Usage:
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
   python scripts/cfd_cli.py include-instrument frxXAUUSD
   python scripts/cfd_cli.py test-order [--instrument frxXAUUSD] [--side long]
+  python scripts/cfd_cli.py close-position CONTRACT_ID
 """
 import argparse
 import asyncio
@@ -101,6 +102,18 @@ async def cmd_test_order(args):
         await broker.close()
 
 
+async def cmd_close_position(args):
+    """Manually closes one open contract by id -- e.g. to clean up a
+    leftover position from an interrupted test-order run."""
+    broker = DerivBroker()
+    try:
+        await broker.connect()
+        result = await broker.close_position(args.contract_id)
+        print(f"Closed. Raw sell response: {result!r}")
+    finally:
+        await broker.close()
+
+
 def cmd_pause(args):
     set_paused(True, getattr(args, "reason", "") or "")
     print("Paused. The CFD bot will skip trading until resumed.")
@@ -147,6 +160,10 @@ def main():
     test_order_parser.add_argument("--side", choices=["long", "short"], default="long")
     test_order_parser.add_argument("--multiplier", type=int, default=20, help="Deriv caps which multipliers are offered per instrument -- override if the default 20 isn't accepted.")
     test_order_parser.set_defaults(func=cmd_test_order, is_async=True)
+
+    close_position_parser = sub.add_parser("close-position")
+    close_position_parser.add_argument("contract_id", type=int)
+    close_position_parser.set_defaults(func=cmd_close_position, is_async=True)
 
     args = parser.parse_args()
     if args.is_async:

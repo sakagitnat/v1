@@ -16,9 +16,9 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order]
+        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position]
       instrument:
-        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD)"
+        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead."
         required: false
         type: string
       reason:
@@ -78,6 +78,9 @@ jobs:
               ARGS="--side ${SIDE:-long} --multiplier ${MULTIPLIER:-20}"
               if [ -n "$INSTRUMENT" ]; then ARGS="$ARGS --instrument $INSTRUMENT"; fi
               python scripts/cfd_cli.py test-order $ARGS
+              ;;
+            close-position)
+              python scripts/cfd_cli.py close-position "$INSTRUMENT"
               ;;
             *)
               echo "Unknown command: $CMD" >&2
