@@ -6,7 +6,14 @@ touched only once at the end, as a sanity check against curve-fitting.
 Any combo whose TRAIN max drawdown breaches MAX_DRAWDOWN_CAP is rejected
 outright, however good its return -- "the portfolio must not blow up"
 stays a hard constraint, not something the search can trade away for a
-better number.
+better number. The winning candidate also has to beat the untouched
+default params' own TEST performance, not just clear CAGR>0 and the
+drawdown cap in isolation -- a candidate that passes that bar in
+isolation but does worse than doing nothing on real holdout data is
+not an improvement, whatever its TRAIN numbers looked like (found this
+the hard way on the first real run: a "recommended" candidate scored
+72% TRAIN CAGR but only 1.8% TEST CAGR, well under the default params'
+31% TEST CAGR).
 
 Backtests all configured instruments together, sharing one
 CfdRiskManager -- matching how the live scheduler actually trades them
@@ -168,10 +175,17 @@ async def main(granularity_seconds: int):
     print(f"  TEST  {fmt(best_test)}")
 
     overfit = best_test["cagr_pct"] <= 0 or best_test["max_drawdown_pct"] < MAX_DRAWDOWN_CAP
+    underperforms_baseline = best_test["cagr_pct"] < baseline_test["cagr_pct"]
     if overfit:
         print("\n  WARNING: does not hold up out-of-sample -- likely overfit to TRAIN. NOT recommended as-is.")
+    elif underperforms_baseline:
+        print(
+            f"\n  Clears the drawdown/CAGR>0 gate, but underperforms the untouched default params on "
+            f"TEST ({best_test['cagr_pct']:.1f}% vs baseline's {baseline_test['cagr_pct']:.1f}%). "
+            "NOT recommended -- keep the current defaults instead."
+        )
     else:
-        print("\n  Holds up out-of-sample -- recommended.")
+        print("\n  Holds up out-of-sample and beats the default params on TEST -- recommended.")
 
 
 if __name__ == "__main__":
