@@ -47,6 +47,11 @@ async def cmd_status(_args):
         print(f"Paused: {state.get('paused', False)}{pause_note}")
         print(f"Equity: {equity:.2f}")
         print(f"Capital floor: {state.get('capital_floor')}")
+        initial_floor = state.get("initial_floor")
+        if initial_floor is not None:
+            growth = equity - initial_floor
+            growth_pct = (growth / initial_floor * 100) if initial_floor > 0 else 0.0
+            print(f"Growth since first run: {growth:+.2f} ({growth_pct:+.1f}%) -- started at {initial_floor:.2f}")
 
         excluded = state.get("excluded_instruments") or {}
         if excluded:

@@ -439,7 +439,15 @@ Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
 case-sensitive symbol names). Manual control (`scripts/cfd_cli.py status`
 / `pause` / `resume` / `exclude-instrument` / `include-instrument`, or
 the "CFD Manual Command" GitHub Actions workflow) mirrors the stock
-system's `cli.py`.
+system's `cli.py`. `status` reports equity growth since the first run
+(`equity - initial_floor`) as a quick sanity check, but **the ground
+truth for actual trading results is the Deriv account dashboard
+itself** -- this project doesn't yet keep its own trade-by-trade P&L
+log (a good next addition once live trading has actually run for a
+while and there are real closed contracts to validate a `profit_table`
+API integration against, rather than guessing its field names ahead of
+time the way several other integration bugs here were only caught by
+reading real responses).
 
 **Safety model is different from Alpaca/OANDA's**, because Deriv's
 account model is: Alpaca/OANDA use one base URL with a paper/live flag
