@@ -71,7 +71,7 @@ class CfdBacktestEngine:
     def __init__(
         self,
         strategy,
-        starting_equity: float = 10_000.0,
+        starting_equity: float = 100.0,
         risk_per_trade: float = 0.01,
         max_open_positions: int = 3,
         max_daily_loss_pct: float = 0.03,

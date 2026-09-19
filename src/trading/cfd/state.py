@@ -11,6 +11,8 @@ _DEFAULTS = {
     "capital_floor": None,
     "initial_floor": None,
     "excluded_instruments": {},
+    "broker_equity_baseline": None,
+    "virtual_starting_capital": None,
 }
 
 
@@ -43,12 +45,33 @@ def set_capital_floor(floor: Optional[float]) -> None:
     _write_state(state)
 
 
+def initialize_virtual_account(broker_equity: float, starting_capital: float) -> dict:
+    """Persist the mapping from Deriv's forced demo balance to a virtual
+    account. Existing values are preserved so repeated scheduler runs keep the
+    same P&L history instead of silently rebasing after every run."""
+    state = load_state()
+    changed = False
+    if state.get("broker_equity_baseline") is None:
+        state["broker_equity_baseline"] = float(broker_equity)
+        changed = True
+    if state.get("virtual_starting_capital") is None:
+        state["virtual_starting_capital"] = float(starting_capital)
+        changed = True
+    if changed:
+        _write_state(state)
+    return state
+
+
+def virtual_equity_for_broker_equity(state: dict, broker_equity: float) -> float:
+    baseline = state.get("broker_equity_baseline")
+    starting = state.get("virtual_starting_capital")
+    if baseline is None or starting is None:
+        raise RuntimeError("Virtual account is not initialized")
+    return float(starting) + (float(broker_equity) - float(baseline))
+
+
 def exclude_instrument(instrument: str, reason: str = "") -> None:
-    # Deliberately NOT .upper()'d: Deriv symbol names are mixed-case and
-    # case-sensitive (frxXAUUSD, not FRXXAUUSD) -- uppercasing here would
-    # silently break matching against settings.cfd_instruments in
-    # scheduler.py, which checks `if instrument in excluded` using the
-    # exact casing Deriv itself uses.
+    # Deriv symbol names are mixed-case and case-sensitive.
     state = load_state()
     state.setdefault("excluded_instruments", {})[instrument] = reason
     _write_state(state)

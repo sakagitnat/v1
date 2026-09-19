@@ -2,7 +2,12 @@ import asyncio
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.risk import CfdRiskManager
-from trading.cfd.state import load_state, set_capital_floor
+from trading.cfd.state import (
+    initialize_virtual_account,
+    load_state,
+    set_capital_floor,
+    virtual_equity_for_broker_equity,
+)
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.config import settings
 from trading.logging_utils import get_logger
@@ -10,19 +15,18 @@ from trading.strategy.base import Action
 
 logger = get_logger(__name__)
 
-GRANULARITY_SECONDS = 3600  # 1 hour -- see EmaCrossoverStrategy's docstring for why H1, not M15
-CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
+GRANULARITY_SECONDS = 3600
+CANDLE_COUNT = 200
 
 
 async def run_once():
-    """Evaluate the EMA crossover strategy on the latest completed H1
-    candle for each configured instrument and place/close orders
-    accordingly. Meant to run roughly hourly during market hours via a
-    scheduled GitHub Actions workflow -- see .github/workflows/
-    cfd-trading.yml.
+    """Run one Deriv Multipliers evaluation pass.
 
-    Confirmed end-to-end against the real Deriv API (connect, buy,
-    portfolio read, sell) -- see src/trading/cfd/broker.py's docstring.
+    Demo accounts are deliberately sized from a virtual account that starts
+    at CFD_VIRTUAL_STARTING_CAPITAL (default $100), not from Deriv's forced
+    ~$10,000 demo balance. The virtual account changes dollar-for-dollar with
+    demo P&L, so compounding and drawdown remain realistic for a future
+    ~$100 real account without deliberately burning the demo balance down.
     """
     state = load_state()
     if state.get("paused"):
@@ -31,16 +35,35 @@ async def run_once():
 
     broker = DerivBroker()
     try:
-        await broker.connect()
-        equity = await broker.account_equity()
+        account = await broker.connect()
+        broker_equity = await broker.account_equity()
+
+        if account.get("account_type") == "demo":
+            state = initialize_virtual_account(
+                broker_equity=broker_equity,
+                starting_capital=settings.cfd_virtual_starting_capital,
+            )
+            equity = virtual_equity_for_broker_equity(state, broker_equity)
+            logger.info(
+                "Demo balance %.2f mapped to virtual trading equity %.2f (start %.2f)",
+                broker_equity,
+                equity,
+                settings.cfd_virtual_starting_capital,
+            )
+        else:
+            equity = broker_equity
+
         capital_floor = state.get("capital_floor")
         if capital_floor is None:
-            # First run: protect the starting balance by default, same as
-            # the stock system's "set-floor" step -- but automatic here
-            # since there's no equivalent manual first command yet.
-            set_capital_floor(equity)
-            capital_floor = equity
-            logger.info("First run: capital floor set to starting equity %.2f", equity)
+            # Allow normal losses while enforcing an account-level hard stop.
+            capital_floor = equity * (1.0 - settings.cfd_max_account_drawdown_pct)
+            set_capital_floor(capital_floor)
+            logger.info(
+                "First run: capital floor set to %.2f (%.1f%% max account drawdown from %.2f)",
+                capital_floor,
+                settings.cfd_max_account_drawdown_pct * 100,
+                equity,
+            )
 
         risk = CfdRiskManager(
             equity=equity,
@@ -50,7 +73,11 @@ async def run_once():
             capital_floor=capital_floor,
         )
         if risk.below_floor():
-            logger.info("Equity %.2f is below the capital floor %.2f -- no new entries this run.", equity, capital_floor)
+            logger.warning(
+                "Trading equity %.2f is below hard floor %.2f -- no new entries this run.",
+                equity,
+                capital_floor,
+            )
 
         excluded = state.get("excluded_instruments") or {}
         open_positions = await broker.open_positions()
@@ -98,8 +125,14 @@ async def run_once():
 
             side = "long" if signal.action == Action.BUY else "short"
             logger.info(
-                "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- %s",
-                side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, signal.reason,
+                "%s %s stake=%.2f (virtual equity %.2f; stop-loss $%.2f, take-profit $%.2f) -- %s",
+                side.upper(),
+                instrument,
+                stake,
+                equity,
+                stop_loss_amount,
+                take_profit_amount,
+                signal.reason,
             )
             result = await broker.submit_multiplier_order(
                 instrument, side, stake, risk.multiplier, stop_loss_amount, take_profit_amount

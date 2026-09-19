@@ -56,16 +56,7 @@ class Settings:
         default_factory=lambda: float(os.getenv("BUCKET_SAFE_FRACTION", "0.5"))
     )
 
-    # CFD/forex (Deriv) -- a separate account, separate safety gate, separate
-    # everything from the Alpaca stock system above. See src/trading/cfd/.
-    #
-    # Tried OANDA first, but the OANDA division reachable from Thailand
-    # ("OANDA Global Markets") doesn't support the v20 REST API at all --
-    # only MetaTrader, which puts us back in the same paid-bridge problem
-    # as XM. Deriv has its own free WebSocket API directly, reachable from
-    # a Thailand signup, and needs no separate account ID: the token itself
-    # is already scoped to one specific account (demo or real) when it's
-    # created, unlike Alpaca/OANDA's separate paper/live URL switch.
+    # Deriv Multipliers -- separate account and safety gate from Alpaca.
     deriv_api_token: str = field(default_factory=lambda: os.getenv("DERIV_API_TOKEN", ""))
     deriv_app_id: str = field(default_factory=lambda: os.getenv("DERIV_APP_ID", "1089"))
     cfd_allow_live_trading: bool = field(
@@ -80,6 +71,17 @@ class Settings:
     )
     cfd_max_daily_loss_pct: float = field(
         default_factory=lambda: float(os.getenv("CFD_MAX_DAILY_LOSS_PCT", "0.03"))
+    )
+
+    # Deriv forces demo accounts to a much larger balance than the intended
+    # real account. Never size demo trades from the broker's displayed balance.
+    # Instead, the scheduler maps the broker account to a virtual account that
+    # starts at $100 and changes dollar-for-dollar with actual demo P&L.
+    cfd_virtual_starting_capital: float = field(
+        default_factory=lambda: float(os.getenv("CFD_VIRTUAL_STARTING_CAPITAL", "100"))
+    )
+    cfd_max_account_drawdown_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_ACCOUNT_DRAWDOWN_PCT", "0.20"))
     )
 
     def is_live_trading_allowed(self) -> bool:
