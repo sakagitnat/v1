@@ -64,10 +64,16 @@ MIN_TRADES = 20  # ignore combos too thin to trust their metrics
 MAX_DRAWDOWN_CAP = -25.0  # reject any combo whose TRAIN max drawdown is worse than this
 
 PARAM_GRID = {
-    "fast_span": [8, 12, 16],
-    "slow_span": [21, 26, 34],
-    "atr_stop_mult": [1.0, 1.5, 2.0],
-    "atr_target_mult": [1.5, 2.5, 3.5],
+    # Widened after the first ~2-year yfinance run: defaults (12/26/1.5/2.5)
+    # traded 1157 times in TRAIN alone with a 34% win rate and -64% max
+    # drawdown -- looks like whipsaw in ranging FX/gold, not a parameter
+    # that just needs fine-tuning. This grid leans toward slower, less
+    # noise-sensitive configs (wider EMA separation, wider stops) to test
+    # that hypothesis, instead of searching near the same failing region.
+    "fast_span": [10, 15, 21],
+    "slow_span": [34, 50, 65],
+    "atr_stop_mult": [1.5, 2.0, 3.0],
+    "atr_target_mult": [2.0, 3.0, 4.5],
 }
 
 # Yahoo Finance ticker candidates per Deriv instrument, tried in order --
