@@ -56,7 +56,20 @@ class CfdRiskManager:
         account currency, sized so a stop-out loses about risk_per_trade of
         equity. Returns (0.0, 0.0, 0.0) if a new position can't open right
         now (floor breached, daily loss halt, or max positions reached) or
-        the inputs are degenerate (zero stop distance)."""
+        the inputs are degenerate (zero stop distance).
+
+        Note: when stop_distance exceeds entry_price / multiplier, stake
+        comes out smaller than stop_loss_amount (risk_amount) -- Deriv's
+        capped-loss guarantee means the real max loss on that trade is the
+        stake, not the fuller risk_amount sent as stop_loss. Confirmed by
+        cfd/backtest.py's simulation: the price move needed to reach
+        stop_loss_amount in dollar P&L lands exactly at stop_price by
+        construction, but if that dollar amount is larger than the stake
+        itself, Deriv's contract-level cap binds first. Harmless (the
+        trade still loses less than intended, never more) but means the
+        effective risk_per_trade can come in under budget for wide
+        stops/low multipliers -- worth knowing when reading backtest
+        results, not something to "fix" here."""
         if not self._can_open_new_position() or entry_price <= 0:
             return 0.0, 0.0, 0.0
         stop_distance = abs(entry_price - stop_price)
