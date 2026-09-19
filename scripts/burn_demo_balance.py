@@ -46,6 +46,7 @@ from trading.cfd.broker import DerivBroker
 LOSS_FRACTION_OF_REMAINING = 0.20  # each round's stake is this fraction of (equity - target)
 TAKE_PROFIT_RATIO = 8.0  # take_profit_amount = stake * this -- far enough that stop_loss wins most of the time
 MIN_STAKE = 1.0
+MAX_STAKE = 1000.0  # confirmed live: "Maximum stake allowed is 1000.00" -- not documented ahead of time, discovered via the real error
 MAX_ROUNDS = 60
 POLL_INTERVAL_SECONDS = 5
 MAX_WAIT_PER_ROUND_SECONDS = 90  # force-close if Deriv hasn't auto-closed it by itself yet
@@ -66,7 +67,7 @@ async def main(target: float, tolerance: float, instrument: str, multiplier: int
         while equity - target > tolerance and rounds < MAX_ROUNDS:
             rounds += 1
             remaining = equity - target
-            stake = max(MIN_STAKE, round(min(remaining * LOSS_FRACTION_OF_REMAINING, remaining), 2))
+            stake = max(MIN_STAKE, round(min(remaining * LOSS_FRACTION_OF_REMAINING, remaining, MAX_STAKE), 2))
             stop_loss_amount = stake
             take_profit_amount = round(stake * TAKE_PROFIT_RATIO, 2)
             side = "long" if rounds % 2 == 0 else "short"  # alternate direction, no reason to bias one way
