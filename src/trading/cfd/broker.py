@@ -51,16 +51,29 @@ class DerivBroker:
     only ever use demo -- so a token can authorize both, and accounts[0]
     is not necessarily the demo one.
 
-    Connection flow and field names are confirmed against the live API --
-    this class has successfully connected to a real Deriv account. Each
-    account in the /accounts response looks like {"account_id": str,
-    "balance": str, "currency": str, "group": str, "status": str,
-    "account_type": "demo"|"real"} -- no "is_virtual" field despite that
-    being the commonly-documented name elsewhere in Deriv's API surface.
-    Still unverified against live responses: submit_multiplier_order's
-    proposal/buy flow and stop_loss/take_profit dollar-amount conversion
-    (see scheduler.py) -- validate those before trusting it with even demo
-    money.
+    Confirmed end-to-end against a live demo account (see scripts/
+    cfd_cli.py's test-order/close-position commands): connect, submit_
+    multiplier_order (buy), open_positions, and close_position (sell) all
+    round-tripped successfully. Field names that differ from the more
+    commonly documented (legacy) Deriv API surface, discovered this way:
+      - /accounts response: {"account_id": str, "balance": str,
+        "currency": str, "group": str, "status": str, "account_type":
+        "demo"|"real"} -- no "is_virtual" field.
+      - proposal request: "underlying_symbol", not "symbol".
+      - portfolio response contracts: "underlying_symbol", not "symbol".
+    A brand-new contract can't be sold until Deriv processes its first
+    price tick -- close_position right after submit_multiplier_order can
+    transiently return "Waiting for entry tick"; retry after a couple of
+    seconds (see cfd_cli.py's test-order for an example).
+
+    Not yet validated: the actual forex/gold instruments in cfd_instruments
+    (frxXAUUSD etc.) only got as far as proposal request validation before
+    market-closed errors (tested on a weekend) -- the multiplier values
+    Deriv accepts per-instrument vary a lot (a synthetic index accepted
+    only 40/100/200/300/400, not the default 20) and haven't been checked
+    for the real trading instruments yet. Also unverified: the strategy's
+    stop_loss/take_profit dollar-amount conversion in scheduler.py, and
+    the EmaCrossoverStrategy's parameters aren't backtested.
     """
 
     def __init__(self):
