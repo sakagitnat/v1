@@ -479,6 +479,30 @@ balance down or up to hit a target number -- see `docs/VISION.md` -- so
 it's kept only as documented history and refuses to run without an
 explicit override flag.)
 
+**Capital floor (opt-in, not automatic) and the daily-loss breaker
+(persisted, not per-run).** Two corrections made 2026-09-19 after a
+second, independent code review caught them:
+
+- `capital_floor` is **never set automatically**. An earlier version set
+  it to the exact starting virtual equity ($100) on the very first run --
+  but on a small account, one ordinary loss (e.g. -$1 at 1% risk) drops
+  equity below a floor set that tight, and with no way to adjust it, new
+  entries stayed blocked *forever*. `cfd_cli.py set-floor AMOUNT` /
+  `clear-floor` are now the only way a floor gets applied -- pick a
+  number with real cushion below your current virtual equity, not equal
+  to it. `status`'s "Growth since virtual start" line no longer depends
+  on a floor ever having been set -- it's computed directly from
+  `CFD_VIRTUAL_STARTING_CAPITAL`, which is always known.
+- The daily-loss circuit breaker (`CFD_MAX_DAILY_LOSS_PCT`) now actually
+  tracks loss across a real calendar day. `CfdRiskManager`'s start-of-day
+  equity and halted flag used to live only in memory, and a fresh
+  `CfdRiskManager` gets constructed every scheduler run (a new process
+  each time, on GitHub Actions) -- so the breaker silently reset every
+  ~hour and could never accumulate a full day's loss. `trading.cfd.state.
+  get_daily_risk_tracking`/`set_daily_risk_tracking` now persist both
+  values, keyed to the current UTC date, and `scheduler.py` feeds them
+  into `CfdRiskManager` explicitly each run.
+
 **Strategy Registry & lifecycle.** Every CFD strategy is a registered
 `name@version` tracked through the lifecycle `docs/VISION.md` defines --
 `RESEARCH -> CANDIDATE -> VALIDATED -> PAPER -> ACTIVE -> PAUSED ->
@@ -487,13 +511,19 @@ RETIRED` (`trading/cfd/strategy_registry.py`, persisted to
 hardcodes which strategy it trades: each run it asks the registry for
 whichever single strategy is marked `ACTIVE` and refuses to guess if zero
 or more than one are (a real misconfiguration, not something to trade
-through silently). `scripts/seed_strategy_registry.py` seeded the two
+through silently). `scripts/seed_strategy_registry.py` seeded the
 strategies that already existed in code: `ema_crossover@v1` went straight
 into `ACTIVE` (grandfathered -- it was already the live strategy, backed
 by the real TRAIN/TEST validation in "Backtesting" below, just predating
-this registry) and `donchian_breakout@v1` into `CANDIDATE` (implemented,
-not yet run through `optimize_cfd_breakout.py`'s TRAIN/TEST validation).
-Every *later* transition goes through `cfd_cli.py promote-strategy NAME
+this registry). `donchian_breakout@v1` (placeholder, never-validated
+params) was initially seeded as `CANDIDATE` -- but the actually-validated
+params a real grid search found (`entry_window=80`, TRAIN cagr=7.9%,
+TEST cagr=9.8%, agreeing in sign and magnitude -- see "Backtesting"
+below) were never registered at all, an oversight only caught by a
+second, independent code review on 2026-09-19. Fixed the same day:
+`donchian_breakout@v2` now carries those actually-validated params as
+`VALIDATED`, and `v1` is `RETIRED` (superseded, not deleted -- the audit
+trail stays intact). Every *later* transition goes through `cfd_cli.py promote-strategy NAME
 VERSION STATE --reason "..."`, which enforces the pipeline order (one
 stage forward at a time -- no skipping straight to `ACTIVE`) and requires
 a stated reason, logged in the entry's audit trail

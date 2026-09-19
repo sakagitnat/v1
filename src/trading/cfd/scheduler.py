@@ -10,12 +10,13 @@ from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
 from trading.cfd.state import (
+    get_daily_risk_tracking,
     list_open_trades,
     load_state,
     pop_open_trade,
     record_open_trade,
     set_broker_baseline,
-    set_capital_floor,
+    set_daily_risk_tracking,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
 from trading.cfd.trade_log import TradeRecord, record_trade
@@ -115,6 +116,18 @@ async def run_once():
     account, never the raw ~$10,000 Deriv demo balance -- see
     trading.cfd.capital and docs/VISION.md's "Capital model" section.
 
+    The daily-loss circuit breaker's start-of-day equity and halted flag
+    are persisted (trading.cfd.state.get/set_daily_risk_tracking) and fed
+    into CfdRiskManager explicitly, keyed off the current UTC calendar
+    date -- each run is a fresh process (GitHub Actions), so without this
+    the breaker would silently reset every single run and never actually
+    see a full day's accumulated loss. capital_floor is never set
+    automatically; it stays whatever `cfd_cli.py set-floor`/`clear-floor`
+    last left it (None by default -- no floor protection until you
+    explicitly choose one), because auto-setting it to the exact starting
+    balance on day one meant a single ordinary loss on a small account
+    permanently blocked all new entries with no way to recover.
+
     risk_per_trade and max_open_positions are scaled by the current
     Operating Mode (trading.cfd.operating_mode, set via
     `cfd_cli.py set-mode`) before CfdRiskManager ever sees them -- still
@@ -163,14 +176,26 @@ async def run_once():
 
         equity = equity_for_account(broker_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
 
+        # No floor is set automatically -- capital_floor stays None (no
+        # protection) until explicitly set via `cfd_cli.py set-floor`,
+        # same opt-in pattern as the stock system's cli.py. Auto-setting
+        # it to the exact starting balance on day one used to be the
+        # default here, but on a small account a single ordinary loss
+        # drops equity below a floor set that tight -- and with no
+        # set-floor/clear-floor command to recover from it, that
+        # silently halted all new entries forever. Set one deliberately,
+        # below your actual starting balance, once you've decided how
+        # much cushion you want to protect.
         capital_floor = state.get("capital_floor")
-        if capital_floor is None:
-            # First run: protect the starting (virtual) balance by default,
-            # same as the stock system's "set-floor" step -- but automatic
-            # here since there's no equivalent manual first command yet.
-            set_capital_floor(equity)
-            capital_floor = equity
-            logger.info("First run: capital floor set to starting virtual equity %.2f", equity)
+
+        today = datetime.now(timezone.utc).date().isoformat()
+        daily_tracking = get_daily_risk_tracking()
+        if daily_tracking.get("date") == today:
+            daily_start_equity = daily_tracking.get("start_equity")
+            initially_halted = daily_tracking.get("halted", False)
+        else:
+            daily_start_equity = equity
+            initially_halted = False
 
         mode = state.get("operating_mode", NORMAL)
         effective_risk = effective_risk_per_trade(mode, settings.cfd_risk_per_trade)
@@ -190,7 +215,11 @@ async def run_once():
             max_daily_loss_pct=settings.cfd_max_daily_loss_pct,
             capital_floor=capital_floor,
             min_stake=settings.cfd_min_stake,
+            daily_start_equity=daily_start_equity,
+            initially_halted=initially_halted,
         )
+        if risk.halted:
+            logger.info("Daily loss limit already breached today (%.2f%% halt) -- no new entries this run.", settings.cfd_max_daily_loss_pct * 100)
         if risk.below_floor():
             logger.info("Equity %.2f is below the capital floor %.2f -- no new entries this run.", equity, capital_floor)
 
@@ -348,6 +377,8 @@ async def run_once():
                         "regime": regime,
                     },
                 )
+
+        set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
     finally:
         await broker.close()
 

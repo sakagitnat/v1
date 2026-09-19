@@ -18,6 +18,7 @@ _DEFAULTS = {
     "paper_positions": {},
     "paper_equity": {},
     "paper_trade_counter": 0,
+    "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
 }
 
 
@@ -47,6 +48,24 @@ def set_capital_floor(floor: Optional[float]) -> None:
     state["capital_floor"] = floor
     if floor is not None and state.get("initial_floor") is None:
         state["initial_floor"] = floor
+    _write_state(state)
+
+
+def get_daily_risk_tracking() -> dict:
+    """The daily-loss circuit breaker's state (UTC calendar date, that
+    day's starting equity, and whether it's already halted today) --
+    persisted here because trading.cfd.scheduler runs as a fresh process
+    every ~hour (GitHub Actions), so CfdRiskManager's own in-memory
+    _daily_start_equity/_halted would otherwise reset every single run
+    and the "daily" loss limit would never actually accumulate loss
+    across a real day. See scheduler.py's run_once() for how this gets
+    fed into CfdRiskManager and written back after each run."""
+    return load_state().get("daily_risk_tracking", {"date": None, "start_equity": None, "halted": False})
+
+
+def set_daily_risk_tracking(date: str, start_equity: float, halted: bool) -> None:
+    state = load_state()
+    state["daily_risk_tracking"] = {"date": date, "start_equity": start_equity, "halted": halted}
     _write_state(state)
 
 

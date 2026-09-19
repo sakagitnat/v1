@@ -80,3 +80,28 @@ def test_reset_day_clears_halt():
     rm.register_close(pnl=-40)
     rm.reset_day()
     assert rm.halted is False
+
+
+def test_daily_start_equity_defaults_to_equity_when_not_given():
+    rm = CfdRiskManager(equity=1000)
+    assert rm.daily_start_equity == 1000
+
+
+def test_daily_start_equity_can_be_carried_in_from_a_prior_run():
+    # Simulates the scheduler passing in a persisted start-of-day equity
+    # from an earlier run today -- a loss that alone wouldn't trip 3% of
+    # *current* equity should still trip the breaker against the day's
+    # actual starting equity.
+    rm = CfdRiskManager(equity=970, max_daily_loss_pct=0.03, daily_start_equity=1000)
+    rm.register_open()
+    rm.register_close(pnl=-1)  # equity now 969; (1000-969)/1000 = 3.1% >= 3%
+    assert rm.halted is True
+
+
+def test_initially_halted_blocks_entries_from_the_first_call():
+    # Simulates the scheduler passing in "already halted earlier today"
+    # from persisted state -- must block immediately, not just after this
+    # run's own register_close.
+    rm = CfdRiskManager(equity=1000, initially_halted=True)
+    assert rm.halted is True
+    assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)

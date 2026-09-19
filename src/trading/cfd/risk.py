@@ -40,13 +40,26 @@ class CfdRiskManager:
     tied up per trade for the same dollar risk -- but Deriv caps which
     multipliers are offered per instrument, so this needs to match
     whatever's actually available once that's checked against the API."""
+    daily_start_equity: Optional[float] = None
+    """Equity at the start of today's UTC calendar day, for the
+    daily-loss circuit breaker. Defaults to `equity` (treats this as a
+    fresh day) if not given -- but a caller running across multiple
+    processes in the same real day (trading.cfd.scheduler, via
+    trading.cfd.state.get_daily_risk_tracking/set_daily_risk_tracking)
+    should pass yesterday's-run value in, and persist this attribute's
+    value back out after, or the breaker only ever sees whatever loss
+    happened to occur within one single run -- never a full day's worth."""
+    initially_halted: bool = False
+    """Whether today's daily-loss threshold was already breached in an
+    earlier run today -- persisted the same way as daily_start_equity."""
 
-    _daily_start_equity: float = field(init=False, repr=False)
     _open_positions: int = field(init=False, default=0, repr=False)
-    _halted: bool = field(init=False, default=False, repr=False)
+    _halted: bool = field(init=False, repr=False)
 
     def __post_init__(self):
-        self._daily_start_equity = self.equity
+        if self.daily_start_equity is None:
+            self.daily_start_equity = self.equity
+        self._halted = self.initially_halted
 
     def below_floor(self) -> bool:
         return self.capital_floor is not None and self.equity < self.capital_floor
@@ -104,13 +117,13 @@ class CfdRiskManager:
     def register_close(self, pnl: float):
         self._open_positions = max(0, self._open_positions - 1)
         self.equity += pnl
-        if self._daily_start_equity > 0:
-            daily_loss_pct = (self._daily_start_equity - self.equity) / self._daily_start_equity
+        if self.daily_start_equity > 0:
+            daily_loss_pct = (self.daily_start_equity - self.equity) / self.daily_start_equity
             if daily_loss_pct >= self.max_daily_loss_pct:
                 self._halted = True
 
     def reset_day(self):
-        self._daily_start_equity = self.equity
+        self.daily_start_equity = self.equity
         self._halted = False
 
     @property

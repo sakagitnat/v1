@@ -1,7 +1,7 @@
 {
   "paused": false,
   "pause_reason": "",
-  "capital_floor": 100.0,
+  "capital_floor": null,
   "initial_floor": 100.0,
   "excluded_instruments": {},
   "broker_baseline": 3169.49,
@@ -10,5 +10,10 @@
   "operating_mode_reason": "",
   "paper_positions": {},
   "paper_equity": {},
-  "paper_trade_counter": 0
+  "paper_trade_counter": 0,
+  "daily_risk_tracking": {
+    "date": null,
+    "start_equity": null,
+    "halted": false
+  }
 }

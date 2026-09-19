@@ -20,6 +20,8 @@ Usage:
   python scripts/cfd_cli.py pause [--reason "..."]
   python scripts/cfd_cli.py resume
   python scripts/cfd_cli.py set-mode {defensive,normal,aggressive,recovery} [--reason "..."]
+  python scripts/cfd_cli.py set-floor AMOUNT
+  python scripts/cfd_cli.py clear-floor
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
   python scripts/cfd_cli.py include-instrument frxXAUUSD
   python scripts/cfd_cli.py test-order [--instrument frxXAUUSD] [--side long]
@@ -43,6 +45,7 @@ from trading.cfd.state import (
     exclude_instrument,
     include_instrument,
     load_state,
+    set_capital_floor,
     set_operating_mode,
     set_paused,
 )
@@ -74,12 +77,12 @@ async def cmd_status(_args):
             print(f"Virtual equity (use this one): {equity:.2f}")
         else:
             print(f"Equity: {equity:.2f}")
-        print(f"Capital floor (virtual equity terms): {state.get('capital_floor')}")
-        initial_floor = state.get("initial_floor")
-        if initial_floor is not None:
-            growth = equity - initial_floor
-            growth_pct = (growth / initial_floor * 100) if initial_floor > 0 else 0.0
-            print(f"Growth since first run: {growth:+.2f} ({growth_pct:+.1f}%) -- started at {initial_floor:.2f}")
+        floor = state.get("capital_floor")
+        print(f"Capital floor (virtual equity terms): {floor if floor is not None else 'none set -- see set-floor'}")
+        start = settings.cfd_virtual_starting_capital
+        growth = equity - start
+        growth_pct = (growth / start * 100) if start > 0 else 0.0
+        print(f"Growth since virtual start: {growth:+.2f} ({growth_pct:+.1f}%) -- virtual starting capital {start:.2f}")
 
         excluded = state.get("excluded_instruments") or {}
         if excluded:
@@ -356,6 +359,27 @@ def cmd_set_mode(args):
     print(f"Operating mode set to {args.mode}.")
 
 
+def cmd_set_floor(args):
+    """Sets the capital floor (virtual equity terms) -- see
+    CfdRiskManager.capital_floor's docstring. No floor is set
+    automatically; this is the only way one gets applied. Pick a number
+    below your current virtual equity -- setting it AT your current
+    equity means one ordinary loss immediately blocks all new entries
+    until equity recovers back above it on its own (no open position to
+    do that from, if you're flat, means it never will) -- use clear-floor
+    to remove it if that happens."""
+    set_capital_floor(args.amount)
+    print(
+        f"Capital floor set to {args.amount:.2f} (virtual equity terms). New entries stop while "
+        f"equity is genuinely below this; existing positions still close normally."
+    )
+
+
+def cmd_clear_floor(_args):
+    set_capital_floor(None)
+    print("Capital floor cleared. No floor protection is active until you set-floor again.")
+
+
 def cmd_exclude_instrument(args):
     exclude_instrument(args.instrument, args.reason or "")
     print(f"{args.instrument} excluded from new entries until included again. Existing open positions are unaffected.")
@@ -403,6 +427,12 @@ def main():
     set_mode_parser.add_argument("mode", choices=list(VALID_MODES))
     set_mode_parser.add_argument("--reason", default="")
     set_mode_parser.set_defaults(func=cmd_set_mode, is_async=False)
+
+    floor_parser = sub.add_parser("set-floor")
+    floor_parser.add_argument("amount", type=float)
+    floor_parser.set_defaults(func=cmd_set_floor, is_async=False)
+
+    sub.add_parser("clear-floor").set_defaults(func=cmd_clear_floor, is_async=False)
 
     exclude_parser = sub.add_parser("exclude-instrument")
     exclude_parser.add_argument("instrument")

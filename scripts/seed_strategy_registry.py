@@ -17,16 +17,23 @@ validation (see README's "Backtesting" section for the numbers) -- just
 never run through the newer formal registry/lifecycle machinery.
 Grandfathered in, not a precedent for skipping stages going forward.
 
-donchian_breakout@v1 is seeded into CANDIDATE -- implemented, but per its
-own module docstring never run through scripts/optimize_cfd_breakout.py's
-TRAIN/TEST validation yet.
+donchian_breakout@v1 was originally seeded into CANDIDATE with
+breakout.py's own placeholder params (entry_window=30 etc. -- its
+docstring always called these "not validated numbers"). Those were never
+run through scripts/optimize_cfd_breakout.py; a separate grid search run
+that session found a genuinely robust set of params instead (see v2
+below) but never registered them -- an oversight only caught later by a
+second, independent code review. v1 is retired here rather than left
+sitting as a misleadingly-named "CANDIDATE" for params nobody was ever
+going to test further; v2 carries the params that were actually
+validated.
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from trading.cfd.strategy_registry import LifecycleState, get, register
+from trading.cfd.strategy_registry import LifecycleState, get, register, set_state
 
 
 def _seed(name: str, version: str, params: dict, state: LifecycleState, note: str, regimes: list) -> None:
@@ -35,6 +42,15 @@ def _seed(name: str, version: str, params: dict, state: LifecycleState, note: st
         return
     register(name, version, params, initial_state=state, note=note, regimes=regimes)
     print(f"Registered {name}@{version} as {state.value} (suited_regimes={regimes}).")
+
+
+def _retire_if_not_already(name: str, version: str, reason: str) -> None:
+    entry = get(name, version)
+    if entry is None or entry.state == LifecycleState.RETIRED.value:
+        print(f"{name}@{version}: nothing to retire (missing or already retired) -- skipping.")
+        return
+    set_state(name, version, LifecycleState.RETIRED, reason=reason)
+    print(f"Retired {name}@{version}.")
 
 
 def main() -> None:
@@ -71,6 +87,33 @@ def main() -> None:
         LifecycleState.CANDIDATE,
         "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
         regimes=["trending"],
+    )
+    _seed(
+        "donchian_breakout",
+        "v2",
+        {
+            "entry_window": 80,
+            "exit_window": 15,
+            "atr_window": 14,
+            "atr_stop_mult": 3.5,
+            "atr_target_mult": 6.0,
+        },
+        LifecycleState.VALIDATED,
+        "The actual robust candidate found by optimize_cfd_breakout.py's grid search (TRAIN cagr=7.9% "
+        "maxdd=-22.4%, TEST cagr=9.8% maxdd=-17.6% -- the first candidate all session, breakout or EMA "
+        "crossover, where TRAIN and TEST agreed in both sign and rough magnitude; see scripts/"
+        "sweep_cfd_risk_breakout.py's docstring and git commit d1a86d4 for the full numbers). Not yet run "
+        "through trading.cfd.research_lab's walk-forward/Monte Carlo gate specifically -- registered as "
+        "VALIDATED on the strength of this real TRAIN/TEST result, same grandfathering basis as "
+        "ema_crossover@v1 above, not a claim that every later gate has been checked too.",
+        regimes=["trending"],
+    )
+    _retire_if_not_already(
+        "donchian_breakout",
+        "v1",
+        "Superseded by v2, registered with the parameters actually found and validated by "
+        "optimize_cfd_breakout.py's grid search -- v1's params were always placeholders (see breakout.py's "
+        "own docstring) and were never the ones tested.",
     )
 
 

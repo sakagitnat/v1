@@ -10,6 +10,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "excluded_instruments": {}, "broker_baseline": None, "open_trades": {},
         "operating_mode": "normal", "operating_mode_reason": "",
         "paper_positions": {}, "paper_equity": {}, "paper_trade_counter": 0,
+        "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
     }
 
 
@@ -84,6 +85,13 @@ def test_paper_position_roundtrips(tmp_path, monkeypatch):
     popped = state.pop_paper_position("ema_crossover@v1", "frxXAUUSD")
     assert popped == {"side": "long"}
     assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") is None
+
+
+def test_daily_risk_tracking_defaults_then_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_daily_risk_tracking() == {"date": None, "start_equity": None, "halted": False}
+    state.set_daily_risk_tracking("2026-01-01", 100.0, True)
+    assert state.get_daily_risk_tracking() == {"date": "2026-01-01", "start_equity": 100.0, "halted": True}
 
 
 def test_set_broker_baseline_only_sets_once(tmp_path, monkeypatch):

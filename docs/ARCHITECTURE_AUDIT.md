@@ -173,6 +173,57 @@ progress log entry.
     with anything but empty data. These will only be exercisable once
     real trade history accumulates from the now-enabled schedule.
 
+- **2026-09-19 — Three real bugs found by a second, independent code
+  review, all confirmed and fixed same-day.** The review (an external
+  pass, not self-caught) flagged several items; most restated things
+  already fixed in earlier entries above (virtual equity, regime/
+  selector/degradation/research-lab existing at all) and were outdated.
+  Three were real and are now fixed:
+  1. **Daily-loss circuit breaker never actually tracked a full day.**
+     `CfdRiskManager._daily_start_equity`/`_halted` lived only in memory,
+     and `scheduler.py` constructs a fresh `CfdRiskManager` every run (a
+     new process each time) -- so the breaker silently reset every
+     ~hour instead of accumulating loss across a real calendar day.
+     Fixed: `trading.cfd.state.get_daily_risk_tracking`/
+     `set_daily_risk_tracking` persist start-of-day equity and the
+     halted flag, keyed to the current UTC date; `CfdRiskManager` gained
+     `daily_start_equity`/`initially_halted` constructor params (both
+     optional, backward compatible) to receive them.
+  2. **`capital_floor` auto-set to the exact starting balance could
+     permanently and silently halt trading.** `scheduler.py` used to set
+     `capital_floor = equity` on the very first run. On a small account,
+     one ordinary loss (e.g. -$1 at 1% risk on $100) drops equity below a
+     floor that tight, and there was no `set-floor`/`clear-floor` command
+     for the CFD system (unlike the stock system's `cli.py`) -- so once
+     breached, new entries stayed blocked forever with no way to recover
+     short of hand-editing the state JSON. Fixed: the floor is never set
+     automatically now (stays `None`/no protection until a human
+     deliberately chooses one); `cfd_cli.py set-floor`/`clear-floor`
+     added; `status`'s growth-since-start figure decoupled from the floor
+     entirely (computed from `CFD_VIRTUAL_STARTING_CAPITAL` directly, so
+     it works whether or not a floor is ever set). The live account's
+     pre-existing auto-set floor (exactly 100.0, from the first live run
+     recorded in the entry above) was cleared as part of applying this
+     fix, not just the code path that created it.
+  3. **The actually-validated Donchian breakout parameters were never
+     registered.** `scripts/sweep_cfd_risk_breakout.py` (see git commit
+     d1a86d4) found a genuinely robust candidate (`entry_window=80,
+     exit_window=15, atr_stop_mult=3.5, atr_target_mult=6.0` -- TRAIN
+     cagr=7.9% maxdd=-22.4%, TEST cagr=9.8% maxdd=-17.6%, the first
+     candidate all session where TRAIN and TEST agreed in both sign and
+     rough magnitude) -- but `scripts/seed_strategy_registry.py` had only
+     ever registered `donchian_breakout@v1` with `breakout.py`'s
+     unvalidated *placeholder* params (`entry_window=30` etc.), and
+     nothing ever registered the real ones. The validated strategy that
+     "Claude already tested and found better" was sitting nowhere in the
+     system a human could act on. Fixed: `donchian_breakout@v2` now
+     carries the actually-validated params as `VALIDATED`; `v1` is
+     `RETIRED` (superseded, not deleted -- audit trail intact).
+
+  All three fixes are unit-tested (backward compatible with every
+  existing `CfdRiskManager`/state test) and applied to the live account's
+  actual state files, not just the code going forward.
+
   Everything else below is still an accurate account of what's missing.
 
 ## Executive summary

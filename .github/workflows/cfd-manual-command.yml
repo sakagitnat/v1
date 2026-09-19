@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, performance, paper-performance, failures, manager-report, list-strategies, promote-strategy, pause, resume, set-mode, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy]
+        options: [status, performance, paper-performance, failures, manager-report, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
@@ -31,6 +31,10 @@ on:
         type: choice
         options: [defensive, normal, aggressive, recovery]
         default: normal
+      amount:
+        description: "For set-floor only: capital floor in virtual-equity dollars, e.g. 80 (below current virtual equity -- see cfd_cli.py set-floor's help)"
+        required: false
+        type: string
       strategy_name:
         description: "For promote-strategy only: registered strategy name, e.g. ema_crossover"
         required: false
@@ -84,10 +88,11 @@ jobs:
           STRATEGY_VERSION: ${{ inputs.strategy_version }}
           STRATEGY_STATE: ${{ inputs.strategy_state }}
           OPERATING_MODE: ${{ inputs.operating_mode }}
+          AMOUNT: ${{ inputs.amount }}
         run: |
           set -e
           case "$CMD" in
-            status|resume|performance|paper-performance|failures|manager-report|list-strategies)
+            status|resume|performance|paper-performance|failures|manager-report|list-strategies|clear-floor)
               python scripts/cfd_cli.py "$CMD"
               ;;
             promote-strategy)
@@ -98,6 +103,9 @@ jobs:
               ;;
             set-mode)
               python scripts/cfd_cli.py set-mode "$OPERATING_MODE" --reason "$REASON"
+              ;;
+            set-floor)
+              python scripts/cfd_cli.py set-floor "$AMOUNT"
               ;;
             exclude-instrument)
               python scripts/cfd_cli.py exclude-instrument "$INSTRUMENT" --reason "$REASON"

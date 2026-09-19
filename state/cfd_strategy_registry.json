@@ -36,15 +36,46 @@
       "atr_stop_mult": 2.5,
       "atr_target_mult": 4.0
     },
-    "state": "CANDIDATE",
+    "state": "RETIRED",
     "created_at": "2026-09-19T14:58:57.512109+00:00",
-    "updated_at": "2026-09-19T14:58:57.512125+00:00",
+    "updated_at": "2026-09-19T16:41:49.592229+00:00",
     "history": [
       {
         "from": null,
         "to": "CANDIDATE",
         "reason": "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
         "at": "2026-09-19T14:58:57.512128+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "Superseded by v2, registered with the parameters actually found and validated by optimize_cfd_breakout.py's grid search -- v1's params were always placeholders (see breakout.py's own docstring) and were never the ones tested.",
+        "at": "2026-09-19T16:41:49.592223+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
+  },
+  "donchian_breakout@v2": {
+    "name": "donchian_breakout",
+    "version": "v2",
+    "params": {
+      "entry_window": 80,
+      "exit_window": 15,
+      "atr_window": 14,
+      "atr_stop_mult": 3.5,
+      "atr_target_mult": 6.0
+    },
+    "state": "VALIDATED",
+    "created_at": "2026-09-19T16:41:49.591752+00:00",
+    "updated_at": "2026-09-19T16:41:49.591789+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "VALIDATED",
+        "reason": "The actual robust candidate found by optimize_cfd_breakout.py's grid search (TRAIN cagr=7.9% maxdd=-22.4%, TEST cagr=9.8% maxdd=-17.6% -- the first candidate all session, breakout or EMA crossover, where TRAIN and TEST agreed in both sign and rough magnitude; see scripts/sweep_cfd_risk_breakout.py's docstring and git commit d1a86d4 for the full numbers). Not yet run through trading.cfd.research_lab's walk-forward/Monte Carlo gate specifically -- registered as VALIDATED on the strength of this real TRAIN/TEST result, same grandfathering basis as ema_crossover@v1 above, not a claim that every later gate has been checked too.",
+        "at": "2026-09-19T16:41:49.591792+00:00"
       }
     ],
     "suited_regimes": [
