@@ -18,7 +18,7 @@ on:
         type: choice
         options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy]
       instrument:
-        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead."
+        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy, put the history source here instead: deriv or yfinance."
         required: false
         type: string
       reason:
@@ -83,7 +83,7 @@ jobs:
               python scripts/cfd_cli.py close-position "$INSTRUMENT"
               ;;
             optimize-strategy)
-              python scripts/optimize_cfd_strategy.py --granularity "${MULTIPLIER:-900}"
+              python scripts/optimize_cfd_strategy.py --granularity "${MULTIPLIER:-900}" --source "${INSTRUMENT:-deriv}"
               ;;
             *)
               echo "Unknown command: $CMD" >&2

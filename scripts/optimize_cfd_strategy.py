@@ -20,11 +20,26 @@ CfdRiskManager -- matching how the live scheduler actually trades them
 (shared max_open_positions, shared daily-loss circuit breaker), not as
 independent single-instrument backtests.
 
-Needs a live Deriv connection to fetch candle history (this sandbox has
-no network access to Deriv) -- run via the "CFD Manual Command" GitHub
-Actions workflow (command=optimize-strategy) and read its job logs.
+Two history sources:
+  --source deriv (default): the real feed the bot trades on, but Deriv
+    caps M15 candle depth at ~3 months regardless of pagination (a
+    server-side limit, confirmed by the identical pagination code
+    reaching ~11 months at H1 granularity) -- too short to trust a
+    train/test split on at M15.
+  --source yfinance: Yahoo Finance, already a trusted dependency in this
+    project (used for the stock system's earnings dates) -- gives up to
+    ~2 years of hourly forex/gold history, a credible longer-window
+    cross-check when Deriv's own window is too short. It's a proxy, not
+    Deriv's exact feed (different vendor, e.g. COMEX gold futures GC=F
+    standing in for spot XAUUSD) -- informative for validating the
+    EMA-crossover approach directionally, not a substitute for
+    eventually backtesting the live bot's own accumulated M15 history.
 
-Usage: python scripts/optimize_cfd_strategy.py [--granularity 900]
+Needs a live network connection (this sandbox has no general internet
+access) -- run via the "CFD Manual Command" GitHub Actions workflow
+(command=optimize-strategy) and read its job logs.
+
+Usage: python scripts/optimize_cfd_strategy.py [--granularity 900] [--source deriv|yfinance]
 """
 import argparse
 import asyncio
@@ -54,6 +69,44 @@ PARAM_GRID = {
     "atr_stop_mult": [1.0, 1.5, 2.0],
     "atr_target_mult": [1.5, 2.5, 3.5],
 }
+
+# Yahoo Finance ticker candidates per Deriv instrument, tried in order --
+# not the same vendor/feed as Deriv, so treat as a directional proxy.
+YFINANCE_TICKERS = {
+    "frxEURUSD": ["EURUSD=X"],
+    "frxGBPUSD": ["GBPUSD=X"],
+    "frxUSDJPY": ["USDJPY=X", "JPY=X"],
+    "frxXAUUSD": ["XAUUSD=X", "GC=F"],
+}
+YFINANCE_INTERVAL_BY_GRANULARITY = {900: "15m", 3600: "1h", 86400: "1d"}
+YFINANCE_PERIOD_BY_INTERVAL = {"15m": "60d", "1h": "730d", "1d": "10y"}
+
+
+def fetch_history_yfinance(instrument: str, interval: str) -> pd.DataFrame:
+    import yfinance as yf
+
+    period = YFINANCE_PERIOD_BY_INTERVAL.get(interval, "730d")
+    candidates = YFINANCE_TICKERS.get(instrument, [])
+    if not candidates:
+        print(f"  no known yfinance ticker mapping for {instrument} -- skipping")
+        return pd.DataFrame(columns=["open", "high", "low", "close"])
+
+    for ticker in candidates:
+        df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
+        if df is None or df.empty:
+            print(f"  yfinance ticker {ticker}: no data, trying next candidate...")
+            continue
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [str(c[0]).lower() for c in df.columns]
+        else:
+            df.columns = [str(c).lower() for c in df.columns]
+        out = df[["open", "high", "low", "close"]].copy()
+        out.index = pd.to_datetime(out.index, utc=True)
+        out.index.name = "time"
+        print(f"  {instrument} -> yfinance {ticker}: {len(out)} bars, {out.index[0]} to {out.index[-1]}")
+        return out
+    print(f"  no yfinance data found for {instrument} under any candidate ticker ({candidates})")
+    return pd.DataFrame(columns=["open", "high", "low", "close"])
 
 
 async def fetch_history(broker: DerivBroker, symbol: str, granularity_seconds: int) -> pd.DataFrame:
@@ -111,19 +164,25 @@ def split(bars: dict[str, pd.DataFrame]) -> tuple[dict, dict]:
     return train, test
 
 
-async def main(granularity_seconds: int):
-    broker = DerivBroker()
-    try:
-        await broker.connect()
-        bars = {}
+async def main(granularity_seconds: int, source: str):
+    bars = {}
+    if source == "deriv":
+        broker = DerivBroker()
+        try:
+            await broker.connect()
+            for instrument in settings.cfd_instruments:
+                print(f"Fetching {instrument} history ({granularity_seconds}s bars, up to {CHUNKS_PER_INSTRUMENT} chunks)...")
+                df = await fetch_history(broker, instrument, granularity_seconds)
+                span = f"{df.index[0]} to {df.index[-1]}" if not df.empty else "no data"
+                print(f"  total: {len(df)} bars, {span}")
+                bars[instrument] = df
+        finally:
+            await broker.close()
+    else:
+        interval = YFINANCE_INTERVAL_BY_GRANULARITY.get(granularity_seconds, "1h")
+        print(f"Fetching from yfinance (interval={interval}, a proxy feed -- see module docstring)...")
         for instrument in settings.cfd_instruments:
-            print(f"Fetching {instrument} history ({granularity_seconds}s bars, up to {CHUNKS_PER_INSTRUMENT} chunks)...")
-            df = await fetch_history(broker, instrument, granularity_seconds)
-            span = f"{df.index[0]} to {df.index[-1]}" if not df.empty else "no data"
-            print(f"  total: {len(df)} bars, {span}")
-            bars[instrument] = df
-    finally:
-        await broker.close()
+            bars[instrument] = fetch_history_yfinance(instrument, interval)
 
     bars = {sym: df for sym, df in bars.items() if not df.empty}
     if not bars:
@@ -197,5 +256,12 @@ if __name__ == "__main__":
         help="Candle size in seconds (Deriv-supported: 60,120,180,300,600,900,1800,3600,7200,14400,86400). "
         "Coarser granularities may have longer history available -- use e.g. 3600 to check.",
     )
+    parser.add_argument(
+        "--source",
+        choices=["deriv", "yfinance"],
+        default="deriv",
+        help="deriv: the real feed the bot trades on, capped at ~3 months for M15. "
+        "yfinance: Yahoo Finance proxy feed, longer history available -- see module docstring.",
+    )
     args = parser.parse_args()
-    asyncio.run(main(args.granularity))
+    asyncio.run(main(args.granularity, args.source))
