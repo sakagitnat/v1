@@ -32,10 +32,12 @@ def test_set_capital_floor_remembers_initial_floor_once(tmp_path, monkeypatch):
 
 
 def test_exclude_and_include_instrument_roundtrip(tmp_path, monkeypatch):
+    # Deriv symbols are mixed-case and case-sensitive (frxXAUUSD) -- casing
+    # must round-trip exactly, unlike the stock system's stock tickers.
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
-    state.exclude_instrument("xau_usd", "spiking on Fed news")
-    assert state.load_state()["excluded_instruments"] == {"XAU_USD": "spiking on Fed news"}
-    state.include_instrument("XAU_USD")
+    state.exclude_instrument("frxXAUUSD", "spiking on Fed news")
+    assert state.load_state()["excluded_instruments"] == {"frxXAUUSD": "spiking on Fed news"}
+    state.include_instrument("frxXAUUSD")
     assert state.load_state()["excluded_instruments"] == {}
 
 
@@ -52,7 +54,7 @@ def test_load_state_does_not_leak_defaults_across_instances(tmp_path, monkeypatc
     # nested dict returned before any state file exists would otherwise
     # pollute the module-level default for every future fresh state.
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "a" / "cfd_bot_state.json")
-    state.exclude_instrument("XAU_USD", "test")
+    state.exclude_instrument("frxXAUUSD", "test")
 
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "b" / "cfd_bot_state.json")
     assert state.load_state()["excluded_instruments"] == {}

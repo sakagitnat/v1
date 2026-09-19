@@ -44,12 +44,17 @@ def set_capital_floor(floor: Optional[float]) -> None:
 
 
 def exclude_instrument(instrument: str, reason: str = "") -> None:
+    # Deliberately NOT .upper()'d: Deriv symbol names are mixed-case and
+    # case-sensitive (frxXAUUSD, not FRXXAUUSD) -- uppercasing here would
+    # silently break matching against settings.cfd_instruments in
+    # scheduler.py, which checks `if instrument in excluded` using the
+    # exact casing Deriv itself uses.
     state = load_state()
-    state.setdefault("excluded_instruments", {})[instrument.upper()] = reason
+    state.setdefault("excluded_instruments", {})[instrument] = reason
     _write_state(state)
 
 
 def include_instrument(instrument: str) -> None:
     state = load_state()
-    state.setdefault("excluded_instruments", {}).pop(instrument.upper(), None)
+    state.setdefault("excluded_instruments", {}).pop(instrument, None)
     _write_state(state)

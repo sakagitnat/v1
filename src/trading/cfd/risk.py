@@ -4,9 +4,16 @@ from typing import Optional
 
 @dataclass
 class CfdRiskManager:
-    """Position sizing and circuit breakers for CFD/forex trading, in units
-    rather than shares/dollars (OANDA orders are sized in instrument units,
-    e.g. 1000 units of EUR_USD).
+    """Position sizing and circuit breakers for Deriv Multipliers trading.
+
+    Deriv's multiplier contracts are sized by a dollar "stake" plus a
+    leverage "multiplier", not by instrument units the way OANDA/most CFD
+    brokers work -- and stop_loss/take_profit on Deriv are dollar P&L
+    amounts, not price levels (see broker.py's submit_multiplier_order).
+    stake_and_limits() converts the strategy's ATR-based price-distance
+    stop/target into the (stake, stop_loss_amount, take_profit_amount)
+    Deriv's API actually wants, sized so a stop-out loses about
+    risk_per_trade of equity regardless of the instrument's price scale.
 
     Mirrors trading/risk/risk_manager.py's protective philosophy, with one
     fix already applied up front instead of re-discovered the hard way: the
@@ -22,6 +29,12 @@ class CfdRiskManager:
     max_open_positions: int = 3
     max_daily_loss_pct: float = 0.03
     capital_floor: Optional[float] = None
+    multiplier: int = 20
+    """Deriv's leverage factor applied to the stake. Higher means a
+    smaller stake reaches the same risk_amount stop-loss, i.e. less cash
+    tied up per trade for the same dollar risk -- but Deriv caps which
+    multipliers are offered per instrument, so this needs to match
+    whatever's actually available once that's checked against the API."""
 
     _daily_start_equity: float = field(init=False, repr=False)
     _open_positions: int = field(init=False, default=0, repr=False)
@@ -36,18 +49,25 @@ class CfdRiskManager:
     def _can_open_new_position(self) -> bool:
         return not (self._halted or self._open_positions >= self.max_open_positions or self.below_floor())
 
-    def position_units(self, entry_price: float, stop_loss_price: float) -> int:
-        """Whole units sized so a stop-out loses about risk_per_trade of
-        equity. Positive entry_price/stop distance assumed for a long;
-        callers going short should pass the same (positive) distance and
-        negate the returned unit count themselves."""
+    def stake_and_limits(
+        self, entry_price: float, stop_price: float, take_profit_price: float
+    ) -> tuple[float, float, float]:
+        """Returns (stake, stop_loss_amount, take_profit_amount), all in
+        account currency, sized so a stop-out loses about risk_per_trade of
+        equity. Returns (0.0, 0.0, 0.0) if a new position can't open right
+        now (floor breached, daily loss halt, or max positions reached) or
+        the inputs are degenerate (zero stop distance)."""
         if not self._can_open_new_position() or entry_price <= 0:
-            return 0
-        per_unit_risk = abs(entry_price - stop_loss_price)
-        if per_unit_risk <= 0:
-            return 0
+            return 0.0, 0.0, 0.0
+        stop_distance = abs(entry_price - stop_price)
+        if stop_distance <= 0:
+            return 0.0, 0.0, 0.0
+        target_distance = abs(take_profit_price - entry_price)
+
         risk_amount = self.equity * self.risk_per_trade
-        return max(0, int(risk_amount // per_unit_risk))
+        stake = min(risk_amount * entry_price / (self.multiplier * stop_distance), self.equity)
+        take_profit_amount = risk_amount * (target_distance / stop_distance)
+        return round(stake, 2), round(risk_amount, 2), round(take_profit_amount, 2)
 
     def register_open(self):
         self._open_positions += 1

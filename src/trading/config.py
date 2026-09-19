@@ -21,10 +21,10 @@ def _default_watchlist() -> list[str]:
 
 
 def _default_cfd_instruments() -> list[str]:
-    # OANDA instrument names use an underscore, not a slash (XAU_USD, not
-    # XAU/USD). Gold plus the most liquid major pairs to start.
-    raw = os.getenv("CFD_INSTRUMENTS", "XAU_USD,EUR_USD,GBP_USD,USD_JPY")
-    return [s.strip().upper() for s in raw.split(",") if s.strip()]
+    # Deriv's Multipliers symbol names use an "frx" prefix (frxXAUUSD, not
+    # XAU/USD or XAU_USD). Gold plus the most liquid major pairs to start.
+    raw = os.getenv("CFD_INSTRUMENTS", "frxXAUUSD,frxEURUSD,frxGBPUSD,frxUSDJPY")
+    return [s.strip() for s in raw.split(",") if s.strip()]
 
 
 @dataclass
@@ -56,11 +56,18 @@ class Settings:
         default_factory=lambda: float(os.getenv("BUCKET_SAFE_FRACTION", "0.5"))
     )
 
-    # CFD/forex (OANDA) -- a separate account, separate safety gate, separate
+    # CFD/forex (Deriv) -- a separate account, separate safety gate, separate
     # everything from the Alpaca stock system above. See src/trading/cfd/.
-    oanda_api_token: str = field(default_factory=lambda: os.getenv("OANDA_API_TOKEN", ""))
-    oanda_account_id: str = field(default_factory=lambda: os.getenv("OANDA_ACCOUNT_ID", ""))
-    oanda_practice: bool = field(default_factory=lambda: _env_bool("OANDA_PRACTICE", True))
+    #
+    # Tried OANDA first, but the OANDA division reachable from Thailand
+    # ("OANDA Global Markets") doesn't support the v20 REST API at all --
+    # only MetaTrader, which puts us back in the same paid-bridge problem
+    # as XM. Deriv has its own free WebSocket API directly, reachable from
+    # a Thailand signup, and needs no separate account ID: the token itself
+    # is already scoped to one specific account (demo or real) when it's
+    # created, unlike Alpaca/OANDA's separate paper/live URL switch.
+    deriv_api_token: str = field(default_factory=lambda: os.getenv("DERIV_API_TOKEN", ""))
+    deriv_app_id: str = field(default_factory=lambda: os.getenv("DERIV_APP_ID", "1089"))
     cfd_allow_live_trading: bool = field(
         default_factory=lambda: _env_bool("CFD_ALLOW_LIVE_TRADING", False)
     )
@@ -77,9 +84,6 @@ class Settings:
 
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
-
-    def is_cfd_live_trading_allowed(self) -> bool:
-        return self.cfd_allow_live_trading and not self.oanda_practice
 
 
 settings = Settings()

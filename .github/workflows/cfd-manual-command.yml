@@ -1,12 +1,14 @@
-name: CFD Manual Command (OANDA)
+name: CFD Manual Command (Deriv)
 
 # Triggered on demand -- normally by Claude, via the GitHub Actions API,
 # when you ask for something in chat about the CFD/forex bot. Can also be
 # run by hand from the Actions tab.
 #
-# Always runs against the PRACTICE account: OANDA_PRACTICE is hardcoded to
-# "true" below regardless of any secret, so this workflow can never place
-# a live order even by accident.
+# Safety: CFD_ALLOW_LIVE_TRADING is hardcoded to "false" below regardless
+# of any secret, as defense-in-depth -- see cfd-trading.yml's comment for
+# why Deriv's account model needs a different safety check than Alpaca/
+# OANDA's practice/live URL switch (the real check is broker.py's
+# is_virtual check at connect time).
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +18,7 @@ on:
         type: choice
         options: [status, pause, resume, exclude-instrument, include-instrument]
       instrument:
-        description: "Instrument (required for exclude-instrument/include-instrument, e.g. XAU_USD)"
+        description: "Instrument (required for exclude-instrument/include-instrument, e.g. frxXAUUSD)"
         required: false
         type: string
       reason:
@@ -38,9 +40,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Run command
         env:
-          OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
-          OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
-          OANDA_PRACTICE: "true"
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "1089"
+          CFD_ALLOW_LIVE_TRADING: "false"
           CMD: ${{ inputs.command }}
           INSTRUMENT: ${{ inputs.instrument }}
           REASON: ${{ inputs.reason }}

@@ -345,7 +345,7 @@ current value of what a bucket has invested, so it can be imprecise while
 positions are open); Alpaca's own buying power is the backstop that keeps
 that imprecision safe rather than an actual overspend.
 
-## CFD/forex trading (OANDA)
+## CFD/forex trading (Deriv)
 
 A second, completely separate trading system, in `src/trading/cfd/` --
 different account, different broker, different everything from the stock
@@ -355,53 +355,91 @@ Trader (PDT) rule caps accounts under $25,000 to 3 same-day round trips
 per 5 business days on a margin account. Forex/CFDs aren't "securities"
 under that rule, so they aren't PDT-restricted at all.
 
-**Broker: OANDA**, not a MetaTrader-based broker (XM, Exness, etc.) --
-those need either a desktop MT4/5 terminal running continuously (not
-practical on GitHub Actions) or a paid third-party bridge service to get
-REST API access at all. OANDA has its own free REST API (v20) directly,
-the same shape as Alpaca: a free practice (demo) account gets full API
-access with no bridge, no hidden per-hour charges.
+**Broker: Deriv**, after two dead ends:
+- **XM** (MetaTrader-only) needs either a desktop MT4/5 terminal running
+  continuously (not practical on GitHub Actions) or a paid third-party
+  bridge (tried MetaApi.cloud; its dashboard only offered a paid
+  ~$9/month "Cloud-g2" account for MT5, no reachable free tier).
+- **OANDA** has a free REST API (v20) in principle, but the OANDA
+  division reachable from a Thailand signup ("OANDA Global Markets")
+  doesn't support it at all -- MetaTrader only, same problem as XM.
+
+Deriv has its own free WebSocket API directly, reachable from a Thailand
+signup, no bridge and no per-hour charges. One important wrinkle: Deriv's
+demo signup creates *two* accounts -- an MT5-branded "CFDs" one (which the
+API can't control, same MetaTrader problem as above) and a native
+"Options" one (which it can). Use the native account's token.
+
+Trades **Multipliers**, not traditional leveraged CFDs -- Deriv's own
+product that caps maximum loss at the stake, unlike a plain leveraged
+position where a big enough adverse move can lose more than the margin
+put up.
 
 **Setup:**
-1. Free practice account: https://hub.oanda.com/apply/demo
-2. Account Management Portal -> "My Services" -> "Manage API Access" ->
-   generate a personal access token
-3. Add `OANDA_API_TOKEN` and `OANDA_ACCOUNT_ID` as repository secrets
-   (same as the Alpaca keys -- never paste them in chat)
+1. Free demo account: https://deriv.com -- use the native **"Options"**
+   demo account it creates automatically, not the MT5-branded "CFDs" one
+2. https://app.deriv.com/account/api-token -> select the Options account
+   -> check the **Trade** scope -> set an expiry (max 90 days -- Deriv
+   requires one; re-generate before it lapses) -> Create token
+3. Add `DERIV_API_TOKEN` as a repository secret (same as the Alpaca keys
+   -- never paste it in chat)
+
+No separate account ID needed: the token itself is already scoped to
+whichever account (demo or real) it was generated from. `DERIV_APP_ID`
+defaults to `1089`, Deriv's shared public ID for testing/personal use --
+no separate app registration needed unless you want your own later.
 
 **How it works:** `src/trading/cfd/strategy.py`'s `EmaCrossoverStrategy`
-(fast/slow EMA crossover, long or short, ATR-based stop-loss/take-profit
-attached directly to the order via OANDA's `stopLossOnFill`/
-`takeProfitOnFill` -- no separate re-arming step needed, unlike the stock
-system) runs on 15-minute candles. `.github/workflows/cfd-trading.yml`
-triggers it every 20 minutes on weekdays via `scripts/run_cfd_trading.py`
--- frequent enough for real same-day, multiple-trades-per-day trading,
-without needing a always-on server (GitHub Actions minutes are free for
-periodic runs like this; a repo would need to go *public* to get free
-*unlimited/continuous* minutes for true tick-level reaction speed, which
-this deliberately doesn't need).
+(fast/slow EMA crossover, long or short, ATR-based stop/target -- same
+strategy code as originally written for OANDA) runs on 15-minute candles.
+Deriv prices stop-loss/take-profit as dollar P&L *amounts*, not price
+levels the way Alpaca/OANDA do, so `risk.py`'s `stake_and_limits()`
+converts the strategy's ATR-based price distance into a (stake,
+stop_loss_amount, take_profit_amount) triple sized so a stop-out loses
+about `CFD_RISK_PER_TRADE` of equity, regardless of the instrument's
+price scale. `.github/workflows/cfd-trading.yml` triggers a run every 20
+minutes on weekdays via `scripts/run_cfd_trading.py` -- frequent enough
+for real same-day, multiple-trades-per-day trading, without needing an
+always-on server (GitHub Actions minutes are free for periodic runs like
+this; a repo would need to go *public* to get free *unlimited/continuous*
+minutes for true tick-level reaction speed, which this deliberately
+doesn't need).
 
-Default instruments: `XAU_USD` (gold) plus `EUR_USD`, `GBP_USD`,
-`USD_JPY` -- change via `CFD_INSTRUMENTS`. Manual control
-(`scripts/cfd_cli.py status` / `pause` / `resume` /
-`exclude-instrument` / `include-instrument`, or the "CFD Manual Command"
-GitHub Actions workflow) mirrors the stock system's `cli.py`. Same
-dual-gate live-trading safety pattern as Alpaca
-(`OANDA_PRACTICE` + `CFD_ALLOW_LIVE_TRADING`, both hardcoded to
-practice-only in both CFD workflows regardless of secrets).
+Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
+`frxUSDJPY` -- change via `CFD_INSTRUMENTS` (Deriv's own mixed-case,
+case-sensitive symbol names). Manual control (`scripts/cfd_cli.py status`
+/ `pause` / `resume` / `exclude-instrument` / `include-instrument`, or
+the "CFD Manual Command" GitHub Actions workflow) mirrors the stock
+system's `cli.py`.
+
+**Safety model is different from Alpaca/OANDA's**, because Deriv's
+account model is: Alpaca/OANDA use one base URL with a paper/live flag
+that can be forced in the workflow regardless of secrets; Deriv's API
+token is already scoped to one specific account (demo or real) the
+moment it's created, so there's no URL to force. Instead, `broker.py`'s
+`connect()` reads the `authorize` response's `is_virtual` field and
+refuses to proceed on a real (non-virtual) account unless
+`CFD_ALLOW_LIVE_TRADING` is explicitly true -- which both CFD workflows
+still hardcode to `"false"` regardless of secrets, as defense-in-depth on
+top of that check.
 
 **Status: scaffolded but not yet validated against a real account.**
-Every method in `broker.py` was written from OANDA's v20 API
-documentation, not exercised against a live practice account (no token
-was available while building it). Do not trust it with even practice
-money until it's been run end-to-end and its logs checked -- same
-discipline the stock system used throughout (this sandbox can't reach
-external APIs, so every change needs validating via a real GitHub
-Actions run). Also not yet backtested/tuned: `EmaCrossoverStrategy`'s
-parameters are a reasonable starting guess, not the result of the
-train/test-split, calmar-optimized process `optimize_strategy.py` used
-for the stock system's Breakout strategy -- that needs OANDA's candle
-history, which also needs a live token to fetch.
+Every method in `broker.py` was written from Deriv's API documentation,
+not exercised against a live demo account (no token was available while
+building it). Do not trust it with even demo money until it's been run
+end-to-end and its logs checked -- same discipline the stock system used
+throughout (this sandbox can't reach external APIs, so every change needs
+validating via a real GitHub Actions run). Particularly worth checking
+first: `stake_and_limits()`'s dollar-amount conversion (get this wrong
+and the risk-per-trade protection is wrong), and whether Deriv accepts
+the `multiplier` value `risk.py` defaults to for each instrument (Deriv
+caps which multipliers are offered per instrument; that cap isn't checked
+against the live API yet). Also not yet backtested/tuned:
+`EmaCrossoverStrategy`'s parameters are a reasonable starting guess, not
+the result of the train/test-split, calmar-optimized process
+`optimize_strategy.py` used for the stock system's Breakout strategy --
+that needs Deriv's candle history, which also needs a live token to
+fetch.
 
 ## Tests
 
@@ -437,11 +475,11 @@ src/trading/
     state.py                # paused flag, capital floor, milestone flag -- shared with the daily workflow
     positions.py             # tracked stop/target prices (+ owning bucket) for open fractional positions
     buckets.py                # safe/risk virtual sub-accounts, active once the withdrawal milestone hits
-  cfd/                        # separate CFD/forex (OANDA) system -- see "CFD/forex trading" above
-    broker.py                   # OANDA v20 REST calls -- UNTESTED against a real account as of writing
+  cfd/                        # separate CFD/forex (Deriv) system -- see "CFD/forex trading" above
+    broker.py                   # Deriv WebSocket API calls -- UNTESTED against a real account as of writing
     strategy.py                   # intraday EMA crossover, long or short
-    risk.py                        # unit-based position sizing, capital floor, daily-loss circuit breaker
-    scheduler.py                    # one strategy evaluation + order pass, every ~20 min
+    risk.py                        # stake/multiplier sizing, capital floor, daily-loss circuit breaker
+    scheduler.py                    # one strategy evaluation + order pass, every ~20 min (async)
     state.py                         # paused flag, capital floor, excluded instruments -- own state file
 scripts/
   run_backtest.py
