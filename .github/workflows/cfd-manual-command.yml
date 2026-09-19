@@ -16,9 +16,9 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk]
+        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols]
       instrument:
-        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance."
+        description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
         type: string
       reason:
@@ -87,6 +87,9 @@ jobs:
               ;;
             sweep-risk)
               python scripts/sweep_cfd_risk.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            list-symbols)
+              python scripts/cfd_cli.py list-symbols --filter "$INSTRUMENT"
               ;;
             *)
               echo "Unknown command: $CMD" >&2

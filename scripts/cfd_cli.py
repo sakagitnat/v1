@@ -64,6 +64,30 @@ async def cmd_status(_args):
         await broker.close()
 
 
+async def cmd_list_symbols(args):
+    """Diagnostic: prints Deriv's own tradable symbol list (optionally
+    filtered by a case-insensitive substring, e.g. --filter crypto or
+    --filter BTC) so real instrument names can be confirmed rather than
+    guessed -- see broker.py's list_active_symbols()."""
+    broker = DerivBroker()
+    try:
+        await broker.connect()
+        symbols = await broker.list_active_symbols()
+        needle = (args.filter or "").lower()
+        matches = [
+            s for s in symbols
+            if needle in s.get("symbol", "").lower()
+            or needle in s.get("display_name", "").lower()
+            or needle in s.get("market", "").lower()
+            or needle in s.get("submarket", "").lower()
+        ]
+        print(f"{len(matches)}/{len(symbols)} symbols match filter {args.filter!r}:")
+        for s in matches:
+            print(f"  {s.get('symbol')}: {s.get('display_name')} (market={s.get('market')}, submarket={s.get('submarket')}, exchange_is_open={s.get('exchange_is_open')})")
+    finally:
+        await broker.close()
+
+
 async def cmd_test_order(args):
     """Diagnostic only -- opens a minimal-size real order via the live
     Deriv API (same submit_multiplier_order/close_position path the
@@ -153,6 +177,10 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("status").set_defaults(func=cmd_status, is_async=True)
+
+    list_symbols_parser = sub.add_parser("list-symbols")
+    list_symbols_parser.add_argument("--filter", default="", help="Case-insensitive substring match against symbol/display_name/market/submarket")
+    list_symbols_parser.set_defaults(func=cmd_list_symbols, is_async=True)
 
     pause_parser = sub.add_parser("pause")
     pause_parser.add_argument("--reason", default="", help="Why (e.g. 'macro risk: unscheduled Fed announcement')")

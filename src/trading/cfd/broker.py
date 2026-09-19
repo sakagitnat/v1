@@ -225,3 +225,18 @@ class DerivBroker:
 
     async def close_position(self, contract_id: int) -> dict:
         return await self._request({"sell": contract_id, "price": 0})
+
+    async def list_active_symbols(self, product_type: str = "basic") -> list[dict]:
+        """Returns Deriv's own list of tradable symbols (each a dict with
+        at least "symbol" and "display_name", plus market/submarket
+        grouping) -- used to discover real instrument names (e.g. for
+        crypto) rather than guessing them, the same "confirm against a
+        live response, don't assume" discipline as everything else in
+        this file. UNTESTED as of writing: this request type is
+        documented for Deriv's classic API; not yet confirmed against
+        this project's newer /trading/v1/options flow the way
+        Multipliers orders themselves were confirmed with Deriv
+        support -- if it errors, that's diagnostic information, not
+        necessarily a bug."""
+        resp = await self._request({"active_symbols": "brief", "product_type": product_type})
+        return resp.get("active_symbols", [])
