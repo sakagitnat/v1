@@ -1,6 +1,7 @@
+import numpy as np
 import pandas as pd
 
-from trading.indicators import atr, bollinger_bands, donchian_channel, ema, macd, rsi, sma
+from trading.indicators import adx, atr, bollinger_bands, donchian_channel, ema, macd, rsi, sma
 
 
 def test_sma_basic():
@@ -48,3 +49,29 @@ def test_donchian_channel_excludes_current_bar():
     low = pd.Series([9.0] * 6)
     upper, _ = donchian_channel(high, low, window=5)
     assert upper.iloc[5] == 10.0  # today's spike to 100 shouldn't count against itself
+
+
+def test_adx_higher_for_a_strong_trend_than_a_flat_range():
+    n = 60
+    trend_close = pd.Series(np.linspace(100, 160, n))
+    trend_high = trend_close + 0.5
+    trend_low = trend_close - 0.5
+
+    rng = np.random.default_rng(0)
+    flat_close = pd.Series(100 + rng.normal(0, 0.3, n).cumsum() * 0 + rng.normal(0, 0.3, n))
+    flat_high = flat_close + 0.5
+    flat_low = flat_close - 0.5
+
+    trend_adx = adx(trend_high, trend_low, trend_close, window=14).iloc[-1]
+    flat_adx = adx(flat_high, flat_low, flat_close, window=14).iloc[-1]
+
+    assert trend_adx > flat_adx
+    assert trend_adx > 25  # Wilder's own rule-of-thumb threshold for "trending"
+
+
+def test_adx_bounded_zero_to_hundred():
+    high = pd.Series([10, 11, 12, 11, 13, 14, 13, 15, 16, 15, 17, 18, 17, 19, 20, 19, 21, 22])
+    low = pd.Series([9, 9, 10, 9, 11, 12, 11, 13, 14, 13, 15, 16, 15, 17, 18, 17, 19, 20])
+    close = pd.Series([9.5, 10.5, 11, 10, 12, 13, 12, 14, 15, 14, 16, 17, 16, 18, 19, 18, 20, 21])
+    result = adx(high, low, close, window=5).dropna()
+    assert (result >= 0).all() and (result <= 100).all()

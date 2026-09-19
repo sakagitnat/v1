@@ -61,3 +61,33 @@ def donchian_channel(high: pd.Series, low: pd.Series, window: int = 20) -> tuple
     upper = high.shift(1).rolling(window=window, min_periods=window).max()
     lower = low.shift(1).rolling(window=window, min_periods=window).min()
     return upper, lower
+
+
+def adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
+    """Average Directional Index (Wilder), 0-100 -- measures trend
+    *strength* regardless of direction, independent of a crossover
+    system's own fast/slow EMAs. Used as a chop filter: an EMA
+    crossover that fires while ADX is low is usually whipsaw in a
+    ranging market (both EMAs drifting sideways near each other) rather
+    than a real trend starting, and is exactly the kind of trade a
+    trend-following system loses on most often."""
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=high.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=high.index)
+
+    prev_close = close.shift(1)
+    true_range = pd.concat(
+        [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+
+    smoothed_tr = true_range.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+    smoothed_plus_dm = plus_dm.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+    smoothed_minus_dm = minus_dm.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+
+    plus_di = 100 * smoothed_plus_dm / smoothed_tr.replace(0, np.nan)
+    minus_di = 100 * smoothed_minus_dm / smoothed_tr.replace(0, np.nan)
+
+    di_sum = (plus_di + minus_di).replace(0, np.nan)
+    dx = 100 * (plus_di - minus_di).abs() / di_sum
+    return dx.ewm(alpha=1 / window, min_periods=window, adjust=False).mean()

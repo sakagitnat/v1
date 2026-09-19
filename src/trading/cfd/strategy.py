@@ -1,6 +1,6 @@
 import pandas as pd
 
-from trading.indicators import atr, ema
+from trading.indicators import adx, atr, ema
 from trading.strategy.base import Action, Signal
 
 
@@ -33,6 +33,17 @@ class EmaCrossoverStrategy:
     changed to match, rather than the parameters being ported across
     timeframes unvalidated. See cfd/backtest.py and
     scripts/optimize_cfd_strategy.py for the methodology.
+
+    Optional ADX chop filter (adx_threshold, default 0 = disabled): a
+    plain EMA crossover fires on every direction change even when price
+    is just drifting sideways near the crossover point, which is
+    whipsaw, not a trend -- the leading cause of a trend-following
+    system's losing trades and its ~50% win rate. When adx_threshold >
+    0, a new entry is only taken if ADX (trend strength, independent of
+    direction) is at or above it; the opposite-crossover/stop/target
+    exit logic is unchanged, so this only ever prevents a bad entry, it
+    never delays an exit. See scripts/optimize_cfd_strategy.py for the
+    grid search that picks a validated value rather than guessing one.
     """
 
     def __init__(
@@ -42,19 +53,34 @@ class EmaCrossoverStrategy:
         atr_window: int = 14,
         atr_stop_mult: float = 2.0,
         atr_target_mult: float = 2.0,
+        adx_window: int = 14,
+        adx_threshold: float = 0.0,
     ):
         self.fast_span = fast_span
         self.slow_span = slow_span
         self.atr_window = atr_window
         self.atr_stop_mult = atr_stop_mult
         self.atr_target_mult = atr_target_mult
+        self.adx_window = adx_window
+        self.adx_threshold = adx_threshold
 
     def prepare(self, bars: pd.DataFrame) -> pd.DataFrame:
         df = bars.copy()
         df["fast_ema"] = ema(df["close"], self.fast_span)
         df["slow_ema"] = ema(df["close"], self.slow_span)
         df["atr"] = atr(df["high"], df["low"], df["close"], self.atr_window)
+        df["adx"] = adx(df["high"], df["low"], df["close"], self.adx_window)
         return df
+
+    def _chop_filtered(self, row: pd.Series) -> bool:
+        """True if a new entry should be skipped because ADX shows too
+        little trend strength -- always False when adx_threshold is 0
+        (the default), so callers/tests that never compute an "adx"
+        column (e.g. rows built by hand) are unaffected."""
+        if self.adx_threshold <= 0:
+            return False
+        adx_value = row.get("adx") if hasattr(row, "get") else None
+        return adx_value is None or pd.isna(adx_value) or adx_value < self.adx_threshold
 
     def signal_for_row(self, instrument: str, row: pd.Series, prev_row: pd.Series, in_position: str | None) -> Signal:
         """in_position is None (flat), "long", or "short" -- which side is
@@ -62,8 +88,12 @@ class EmaCrossoverStrategy:
         needed to detect the crossover moment rather than just the
         fast/slow ordering (which stays "crossed" for many bars after)."""
         price = row["close"]
-        needed = ("fast_ema", "slow_ema", "atr")
-        if any(pd.isna(row[c]) for c in needed) or any(pd.isna(prev_row[c]) for c in needed):
+        needed = ["fast_ema", "slow_ema", "atr"]
+        if self.adx_threshold > 0:
+            needed.append("adx")
+        if any(c not in row.index or pd.isna(row[c]) for c in needed) or any(
+            c not in prev_row.index or pd.isna(prev_row[c]) for c in needed
+        ):
             return Signal(instrument, Action.HOLD, price, reason="warming up")
 
         crossed_up = prev_row["fast_ema"] <= prev_row["slow_ema"] and row["fast_ema"] > row["slow_ema"]
@@ -76,10 +106,14 @@ class EmaCrossoverStrategy:
 
         if in_position is None:
             if crossed_up:
+                if self._chop_filtered(row):
+                    return Signal(instrument, Action.HOLD, price, reason="crossed up but ADX below threshold (chop filter)")
                 stop = price - self.atr_stop_mult * row["atr"]
                 target = price + self.atr_target_mult * row["atr"]
                 return Signal(instrument, Action.BUY, price, stop, target, "fast EMA crossed above slow EMA")
             if crossed_down:
+                if self._chop_filtered(row):
+                    return Signal(instrument, Action.HOLD, price, reason="crossed down but ADX below threshold (chop filter)")
                 stop = price + self.atr_stop_mult * row["atr"]
                 target = price - self.atr_target_mult * row["atr"]
                 return Signal(instrument, Action.SELL, price, stop, target, "fast EMA crossed below slow EMA (short entry)")

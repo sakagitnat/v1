@@ -20,6 +20,17 @@ way: the TRAIN-calmar #1 candidate scored 35% TRAIN CAGR but -46% TEST
 CAGR against a wider grid on ~2 years of data -- a catastrophic
 overfit a naive "just take #1" selection would have missed).
 
+Grid now includes adx_threshold (0/20/25) alongside the EMA/ATR
+parameters -- an ADX chop filter (see strategy.py's docstring) skips
+new entries when the market isn't trending strongly enough, aimed at
+the ~46-50% win rate seen across every backtest so far: a plain EMA
+crossover enters on sideways whipsaw as readily as a real trend, and
+whipsaw entries are disproportionately losers. Same selection
+discipline applies -- a nonzero adx_threshold is only adopted if it
+clears the TRAIN gate AND beats baseline on TEST, exactly like any
+other parameter combination; it doesn't get to skip the overfit check
+just because the hypothesis behind it is intuitive.
+
 Backtests all configured instruments together, sharing one
 CfdRiskManager -- matching how the live scheduler actually trades them
 (shared max_open_positions, shared daily-loss circuit breaker), not as
@@ -80,6 +91,11 @@ PARAM_GRID = {
     "slow_span": [34, 50, 65],
     "atr_stop_mult": [1.5, 2.0, 3.0],
     "atr_target_mult": [2.0, 3.0, 4.5],
+    # ADX chop filter (see strategy.py's docstring): 0 disables it
+    # (backward-compatible baseline); 20/25 are Wilder's own commonly
+    # cited "trending" thresholds, included to test directly whether
+    # skipping low-ADX entries raises win rate rather than assuming it.
+    "adx_threshold": [0, 20, 25],
 }
 
 # Yahoo Finance ticker candidates per Deriv instrument, tried in order --
