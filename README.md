@@ -476,13 +476,32 @@ so those markets were closed before an actual order could be placed
 closed" response rather than a validation error). Deriv caps which
 `multiplier` values it accepts per instrument (a synthetic index tested
 instead accepted only 40/100/200/300/400, not `risk.py`'s default of
-20) -- unchecked for the real trading instruments. Also not yet
-backtested/tuned: `EmaCrossoverStrategy`'s parameters are a reasonable
-starting guess, not the result of the train/test-split, calmar-optimized
-process `optimize_strategy.py` used for the stock system's Breakout
-strategy -- that needs Deriv's candle history, which also needs a live
-token to fetch. The cron schedule in `cfd-trading.yml` stays commented
-out until these are checked.
+20) -- unchecked for the real trading instruments. The cron schedule in
+`cfd-trading.yml` stays commented out until this is checked.
+
+**Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
+in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s
+TRAIN/TEST discipline for `EmaCrossoverStrategy`, but with one further
+gate the stock version doesn't need: the winning candidate also has to
+beat the untouched default params' own TEST performance, not just clear
+CAGR>0 and the drawdown cap in isolation. First real run found exactly
+why that extra gate matters -- a candidate that scored 72% TRAIN CAGR
+passed the old checks with 1.8% TEST CAGR, but the *untouched defaults*
+scored 31% TEST CAGR over the same holdout. Decision from that run: kept
+the current defaults, did not adopt the "recommended" candidate.
+
+Also discovered fetching that history: Deriv's `ticks_history` only
+serves roughly the last **3 months** of `M15` (15-minute) candles for
+these instruments, however far back `end` is paged -- confirmed by
+running the identical pagination logic at `H1` (hourly) granularity,
+which reached back **~11 months** without issue. The one real backtest
+run so far used `H1` bars as a longer-history proxy (M15's ~3-month
+window is too short to trust a train/test split on); this is directionally
+useful but not a direct stand-in for the live bot's actual M15 behavior
+(a 12-period EMA means something different on hourly vs. 15-minute
+bars). Re-running against true M15 data stays worth doing once enough
+of the live bot's own trade history has accumulated to backtest against
+directly.
 
 ## Tests
 
