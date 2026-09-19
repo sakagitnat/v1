@@ -50,6 +50,8 @@ jobs:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
+          CFD_VIRTUAL_STARTING_CAPITAL: "100"
+          CFD_MAX_ACCOUNT_DRAWDOWN_PCT: "0.20"
       - name: Commit state changes (if any)
         run: |
           git config user.name "trading-bot"
