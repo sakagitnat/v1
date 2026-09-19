@@ -474,15 +474,33 @@ portfolio response both use `underlying_symbol`, not `symbol`; and a
 brand-new contract can't be sold until Deriv processes its first price
 tick (`test-order` retries on that specific transient error).
 
+**Order placement is now confirmed end-to-end against a real market
+instrument**, not just a synthetic index: `cryBTCUSD` (Bitcoin, one of
+Deriv's crypto Multipliers -- discovered via a new `list-symbols`
+CLI/workflow command rather than guessed, see `broker.py`'s
+`list_active_symbols()`) round-tripped connect/buy/portfolio-read/sell
+successfully. Crypto trades 24/7 on Deriv, unlike forex/gold which
+close on weekends -- useful for testing when `CFD_INSTRUMENTS`' own
+markets are shut, as they were when this was run. Confirmed multiplier
+values differ by instrument yet again: `cryBTCUSD` accepts
+100/200/300/500/800, not `risk.py`'s default of 20.
+
 **Still not validated:** the real forex/gold instruments in
-`CFD_INSTRUMENTS` (`frxXAUUSD` etc.) -- testing happened on a weekend,
-so those markets were closed before an actual order could be placed
-(confirmed as far as the request being schema-valid, via a "market
-closed" response rather than a validation error). Deriv caps which
-`multiplier` values it accepts per instrument (a synthetic index tested
-instead accepted only 40/100/200/300/400, not `risk.py`'s default of
-20) -- unchecked for the real trading instruments. The cron schedule in
-`cfd-trading.yml` stays commented out until this is checked.
+`CFD_INSTRUMENTS` (`frxXAUUSD` etc.) *themselves* -- testing happened
+on a weekend, so those markets were closed before an actual order
+could be placed there specifically (confirmed as far as the request
+being schema-valid, via a "market closed" response rather than a
+validation error). Deriv caps which `multiplier` values it accepts per
+instrument, unchecked for these specific instruments. The order
+*mechanism* is proven correct now (crypto test above), so this
+remaining gap is narrower than before: forex/gold's own market hours
+and multiplier values, not an unproven code path. The cron schedule in
+`cfd-trading.yml` stays commented out until this is checked. (Crypto
+itself isn't a drop-in fix for this -- `EmaCrossoverStrategy`'s
+parameters were validated on forex/gold data only, not crypto's
+different volatility profile, so `cryBTCUSD`/`cryETHUSD` need their
+own backtest before joining `CFD_INSTRUMENTS` for real trading, even
+though their order mechanism already works.)
 
 **Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
 in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s

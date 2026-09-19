@@ -66,14 +66,28 @@ class DerivBroker:
     transiently return "Waiting for entry tick"; retry after a couple of
     seconds (see cfd_cli.py's test-order for an example).
 
-    Not yet validated: the actual forex/gold instruments in cfd_instruments
-    (frxXAUUSD etc.) only got as far as proposal request validation before
-    market-closed errors (tested on a weekend) -- the multiplier values
-    Deriv accepts per-instrument vary a lot (a synthetic index accepted
-    only 40/100/200/300/400, not the default 20) and haven't been checked
-    for the real trading instruments yet. Also unverified: the strategy's
-    stop_loss/take_profit dollar-amount conversion in scheduler.py, and
-    the EmaCrossoverStrategy's parameters aren't backtested.
+    Full order lifecycle (connect, buy, portfolio read, sell) is now also
+    confirmed against a REAL market instrument, not just a synthetic
+    index: cryBTCUSD (crypto, via list_active_symbols()) round-tripped
+    successfully on a Saturday, since crypto trades 24/7 on Deriv unlike
+    forex/gold which close on weekends -- useful for testing when the
+    default cfd_instruments' own markets are shut. Confirmed multiplier
+    values differ by instrument here too: cryBTCUSD accepts
+    100/200/300/500/800, not the default 20 (same "check the error, don't
+    guess" pattern as the earlier synthetic-index multiplier discovery).
+
+    Still not validated: the actual forex/gold instruments in
+    cfd_instruments (frxXAUUSD etc.) themselves -- only got as far as
+    proposal request validation before market-closed errors (tested on a
+    weekend). The order-placement *mechanism* is now proven correct
+    end-to-end on a real instrument, so this remaining gap is about
+    frxXAUUSD/frxEURUSD/etc.'s own market hours and multiplier values
+    specifically, not an unproven code path in general. Also unverified:
+    the EmaCrossoverStrategy's parameters were validated on forex/gold
+    data only (see strategy.py's docstring) -- NOT re-validated for
+    crypto's different volatility profile, so cryBTCUSD/cryETHUSD
+    shouldn't be added to live cfd_instruments without their own
+    backtest first, despite the order mechanism itself working fine.
     """
 
     def __init__(self):
