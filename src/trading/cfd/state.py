@@ -13,6 +13,8 @@ _DEFAULTS = {
     "excluded_instruments": {},
     "broker_baseline": None,
     "open_trades": {},
+    "operating_mode": "normal",
+    "operating_mode_reason": "",
 }
 
 
@@ -42,6 +44,22 @@ def set_capital_floor(floor: Optional[float]) -> None:
     state["capital_floor"] = floor
     if floor is not None and state.get("initial_floor") is None:
         state["initial_floor"] = floor
+    _write_state(state)
+
+
+def set_operating_mode(mode: str, reason: str = "") -> None:
+    """Sets the CFD bot's operating mode (see trading.cfd.operating_mode
+    for what each mode actually changes -- risk sizing tactics only,
+    never whether the bot trades at all; use set_paused for that).
+    Validated against operating_mode.VALID_MODES so a typo can never
+    silently leave the bot running an unrecognized mode."""
+    from trading.cfd.operating_mode import VALID_MODES
+
+    if mode not in VALID_MODES:
+        raise ValueError(f"Invalid operating mode {mode!r} -- must be one of {VALID_MODES}")
+    state = load_state()
+    state["operating_mode"] = mode
+    state["operating_mode_reason"] = reason
     _write_state(state)
 
 

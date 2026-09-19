@@ -4,6 +4,7 @@ from typing import Optional
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
+from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
 from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
@@ -113,6 +114,12 @@ async def run_once():
     account, never the raw ~$10,000 Deriv demo balance -- see
     trading.cfd.capital and docs/VISION.md's "Capital model" section.
 
+    risk_per_trade and max_open_positions are scaled by the current
+    Operating Mode (trading.cfd.operating_mode, set via
+    `cfd_cli.py set-mode`) before CfdRiskManager ever sees them -- still
+    bounded by CFD_MAX_RISK_PER_TRADE_CEILING, an absolute ceiling no
+    mode may cross.
+
     Which strategy opens a NEW position is decided per instrument, per
     run, by the Strategy Selector (trading.cfd.selector.select_for_entry)
     matching the instrument's current regime (trading.cfd.regime) against
@@ -157,10 +164,21 @@ async def run_once():
             capital_floor = equity
             logger.info("First run: capital floor set to starting virtual equity %.2f", equity)
 
+        mode = state.get("operating_mode", NORMAL)
+        effective_risk = effective_risk_per_trade(mode, settings.cfd_risk_per_trade)
+        effective_max_positions = effective_max_open_positions(mode, settings.cfd_max_open_positions)
+        if mode != NORMAL:
+            logger.info(
+                "Operating mode=%s: risk_per_trade %.4f -> %.4f, max_open_positions %d -> %d (%s)",
+                mode, settings.cfd_risk_per_trade, effective_risk,
+                settings.cfd_max_open_positions, effective_max_positions,
+                state.get("operating_mode_reason") or "no reason given",
+            )
+
         risk = CfdRiskManager(
             equity=equity,
-            risk_per_trade=settings.cfd_risk_per_trade,
-            max_open_positions=settings.cfd_max_open_positions,
+            risk_per_trade=effective_risk,
+            max_open_positions=effective_max_positions,
             max_daily_loss_pct=settings.cfd_max_daily_loss_pct,
             capital_floor=capital_floor,
             min_stake=settings.cfd_min_stake,
@@ -277,7 +295,7 @@ async def run_once():
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
                 continue
-            if len(open_positions) >= settings.cfd_max_open_positions:
+            if len(open_positions) >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
                 continue
 

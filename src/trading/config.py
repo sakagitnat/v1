@@ -110,6 +110,13 @@ class Settings:
         default_factory=lambda: float(os.getenv("CFD_REGIME_TREND_THRESHOLD", "25.0"))
     )
 
+    # Operating Modes (see trading.cfd.operating_mode) -- an ABSOLUTE
+    # ceiling on effective risk_per_trade no mode's multiplier may ever
+    # cross, regardless of CFD_RISK_PER_TRADE or which mode is active.
+    cfd_max_risk_per_trade_ceiling: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_RISK_PER_TRADE_CEILING", "0.03"))
+    )
+
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
 

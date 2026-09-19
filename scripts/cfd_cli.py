@@ -17,6 +17,7 @@ Usage:
   python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
   python scripts/cfd_cli.py resume
+  python scripts/cfd_cli.py set-mode {defensive,normal,aggressive,recovery} [--reason "..."]
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
   python scripts/cfd_cli.py include-instrument frxXAUUSD
   python scripts/cfd_cli.py test-order [--instrument frxXAUUSD] [--side long]
@@ -32,11 +33,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
+from trading.cfd.operating_mode import VALID_MODES
 from trading.cfd.performance import compute_performance
 from trading.cfd.state import (
     exclude_instrument,
     include_instrument,
     load_state,
+    set_operating_mode,
     set_paused,
 )
 from trading.cfd.strategy_registry import LifecycleState, list_all, set_state
@@ -58,6 +61,9 @@ async def cmd_status(_args):
 
         pause_note = f" ({state.get('pause_reason')})" if state.get("paused") and state.get("pause_reason") else ""
         print(f"Paused: {state.get('paused', False)}{pause_note}")
+        mode = state.get("operating_mode", "normal")
+        mode_note = f" ({state.get('operating_mode_reason')})" if state.get("operating_mode_reason") else ""
+        print(f"Operating mode: {mode}{mode_note}")
         if account.get("account_type") == "demo" and broker_baseline is not None:
             print(f"Broker balance (raw demo, not the real number): {broker_balance:.2f}")
             print(f"Broker baseline (recorded at first run): {broker_baseline:.2f}")
@@ -280,6 +286,20 @@ def cmd_resume(_args):
     print("Resumed. The CFD bot will trade again.")
 
 
+def cmd_set_mode(args):
+    """Sets the operating mode (defensive/normal/aggressive/recovery --
+    see trading.cfd.operating_mode). Scales risk_per_trade and
+    max_open_positions only -- never whether the bot trades at all
+    (use pause/resume for that), and never past
+    CFD_MAX_RISK_PER_TRADE_CEILING regardless of mode."""
+    try:
+        set_operating_mode(args.mode, args.reason or "")
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Operating mode set to {args.mode}.")
+
+
 def cmd_exclude_instrument(args):
     exclude_instrument(args.instrument, args.reason or "")
     print(f"{args.instrument} excluded from new entries until included again. Existing open positions are unaffected.")
@@ -318,6 +338,11 @@ def main():
     pause_parser.set_defaults(func=cmd_pause, is_async=False)
 
     sub.add_parser("resume").set_defaults(func=cmd_resume, is_async=False)
+
+    set_mode_parser = sub.add_parser("set-mode")
+    set_mode_parser.add_argument("mode", choices=list(VALID_MODES))
+    set_mode_parser.add_argument("--reason", default="")
+    set_mode_parser.set_defaults(func=cmd_set_mode, is_async=False)
 
     exclude_parser = sub.add_parser("exclude-instrument")
     exclude_parser.add_argument("instrument")

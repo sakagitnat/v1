@@ -16,15 +16,21 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, performance, failures, list-strategies, promote-strategy, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
+        options: [status, performance, failures, list-strategies, promote-strategy, pause, resume, set-mode, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
         type: string
       reason:
-        description: "Why (optional, for pause/exclude-instrument; REQUIRED for promote-strategy)"
+        description: "Why (optional, for pause/exclude-instrument/set-mode; REQUIRED for promote-strategy)"
         required: false
         type: string
+      operating_mode:
+        description: "For set-mode only: target operating mode"
+        required: false
+        type: choice
+        options: [defensive, normal, aggressive, recovery]
+        default: normal
       strategy_name:
         description: "For promote-strategy only: registered strategy name, e.g. ema_crossover"
         required: false
@@ -77,6 +83,7 @@ jobs:
           STRATEGY_NAME: ${{ inputs.strategy_name }}
           STRATEGY_VERSION: ${{ inputs.strategy_version }}
           STRATEGY_STATE: ${{ inputs.strategy_state }}
+          OPERATING_MODE: ${{ inputs.operating_mode }}
         run: |
           set -e
           case "$CMD" in
@@ -88,6 +95,9 @@ jobs:
               ;;
             pause)
               python scripts/cfd_cli.py pause --reason "$REASON"
+              ;;
+            set-mode)
+              python scripts/cfd_cli.py set-mode "$OPERATING_MODE" --reason "$REASON"
               ;;
             exclude-instrument)
               python scripts/cfd_cli.py exclude-instrument "$INSTRUMENT" --reason "$REASON"
@@ -120,6 +130,9 @@ jobs:
               ;;
             optimize-breakout)
               python scripts/optimize_cfd_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            research-strategy)
+              python scripts/research_cfd_strategy.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
               ;;
             sweep-risk-breakout)
               python scripts/sweep_cfd_risk_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"

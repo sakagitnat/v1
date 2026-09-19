@@ -68,9 +68,29 @@ no trading logic was changed while writing it.
   loss categories (abnormal market/news event, execution problem, data
   problem) are still not classified -- no news/latency/data-quality
   signal exists to base them on, so they're deliberately never guessed at
-  (see "Other vision requirements not yet met" below). Walk-forward +
-  Monte Carlo validation, Research Lab candidate generation, and
-  Operating Modes are still open -- Phase 4 continues in a later pass.
+  (see "Other vision requirements not yet met" below).
+- **2026-09-19 — Phase 4 complete.** `trading/cfd/validation.py`:
+  walk-forward (fixed params re-tested across sequential TEST folds,
+  reporting fold-consistency and worst-fold drawdown) and Monte Carlo
+  (reshuffles a backtest's own trades into 1000s of random orders,
+  reporting ruin probability + equity/drawdown percentiles). `trading/
+  cfd/research_lab.py` (`scripts/research_cfd_strategy.py`, the
+  `research-strategy` manual-command): runs a strategy's parameter grid
+  through the full Backtest -> TEST -> Walk-Forward -> Monte Carlo gate
+  and auto-registers any candidate that clears every stage as `VALIDATED`
+  -- never higher; PAPER and ACTIVE still need a human's
+  `promote-strategy` call. `trading/cfd/operating_mode.py`
+  (`cfd_cli.py set-mode`): Defensive/Normal/Aggressive/Recovery as fixed
+  `risk_per_trade`/`max_open_positions` multipliers, hard-capped by
+  `CFD_MAX_RISK_PER_TRADE_CEILING`; Defensive and Recovery share the same
+  conservative multiplier by design (Recovery is never "bet bigger to
+  catch up"). `scheduler.py` now applies the current mode to every
+  run's risk sizing. Mode *selection* is still manual -- an AI deciding
+  when to enter Recovery/Defensive on its own is Phase 5's job. This
+  closes out every item docs/ARCHITECTURE_AUDIT.md's original Phase 4
+  bullet named. What's left across the whole roadmap is Phase 5: the
+  AI Trading Manager decision layer itself, reasoning end-to-end over
+  everything Phases 0-4 built.
   Everything else below is still an accurate account of what's missing.
 
 ## Executive summary
@@ -141,9 +161,9 @@ Deriv                      -> EXISTS
 Trade Database             -> DONE for Phase 1's scope (trade_log.py, state/cfd_trades.jsonl) -- one known gap: a trade Deriv auto-closes via stop-loss/take-profit is only priced exactly when it's the sole one that closed between two runs; simultaneous external closes log with pnl=null rather than a guessed split (no profit_table API integration yet -- see "Still not validated" thread in the CFD README section)
 Performance Engine         -> DONE for Phase 1's scope (performance.py, `cfd_cli.py performance`): net return, expectancy, profit factor, win rate, avg win/loss, R multiple, Sharpe, Sortino, Calmar, max drawdown, longest losing streak, by-strategy/regime/session/side breakdowns, exposure. by_regime is schema-ready but always "unknown" until the Market Regime Engine (Phase 3) exists.
 Failure Analysis            -> PARTIAL: loss classification + strategy degradation detection DONE (trading.cfd.failure_analysis, `cfd_cli.py failures`), covering normal_statistical_loss/excessive_risk/regime_mismatch. abnormal market/news event, execution problem, and data problem are NOT classified -- no news/latency/data-quality signal exists to base them on, so they're never guessed at (see below)
-Research / Improvement Lab -> MISSING entirely (no automatic candidate generation; new strategies are hand-written)
-Validation                  -> PARTIAL (TRAIN/TEST split with an overfit check exists; no walk-forward, no Monte Carlo/stress test, no paper-trading promotion gate)
-Strategy Registry            -> DONE for Phase 2's scope (name@version, full lifecycle, enforced transitions, audit trail) -- the validation pipeline that's meant to gate promotion through it (walk-forward, Monte Carlo, paper trading) is still missing, so promotion is manual/audited today, not automatically earned
+Research / Improvement Lab -> DONE for Phase 4's scope (trading.cfd.research_lab, scripts/research_cfd_strategy.py): searches an existing strategy class's parameter grid, runs every candidate through Backtest->TEST->Walk-Forward->Monte Carlo, auto-registers passing ones as VALIDATED (never higher). No new strategy LOGIC is generated (no code synthesis) -- "candidate" means a new parameter set for a strategy class already in trading.cfd.strategy_registry.STRATEGY_CLASSES, not a genuinely new strategy family (that still needs a human to write the class, e.g. a future mean-reversion strategy).
+Validation                  -> DONE for Phase 4's scope (trading.cfd.validation): walk-forward (fixed-params consistency across sequential folds) and Monte Carlo/stress test (trade-reshuffle ruin-probability + drawdown/equity percentiles) both implemented, pure functions over existing backtest output, wired into Research Lab's auto-gate. A live paper-trading promotion GATE (as opposed to the manual PAPER lifecycle state, which already exists) still doesn't auto-advance PAPER->ACTIVE based on real paper-trading results -- that transition is still a human's call via cfd_cli.py promote-strategy.
+Strategy Registry            -> DONE (Phase 2 + Phase 4): name@version, full lifecycle, enforced transitions, audit trail (Phase 2); now also a real automated path feeding it (Research Lab, Phase 4) that lands candidates at VALIDATED. PAPER->ACTIVE promotion is still always a human decision -- by design, not a gap (see docs/VISION.md's rule against promoting on backtest results alone).
 ```
 
 ## Other vision requirements not yet met
@@ -169,9 +189,18 @@ Strategy Registry            -> DONE for Phase 2's scope (name@version, full lif
   nothing to read yet. A lightweight decision log (separate from the
   Trade Database's closed-trade schema) is a reasonable Phase 4 addition,
   not built now to keep this phase's scope to what was asked.
-- **Operating modes** (Defensive/Normal/Aggressive/Recovery/Paused): only
-  `paused` exists today (`cfd_bot_state.json`). No mode concept, no
-  mode-dependent tactics within the same hard risk ceiling.
+- ~~**Operating modes**~~ — **done (Phase 4).** `trading/cfd/
+  operating_mode.py` (`cfd_cli.py set-mode`) covers Defensive/Normal/
+  Aggressive/Recovery as fixed, pre-approved `risk_per_trade`/
+  `max_open_positions` multipliers, layered under
+  `CFD_MAX_RISK_PER_TRADE_CEILING` (an absolute ceiling no mode may
+  cross). Paused was already covered by the existing `paused` flag.
+  Defensive and Recovery intentionally share the same conservative
+  multiplier -- Recovery means smaller size under equity strain, never
+  bigger size to chase losses back (see the module's docstring). No
+  automatic mode SELECTION yet (e.g. auto-entering Recovery from a
+  drawdown signal) -- that decision-making belongs to the future AI
+  Trading Manager layer (Phase 5); today a human sets the mode.
 - **Hard prohibitions**: no martingale/revenge-trading logic exists in the
   current code (good — nothing to remove), but there's also no explicit
   guard *preventing* a future change from introducing risk-scales-with-loss

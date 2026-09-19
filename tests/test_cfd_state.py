@@ -8,6 +8,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
     assert state.load_state() == {
         "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
         "excluded_instruments": {}, "broker_baseline": None, "open_trades": {},
+        "operating_mode": "normal", "operating_mode_reason": "",
     }
 
 
@@ -39,6 +40,23 @@ def test_exclude_and_include_instrument_roundtrip(tmp_path, monkeypatch):
     assert state.load_state()["excluded_instruments"] == {"frxXAUUSD": "spiking on Fed news"}
     state.include_instrument("frxXAUUSD")
     assert state.load_state()["excluded_instruments"] == {}
+
+
+def test_set_operating_mode_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_operating_mode("defensive", "spread widening on gold")
+    result = state.load_state()
+    assert result["operating_mode"] == "defensive"
+    assert result["operating_mode_reason"] == "spread widening on gold"
+
+
+def test_set_operating_mode_rejects_unknown_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    import pytest
+
+    with pytest.raises(ValueError):
+        state.set_operating_mode("yolo")
+    assert state.load_state()["operating_mode"] == "normal"  # unchanged
 
 
 def test_set_broker_baseline_only_sets_once(tmp_path, monkeypatch):

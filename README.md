@@ -545,6 +545,54 @@ degradation flag is a prompt to look, never an automatic pause -- acting
 on it still goes through `cfd_cli.py promote-strategy ... PAUSED` like
 every other lifecycle change.
 
+**Validation: Walk-Forward + Monte Carlo.** `trading/cfd/validation.py`
+adds the two checks docs/VISION.md's pipeline calls for beyond the
+TRAIN/TEST split `optimize_cfd_strategy.py`/`optimize_cfd_breakout.py`
+already do. **Walk-forward** (`run_walk_forward`) splits the TEST period
+into several sequential, non-overlapping folds and re-runs the backtest
+on each with the *same fixed params* (it doesn't re-optimize per fold --
+that would multiply the grid search's runtime by the fold count; it
+checks whether already-chosen params keep working across time, not what
+the best re-tuning per period would have been), reporting how many folds
+were profitable and the worst single fold's drawdown. **Monte Carlo**
+(`run_monte_carlo`) reshuffles a backtest's own realized trade P&Ls into
+thousands of random orders, to see whether the result depended on a
+lucky sequence, and reports a probability-of-ruin estimate (the fraction
+of simulated paths that ever dropped to half of starting equity) plus
+percentiles of final equity and max drawdown. Both are pure functions
+over data a backtest already produces -- no new market data or API calls.
+
+**Research Lab.** `trading/cfd/research_lab.py` (`scripts/
+research_cfd_strategy.py`) automates running a strategy's parameter grid
+through the *entire* pipeline -- Backtest -> Out-of-Sample -> Walk-Forward
+-> Monte Carlo -- and auto-registers any candidate that clears every gate
+into the Strategy Registry as `VALIDATED`, **never higher**: the
+remaining steps (Paper Trading, then Promote) still need a human's
+explicit `promote-strategy` call, per docs/VISION.md's rule against
+promoting a strategy on backtest results alone. This doesn't invent new
+strategy logic -- "candidate" means a new, systematically-searched
+parameter set for an *existing* strategy class, the same grid search
+`optimize_cfd_breakout.py` already does by hand; what's new is that a
+passing result gets registered automatically, audit trail and all,
+instead of a human reading a printed table and typing the registration
+command themselves. Run via the "CFD Manual Command" workflow's
+`research-strategy` command.
+
+**Operating Modes.** `trading/cfd/operating_mode.py`
+(`cfd_cli.py set-mode {defensive,normal,aggressive,recovery}`) scales
+`risk_per_trade` and `max_open_positions` by a fixed, pre-approved
+multiplier per mode -- never whether the bot trades at all (`pause`/
+`resume` still covers that). `defensive` and `recovery` deliberately use
+the *same* conservative 0.5x multiplier: Recovery means "trade smaller
+because equity is under strain," never "trade bigger to catch up on
+losses faster" -- the latter is exactly the revenge-trading/martingale
+pattern docs/VISION.md forbids outright. They're kept as distinct,
+separately-loggable states so *why* the bot is being cautious stays
+visible, even though the numeric effect is identical today. `aggressive`
+(1.5x) is still capped by `CFD_MAX_RISK_PER_TRADE_CEILING` -- an absolute
+ceiling no mode may ever cross, regardless of `CFD_RISK_PER_TRADE` or
+which mode is set.
+
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a
 stop-loss/take-profit between runs -- is logged to
@@ -742,6 +790,9 @@ src/trading/
     regime.py                          # Market Regime Engine -- per-instrument trending/ranging/unknown via ADX
     selector.py                         # Strategy Selector -- matches regime against ACTIVE strategies' suited_regimes
     failure_analysis.py                  # Failure Analysis -- loss classification + strategy degradation detection
+    validation.py                         # Walk-Forward + Monte Carlo / Stress Test
+    research_lab.py                        # Research Lab -- candidate generation/evaluation, auto-registers passing ones as VALIDATED
+    operating_mode.py                       # Defensive/Normal/Aggressive/Recovery risk-sizing multipliers, hard-capped
     trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
     performance.py                      # Performance Engine -- metrics computed from the trade log
     scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)
