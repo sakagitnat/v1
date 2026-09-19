@@ -38,20 +38,6 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Debug token shape (TEMPORARY -- never prints the token itself)
-        env:
-          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
-        run: |
-          python3 -c "
-          import os
-          t = os.environ.get('DERIV_API_TOKEN', '')
-          print('length:', len(t))
-          print('starts with pat_:', t.startswith('pat_'))
-          print('has leading/trailing whitespace:', t != t.strip())
-          print('repr of first 6 chars:', repr(t[:6]))
-          print('repr of last 6 chars:', repr(t[-6:]))
-          print('contains newline:', '\n' in t)
-          "
       - name: Run command
         env:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}

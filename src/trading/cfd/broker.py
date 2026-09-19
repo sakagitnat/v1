@@ -5,7 +5,7 @@ import pandas as pd
 
 from trading.config import settings
 
-WS_URL = "wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+OPTIONS_API_BASE = "https://api.derivws.com/trading/v1/options"
 
 
 class DerivBroker:
@@ -17,16 +17,39 @@ class DerivBroker:
     Alpaca/OANDA's "same URL, paper vs live flag" pattern: an API token is
     already scoped to one specific account (demo/virtual or real) at the
     moment it's created, there's no separate practice/live base URL to
-    switch. So the safety check here happens *after* connecting: the
-    authorize response's is_virtual field says which kind of account this
-    token is for, and we refuse to proceed on a real (non-virtual) account
-    unless CFD_ALLOW_LIVE_TRADING is explicitly set -- same protective
-    intent as the Alpaca/OANDA dual gate, enforced a different way because
-    Deriv's account model itself is different.
+    switch.
 
-    UNTESTED against the real API as of writing -- built from Deriv's API
-    documentation but not yet exercised against a real demo account (no
-    token was available yet). Validate every method here, especially
+    Connection flow for PAT-style tokens (the "pat_..." prefix Deriv's
+    current account/api-token page issues), confirmed directly with Deriv
+    support after the classic "wss://ws.derivws.com/websockets/v3" +
+    {"authorize": token} approach documented in most examples online
+    turned out to be for the older/OAuth token style only:
+      1. GET  {OPTIONS_API_BASE}/accounts with Authorization: Bearer +
+         Deriv-App-ID headers -- lists the account(s) this token can act
+         on, and whether each is real or virtual (demo).
+      2. POST {OPTIONS_API_BASE}/accounts/{account_id}/otp, same headers
+         -- issues a short-lived (120s), single-use one-time-password and
+         a ready-to-use WebSocket URL with it attached.
+      3. Connect to that URL directly. The connection is already
+         authenticated -- no separate "authorize" message is sent or
+         needed once connected this way.
+    Multipliers contracts are confirmed (by Deriv support) to be covered
+    by this same flow, despite the "options" in the URL path -- that's
+    Deriv's product-family name for this whole newer API surface, not a
+    restriction to binary/digital options contracts specifically. A
+    genuinely different product -- MT5 leveraged forex/CFDs -- should NOT
+    use this endpoint; that's the "CFDs" account the README warns is a
+    dead end for API access (see "CFD/forex trading (Deriv)").
+
+    Safety gate: since there's no separate practice/live base URL to
+    force, the check happens right after step 1 -- refuses to proceed on
+    a real (non-virtual) account unless CFD_ALLOW_LIVE_TRADING is
+    explicitly set, same protective intent as the Alpaca/OANDA dual gate.
+
+    UNTESTED against the real API as of writing -- exact JSON field names
+    in the /accounts and /otp responses (account_id, is_virtual, etc.) are
+    a best-effort guess from documentation search, not yet confirmed
+    against a live response. Validate this, and separately
     submit_multiplier_order's stop_loss/take_profit unit conversion
     (dollar amounts, not price levels -- see scheduler.py), before
     trusting it with even demo money.
@@ -40,27 +63,35 @@ class DerivBroker:
         self._ws = None
         self._req_id = itertools.count(1)
 
+    def _auth_headers(self) -> dict:
+        return {"Authorization": f"Bearer {self._token}", "Deriv-App-ID": self._app_id}
+
     async def connect(self) -> dict:
+        import requests
         import websockets
 
-        # PAT-style tokens (the "pat_..." prefix Deriv's newer account
-        # settings page issues) need the app ID sent as a header, not just
-        # the ?app_id= query param the classic API docs show -- Deriv's
-        # own docs: "Deriv-App-ID header is required for PAT tokens".
-        self._ws = await websockets.connect(
-            WS_URL.format(app_id=self._app_id),
-            additional_headers={"Deriv-App-ID": self._app_id},
-        )
-        auth = await self._request({"authorize": self._token})
-        is_virtual = bool(auth["authorize"].get("is_virtual"))
+        accounts_resp = requests.get(f"{OPTIONS_API_BASE}/accounts", headers=self._auth_headers())
+        accounts_resp.raise_for_status()
+        accounts = accounts_resp.json().get("data") or []
+        if not accounts:
+            raise RuntimeError("Deriv API: no accounts found for this token (GET /accounts returned none)")
+        account = accounts[0]
+        account_id = account["account_id"]
+        is_virtual = bool(account.get("is_virtual"))
+
         if not is_virtual and not settings.cfd_allow_live_trading:
-            await self.close()
             raise RuntimeError(
                 "Refusing to start: this API token authorizes a REAL (non-virtual) Deriv "
                 "account, but CFD_ALLOW_LIVE_TRADING is not true. Set CFD_ALLOW_LIVE_TRADING=true "
                 "explicitly to trade with real money."
             )
-        return auth
+
+        otp_resp = requests.post(f"{OPTIONS_API_BASE}/accounts/{account_id}/otp", headers=self._auth_headers())
+        otp_resp.raise_for_status()
+        ws_url = otp_resp.json()["data"]["url"]
+
+        self._ws = await websockets.connect(ws_url)
+        return account
 
     async def close(self) -> None:
         if self._ws is not None:

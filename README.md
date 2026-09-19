@@ -384,10 +384,29 @@ put up.
 3. Add `DERIV_API_TOKEN` as a repository secret (same as the Alpaca keys
    -- never paste it in chat)
 
-No separate account ID needed: the token itself is already scoped to
-whichever account (demo or real) it was generated from. `DERIV_APP_ID`
-defaults to `1089`, Deriv's shared public ID for testing/personal use --
-no separate app registration needed unless you want your own later.
+No separate account ID needed *from you*: `broker.py` discovers it itself
+(`GET {OPTIONS_API_BASE}/accounts` with the token) as part of connecting.
+`DERIV_APP_ID` defaults to `1089`, Deriv's shared public ID for testing/
+personal use -- no separate app registration needed unless you want your
+own later.
+
+**Connection flow is not the classic one most Deriv API examples show.**
+The commonly-documented `wss://ws.derivws.com/websockets/v3` +
+`{"authorize": token}` approach doesn't work with PAT-style tokens (the
+`pat_...` prefix the current account/api-token page issues) -- every
+token tried returned "The token is invalid" from that endpoint, confirmed
+with Deriv support to be a wrong-flow issue, not an account problem.
+The actual PAT flow (`broker.py`'s `connect()`): `GET
+{OPTIONS_API_BASE}/accounts` (Bearer token + `Deriv-App-ID` header) to
+find the account and check `is_virtual`, then `POST
+{OPTIONS_API_BASE}/accounts/{id}/otp` (same headers) for a short-lived,
+single-use one-time-password and a ready-to-use WebSocket URL with it
+attached -- connecting to *that* URL is already authenticated, no
+separate `authorize` message needed. Despite "options" in the URL path,
+Deriv support confirmed Multipliers contracts use this same flow (it's
+the name of the whole newer API surface, not a restriction to binary
+options) -- but MT5 leveraged forex/CFDs is a different product and must
+not use this endpoint.
 
 **How it works:** `src/trading/cfd/strategy.py`'s `EmaCrossoverStrategy`
 (fast/slow EMA crossover, long or short, ATR-based stop/target -- same
@@ -417,24 +436,27 @@ account model is: Alpaca/OANDA use one base URL with a paper/live flag
 that can be forced in the workflow regardless of secrets; Deriv's API
 token is already scoped to one specific account (demo or real) the
 moment it's created, so there's no URL to force. Instead, `broker.py`'s
-`connect()` reads the `authorize` response's `is_virtual` field and
-refuses to proceed on a real (non-virtual) account unless
-`CFD_ALLOW_LIVE_TRADING` is explicitly true -- which both CFD workflows
-still hardcode to `"false"` regardless of secrets, as defense-in-depth on
-top of that check.
+`connect()` reads the accounts response's `is_virtual` field and refuses
+to proceed on a real (non-virtual) account unless `CFD_ALLOW_LIVE_TRADING`
+is explicitly true -- which both CFD workflows still hardcode to
+`"false"` regardless of secrets, as defense-in-depth on top of that
+check.
 
 **Status: scaffolded but not yet validated against a real account.**
-Every method in `broker.py` was written from Deriv's API documentation,
-not exercised against a live demo account (no token was available while
-building it). Do not trust it with even demo money until it's been run
-end-to-end and its logs checked -- same discipline the stock system used
-throughout (this sandbox can't reach external APIs, so every change needs
-validating via a real GitHub Actions run). Particularly worth checking
-first: `stake_and_limits()`'s dollar-amount conversion (get this wrong
-and the risk-per-trade protection is wrong), and whether Deriv accepts
-the `multiplier` value `risk.py` defaults to for each instrument (Deriv
-caps which multipliers are offered per instrument; that cap isn't checked
-against the live API yet). Also not yet backtested/tuned:
+`broker.py` was rewritten once already after live testing showed the
+first connection approach didn't work at all (see above) -- exact JSON
+field names in the `/accounts` and `/otp` responses (`account_id`,
+`is_virtual`, etc.) are still a best-effort guess from documentation
+search, not yet confirmed against a live response. Do not trust it with
+even demo money until it's been run end-to-end and its logs checked --
+same discipline the stock system used throughout (this sandbox can't
+reach external APIs, so every change needs validating via a real GitHub
+Actions run). Particularly worth checking first: `stake_and_limits()`'s
+dollar-amount conversion (get this wrong and the risk-per-trade
+protection is wrong), and whether Deriv accepts the `multiplier` value
+`risk.py` defaults to for each instrument (Deriv caps which multipliers
+are offered per instrument; that cap isn't checked against the live API
+yet). Also not yet backtested/tuned:
 `EmaCrossoverStrategy`'s parameters are a reasonable starting guess, not
 the result of the train/test-split, calmar-optimized process
 `optimize_strategy.py` used for the stock system's Breakout strategy --
