@@ -422,20 +422,17 @@ picks the account whose `account_type` is `"demo"` explicitly (or
 `accounts[0]` is the right one.
 
 **How it works:** `src/trading/cfd/strategy.py`'s `EmaCrossoverStrategy`
-(fast/slow EMA crossover, long or short, ATR-based stop/target -- same
-strategy code as originally written for OANDA) runs on 15-minute candles.
-Deriv prices stop-loss/take-profit as dollar P&L *amounts*, not price
-levels the way Alpaca/OANDA do, so `risk.py`'s `stake_and_limits()`
-converts the strategy's ATR-based price distance into a (stake,
-stop_loss_amount, take_profit_amount) triple sized so a stop-out loses
-about `CFD_RISK_PER_TRADE` of equity, regardless of the instrument's
-price scale. `.github/workflows/cfd-trading.yml` triggers a run every 20
-minutes on weekdays via `scripts/run_cfd_trading.py` -- frequent enough
-for real same-day, multiple-trades-per-day trading, without needing an
-always-on server (GitHub Actions minutes are free for periodic runs like
-this; a repo would need to go *public* to get free *unlimited/continuous*
-minutes for true tick-level reaction speed, which this deliberately
-doesn't need).
+(fast/slow EMA crossover, long or short, ATR-based stop/target) runs on
+**hourly (H1)** candles -- not the originally-intended 15-minute bars;
+see "Backtesting" below for why. Deriv prices stop-loss/take-profit as
+dollar P&L *amounts*, not price levels the way Alpaca/OANDA do, so
+`risk.py`'s `stake_and_limits()` converts the strategy's ATR-based price
+distance into a (stake, stop_loss_amount, take_profit_amount) triple
+sized so a stop-out loses about `CFD_RISK_PER_TRADE` of equity,
+regardless of the instrument's price scale. `.github/workflows/
+cfd-trading.yml` triggers a run roughly hourly on weekdays via
+`scripts/run_cfd_trading.py`, without needing an always-on server
+(GitHub Actions minutes are free for periodic runs like this).
 
 Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
 `frxUSDJPY` -- change via `CFD_INSTRUMENTS` (Deriv's own mixed-case,
@@ -481,27 +478,53 @@ instead accepted only 40/100/200/300/400, not `risk.py`'s default of
 
 **Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
 in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s
-TRAIN/TEST discipline for `EmaCrossoverStrategy`, but with one further
-gate the stock version doesn't need: the winning candidate also has to
-beat the untouched default params' own TEST performance, not just clear
-CAGR>0 and the drawdown cap in isolation. First real run found exactly
-why that extra gate matters -- a candidate that scored 72% TRAIN CAGR
-passed the old checks with 1.8% TEST CAGR, but the *untouched defaults*
-scored 31% TEST CAGR over the same holdout. Decision from that run: kept
-the current defaults, did not adopt the "recommended" candidate.
+TRAIN/TEST discipline for `EmaCrossoverStrategy`, with two gates the
+stock version doesn't need, both earned the hard way across several
+real runs:
+- The winning candidate has to beat the untouched default params' own
+  TEST performance, not just clear CAGR>0 and the drawdown cap in
+  isolation -- a candidate that passes that bar alone but does worse
+  than doing nothing on real holdout data is not an improvement.
+- Ranking by TRAIN calmar alone isn't enough either: the top `TOP_N_TO_TEST`
+  TRAIN-qualified candidates all get evaluated on TEST, and the winner is
+  whichever both clears the gate and beats baseline, ranked by *TEST*
+  calmar -- the TRAIN-calmar #1 candidate turned out to be a
+  catastrophic overfit (35% TRAIN CAGR, -46% TEST CAGR) that a naive
+  "just test #1" selection would have missed.
 
-Also discovered fetching that history: Deriv's `ticks_history` only
-serves roughly the last **3 months** of `M15` (15-minute) candles for
-these instruments, however far back `end` is paged -- confirmed by
-running the identical pagination logic at `H1` (hourly) granularity,
-which reached back **~11 months** without issue. The one real backtest
-run so far used `H1` bars as a longer-history proxy (M15's ~3-month
-window is too short to trust a train/test split on); this is directionally
-useful but not a direct stand-in for the live bot's actual M15 behavior
-(a 12-period EMA means something different on hourly vs. 15-minute
-bars). Re-running against true M15 data stays worth doing once enough
-of the live bot's own trade history has accumulated to backtest against
-directly.
+**History depth turned out to be the real obstacle.** Deriv's
+`ticks_history` only serves roughly the last **3 months** of `M15`
+(15-minute) candles for these instruments, however far back `end` is
+paged -- confirmed by running the identical pagination logic at `H1`
+(hourly) granularity, which reached back ~11 months without issue (a
+server-side limit, not a fetch bug). Even that wasn't enough: the
+optimizer also supports `--source yfinance` (Yahoo Finance, already a
+trusted dependency here for the stock system's earnings dates) as a
+credible longer-history cross-check, reaching **~2-2.9 years** of
+hourly data for EUR/USD, GBP/USD, USD/JPY, and gold (via `GC=F` COMEX
+futures, since `XAUUSD=X` isn't a valid Yahoo ticker) -- a different
+vendor/feed than Deriv, so treated as directional, not identical to
+Deriv's own prices.
+
+That longer window changed the conclusion entirely. The **original**
+defaults (12/26 EMA spans, 1.5/2.5 ATR multiples, aimed at M15 bars)
+scored a **-30.8% TRAIN CAGR and -65.5% max drawdown** over ~2 years of
+H1 data -- 1143 trades at a 34% win rate, i.e. whipsaw in ranging
+FX/gold, not something nearby fine-tuning fixes. A widened grid search
+(wider EMA separation, wider stops) found only 2 of 81 combinations
+held up out-of-sample at all; `EmaCrossoverStrategy`'s defaults are now
+the better of those two (`fast_span=15, slow_span=34, atr_stop_mult=2.0,
+atr_target_mult=2.0` -- TRAIN cagr=3.4% maxdd=-19.9%, TEST cagr=4.8%
+maxdd=-13.9%, win_rate=47.6% both periods: modest but genuinely
+consistent, unlike the overfit candidates). Because this was only
+validated at H1, `scheduler.py`'s granularity moved from M15 to H1 to
+match -- copying H1-validated EMA spans onto M15 bars would silently
+change what they mean (15 H1 bars is 15 hours of lookback, not 15 x 15
+minutes), so the live bot now trades what was actually tested rather
+than an extrapolation across timeframes. Revisiting M15 (probably via
+the live bot's own accumulated trade history, once there's enough of
+it) stays a reasonable future step, not a requirement -- H1 is a fully
+valid, deliberately-chosen granularity now, not a placeholder.
 
 ## Tests
 

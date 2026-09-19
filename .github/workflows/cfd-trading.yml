@@ -1,33 +1,37 @@
 name: CFD Trading (Deriv)
 
-# Runs the CFD/forex strategy every 20 minutes on weekdays. Forex/Deriv
-# Multipliers trade ~24 hours a day Sunday evening through Friday evening
-# UTC, so this misses a few hours at each end of that window (Mon-Fri
-# only) -- a known simplification for now, not a full 24/5 schedule.
+# Runs the CFD/forex strategy roughly hourly on weekdays, matching
+# EmaCrossoverStrategy's H1 granularity (see its docstring for why H1,
+# not the originally-intended M15). Forex/Deriv Multipliers trade ~24
+# hours a day Sunday evening through Friday evening UTC, so this misses
+# a few hours at each end of that window (Mon-Fri only) -- a known
+# simplification, not a full 24/5 schedule.
 #
 # Safety: unlike Alpaca/OANDA, Deriv doesn't have a separate practice/live
 # base URL to force via an env var -- an API token is already scoped to
 # whichever account (demo or real) it was created from. The actual safety
-# check happens at runtime in broker.py's connect(): it reads the
-# authorize response's is_virtual field and refuses a real account unless
+# check happens at runtime in broker.py's connect(): it picks the account
+# whose account_type is "demo" and refuses a real account unless
 # CFD_ALLOW_LIVE_TRADING is true. CFD_ALLOW_LIVE_TRADING is still hardcoded
 # to "false" below as defense-in-depth, same protective intent as
 # ALPACA_PAPER/OANDA_PRACTICE being hardcoded in the stock system's
 # workflows -- so even a token for the wrong (real) account gets refused.
 #
-# UNTESTED end-to-end as of writing -- see src/trading/cfd/broker.py's
-# docstring. Do not assume this works until it's been run against a real
-# Deriv demo account and its logs checked.
-#
-# The "schedule" trigger below is commented out on purpose: with no
-# DERIV_API_TOKEN secret set yet, a live cron would just fail every 20
-# minutes and burn CI minutes on guaranteed failures. Trigger manually
-# (workflow_dispatch) to validate against a real demo account first, then
-# uncomment the schedule once that's confirmed working.
+# Connection and order flow (connect, buy, portfolio read, sell) are
+# confirmed end-to-end against a real Deriv demo account -- see
+# src/trading/cfd/broker.py's docstring. Still not yet confirmed: placing
+# a real order on the actual configured instruments (frxXAUUSD etc,
+# rather than a synthetic index used for the connection test) -- blocked
+# by forex/gold markets being closed over a weekend when that was last
+# attempted. The "schedule" trigger stays commented out until that's
+# checked -- a live cron against instruments that might reject the
+# trade would just fail every run and burn CI minutes on a guaranteed
+# failure. Trigger manually (workflow_dispatch) to confirm first, then
+# uncomment the schedule.
 on:
   workflow_dispatch: {}
   # schedule:
-  #   - cron: "7,27,47 * * * 1-5"
+  #   - cron: "5 * * * 1-5"
 
 permissions:
   contents: write

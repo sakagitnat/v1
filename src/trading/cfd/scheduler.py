@@ -10,20 +10,19 @@ from trading.strategy.base import Action
 
 logger = get_logger(__name__)
 
-GRANULARITY_SECONDS = 900  # 15 minutes -- must be one of Deriv's supported candle sizes
-CANDLE_COUNT = 200  # comfortably more than slow_span=26 + atr_window=14 warmup
+GRANULARITY_SECONDS = 3600  # 1 hour -- see EmaCrossoverStrategy's docstring for why H1, not M15
+CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
 
 
 async def run_once():
-    """Evaluate the EMA crossover strategy on the latest completed M15
+    """Evaluate the EMA crossover strategy on the latest completed H1
     candle for each configured instrument and place/close orders
-    accordingly. Meant to run every 15-30 minutes during market hours via
-    a scheduled GitHub Actions workflow -- see .github/workflows/
+    accordingly. Meant to run roughly hourly during market hours via a
+    scheduled GitHub Actions workflow -- see .github/workflows/
     cfd-trading.yml.
 
-    UNTESTED against the real Deriv API as of writing -- see
-    src/trading/cfd/broker.py's docstring. Validate end-to-end against a
-    real demo account before trusting it.
+    Confirmed end-to-end against the real Deriv API (connect, buy,
+    portfolio read, sell) -- see src/trading/cfd/broker.py's docstring.
     """
     state = load_state()
     if state.get("paused"):
