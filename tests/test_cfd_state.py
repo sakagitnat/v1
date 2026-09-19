@@ -7,7 +7,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
     assert state.load_state() == {
         "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
-        "excluded_instruments": {},
+        "excluded_instruments": {}, "broker_baseline": None, "open_trades": {},
     }
 
 
@@ -39,6 +39,29 @@ def test_exclude_and_include_instrument_roundtrip(tmp_path, monkeypatch):
     assert state.load_state()["excluded_instruments"] == {"frxXAUUSD": "spiking on Fed news"}
     state.include_instrument("frxXAUUSD")
     assert state.load_state()["excluded_instruments"] == {}
+
+
+def test_set_broker_baseline_only_sets_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_broker_baseline(10000.0)
+    assert state.load_state()["broker_baseline"] == 10000.0
+    state.set_broker_baseline(9500.0)  # a later run must not move the anchor
+    assert state.load_state()["broker_baseline"] == 10000.0
+
+
+def test_record_open_trade_then_pop_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.record_open_trade(12345, {"instrument": "frxXAUUSD", "side": "long"})
+    assert state.list_open_trades() == {"12345": {"instrument": "frxXAUUSD", "side": "long"}}
+
+    popped = state.pop_open_trade(12345)
+    assert popped == {"instrument": "frxXAUUSD", "side": "long"}
+    assert state.list_open_trades() == {}
+
+
+def test_pop_open_trade_missing_returns_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.pop_open_trade(999) is None
 
 
 def test_state_file_is_valid_json(tmp_path, monkeypatch):

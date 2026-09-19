@@ -30,6 +30,11 @@ class CfdRiskManager:
     max_daily_loss_pct: float = 0.03
     capital_floor: Optional[float] = None
     multiplier: int = 20
+    min_stake: float = 1.0
+    """Deriv's confirmed live minimum stake for a Multipliers order. A
+    risk-budgeted stake smaller than this can't be placed as-is -- see
+    stake_and_limits()'s docstring for why the fix is SKIP TRADE, not
+    rounding the stake up to this floor."""
     """Deriv's leverage factor applied to the stake. Higher means a
     smaller stake reaches the same risk_amount stop-loss, i.e. less cash
     tied up per trade for the same dollar risk -- but Deriv caps which
@@ -69,7 +74,16 @@ class CfdRiskManager:
         trade still loses less than intended, never more) but means the
         effective risk_per_trade can come in under budget for wide
         stops/low multipliers -- worth knowing when reading backtest
-        results, not something to "fix" here."""
+        results, not something to "fix" here.
+
+        Also returns (0.0, 0.0, 0.0) -- SKIP TRADE -- when the
+        risk-budgeted stake comes out below min_stake. Deriv won't accept
+        an order smaller than min_stake, and forcing the stake UP to that
+        floor would risk more of equity than risk_per_trade allows, most
+        acutely on a small (e.g. $100) account where min_stake is a much
+        larger fraction of equity than on a $10,000 one. Per
+        docs/VISION.md's capital-model rule: never round a position size
+        up past the configured risk -- skip the trade instead."""
         if not self._can_open_new_position() or entry_price <= 0:
             return 0.0, 0.0, 0.0
         stop_distance = abs(entry_price - stop_price)
@@ -79,6 +93,8 @@ class CfdRiskManager:
 
         risk_amount = self.equity * self.risk_per_trade
         stake = min(risk_amount * entry_price / (self.multiplier * stop_distance), self.equity)
+        if stake < self.min_stake:
+            return 0.0, 0.0, 0.0
         take_profit_amount = risk_amount * (target_distance / stop_distance)
         return round(stake, 2), round(risk_amount, 2), round(take_profit_amount, 2)
 

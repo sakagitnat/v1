@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, burn-demo-balance, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
+        options: [status, performance, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
@@ -43,7 +43,7 @@ permissions:
 jobs:
   run-command:
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # burn-demo-balance can need several reconnect cycles (Deriv's WebSocket seems to drop around ~30min) across up to 30 rounds -- everything else finishes in well under a minute
+    timeout-minutes: 20  # optimize-strategy/sweep-risk grid searches can take a few minutes; everything else finishes in well under one
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,7 +63,7 @@ jobs:
         run: |
           set -e
           case "$CMD" in
-            status|resume)
+            status|resume|performance)
               python scripts/cfd_cli.py "$CMD"
               ;;
             pause)
@@ -95,9 +95,6 @@ jobs:
             backtest-crypto)
               python scripts/backtest_crypto.py --granularity "${MULTIPLIER:-3600}"
               ;;
-            burn-demo-balance)
-              python scripts/burn_demo_balance.py --target 100 --tolerance 30
-              ;;
             sweep-risk-synthetic)
               python scripts/sweep_cfd_risk_synthetic.py --granularity "${MULTIPLIER:-3600}"
               ;;
@@ -116,14 +113,12 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          if [ -f state/cfd_bot_state.json ]; then
-            git add state/cfd_bot_state.json
-            if ! git diff --cached --quiet; then
-              git commit -m "Update CFD bot state via manual command: ${{ inputs.command }}"
-              git push
-            else
-              echo "No state changes to commit."
-            fi
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD bot state via manual command: ${{ inputs.command }}"
+            git push
           else
-            echo "No state file yet (read-only command, or first run never persisted one)."
+            echo "No state changes to commit."
           fi

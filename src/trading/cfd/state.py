@@ -11,6 +11,8 @@ _DEFAULTS = {
     "capital_floor": None,
     "initial_floor": None,
     "excluded_instruments": {},
+    "broker_baseline": None,
+    "open_trades": {},
 }
 
 
@@ -41,6 +43,41 @@ def set_capital_floor(floor: Optional[float]) -> None:
     if floor is not None and state.get("initial_floor") is None:
         state["initial_floor"] = floor
     _write_state(state)
+
+
+def set_broker_baseline(balance: float) -> None:
+    """Records the raw Deriv broker balance the first time this system
+    ever sees the demo account -- the anchor trading.cfd.capital.
+    virtual_equity() rebases every later balance onto the $100-scale
+    virtual account. Deliberately set-once: called every run until a
+    baseline exists, then a no-op forever after, so it can never drift
+    once real (virtual) trading history depends on it."""
+    state = load_state()
+    if state.get("broker_baseline") is None:
+        state["broker_baseline"] = balance
+        _write_state(state)
+
+
+def record_open_trade(contract_id: int, meta: dict) -> None:
+    """Persists the entry-time details of a just-opened contract so a
+    later run (a fresh process, on GitHub Actions) can still compute that
+    trade's P&L and log it to the Trade Database once it closes -- see
+    trading.cfd.trade_log and scheduler.py."""
+    state = load_state()
+    state.setdefault("open_trades", {})[str(contract_id)] = meta
+    _write_state(state)
+
+
+def pop_open_trade(contract_id: int) -> Optional[dict]:
+    state = load_state()
+    open_trades = state.setdefault("open_trades", {})
+    meta = open_trades.pop(str(contract_id), None)
+    _write_state(state)
+    return meta
+
+
+def list_open_trades() -> dict:
+    return load_state().get("open_trades", {})
 
 
 def exclude_instrument(instrument: str, reason: str = "") -> None:

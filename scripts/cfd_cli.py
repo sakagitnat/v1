@@ -11,6 +11,7 @@ Instrument names are Deriv's own, mixed-case and case-sensitive
 
 Usage:
   python scripts/cfd_cli.py status
+  python scripts/cfd_cli.py performance
   python scripts/cfd_cli.py pause [--reason "..."]
   python scripts/cfd_cli.py resume
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
@@ -26,27 +27,39 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
+from trading.cfd.capital import equity_for_account
+from trading.cfd.performance import compute_performance
 from trading.cfd.state import (
     exclude_instrument,
     include_instrument,
     load_state,
     set_paused,
 )
+from trading.cfd.trade_log import load_trades
 from trading.config import settings
 
 
 async def cmd_status(_args):
     broker = DerivBroker()
     try:
-        await broker.connect()
+        account = await broker.connect()
         state = load_state()
-        equity = await broker.account_equity()
+        broker_balance = await broker.account_equity()
+        broker_baseline = state.get("broker_baseline")
+        equity = equity_for_account(
+            broker_balance, account.get("account_type"), broker_baseline, settings.cfd_virtual_starting_capital
+        )
         positions = await broker.open_positions()
 
         pause_note = f" ({state.get('pause_reason')})" if state.get("paused") and state.get("pause_reason") else ""
         print(f"Paused: {state.get('paused', False)}{pause_note}")
-        print(f"Equity: {equity:.2f}")
-        print(f"Capital floor: {state.get('capital_floor')}")
+        if account.get("account_type") == "demo" and broker_baseline is not None:
+            print(f"Broker balance (raw demo, not the real number): {broker_balance:.2f}")
+            print(f"Broker baseline (recorded at first run): {broker_baseline:.2f}")
+            print(f"Virtual equity (use this one): {equity:.2f}")
+        else:
+            print(f"Equity: {equity:.2f}")
+        print(f"Capital floor (virtual equity terms): {state.get('capital_floor')}")
         initial_floor = state.get("initial_floor")
         if initial_floor is not None:
             growth = equity - initial_floor
@@ -62,6 +75,30 @@ async def cmd_status(_args):
             print(f"  {instrument}: {pos['side']} (contract {pos['contract_id']})")
     finally:
         await broker.close()
+
+
+def cmd_performance(_args):
+    """Prints the Performance Engine's metrics computed from the Trade
+    Database (state/cfd_trades.jsonl) -- see trading.cfd.performance.
+    Synchronous and offline: reads the local trade log only, no Deriv
+    connection needed."""
+    trades = load_trades()
+    if not trades:
+        print("No trades recorded yet (state/cfd_trades.jsonl is empty or missing).")
+        return
+    metrics = compute_performance(trades, starting_equity=settings.cfd_virtual_starting_capital)
+    print(f"Trades: {metrics['trade_count']} ({metrics['priced_trade_count']} priced, {metrics['unattributed_trade_count']} unattributed)")
+    print(f"Net return: {metrics['net_return']:+.2f} (starting capital {settings.cfd_virtual_starting_capital:.2f})")
+    print(f"Expectancy: {metrics['expectancy']:+.2f} per trade")
+    print(f"Win rate: {metrics['win_rate_pct']:.1f}%  Profit factor: {metrics['profit_factor']}")
+    print(f"Avg win: {metrics['avg_win']:+.2f}  Avg loss: {metrics['avg_loss']:+.2f}  Avg R: {metrics['avg_r_multiple']}")
+    print(f"Sharpe: {metrics['sharpe']}  Sortino: {metrics['sortino']}  Calmar: {metrics['calmar']}")
+    print(f"Max drawdown: {metrics['max_drawdown_pct']:.2f}%  Longest losing streak: {metrics['longest_losing_streak']}")
+    print(f"Exposure: {metrics['exposure_pct']}%")
+    for label, key in [("strategy", "by_strategy"), ("regime", "by_regime"), ("session", "by_session"), ("side", "by_side")]:
+        print(f"By {label}:")
+        for name, stats in metrics[key].items():
+            print(f"  {name}: {stats}")
 
 
 async def cmd_list_symbols(args):
@@ -181,6 +218,8 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("status").set_defaults(func=cmd_status, is_async=True)
+
+    sub.add_parser("performance").set_defaults(func=cmd_performance, is_async=False)
 
     list_symbols_parser = sub.add_parser("list-symbols")
     list_symbols_parser.add_argument("--filter", default="", help="Case-insensitive substring match against symbol/display_name/market/submarket")

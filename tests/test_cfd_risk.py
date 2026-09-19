@@ -55,6 +55,25 @@ def test_daily_loss_circuit_breaker_halts_further_entries():
     assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
 
 
+def test_skips_trade_when_risk_budgeted_stake_is_below_min_stake():
+    # $100 equity, 0.1% risk -> risk_amount=$0.10; a wide stop/low
+    # multiplier sizes the stake (0.40) well under Deriv's real minimum --
+    # must SKIP, not round the stake up to min_stake (which would risk far
+    # more than the configured 0.1%).
+    rm = CfdRiskManager(equity=100, risk_per_trade=0.001, multiplier=5, min_stake=1.0)
+    stake, stop_loss_amount, take_profit_amount = rm.stake_and_limits(
+        entry_price=100.0, stop_price=95.0, take_profit_price=110.0
+    )
+    assert (stake, stop_loss_amount, take_profit_amount) == (0.0, 0.0, 0.0)
+
+
+def test_trades_at_exactly_min_stake_are_not_skipped():
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20, min_stake=1.0)
+    stake, _, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert stake == 50.0  # comfortably above min_stake, sanity check the fixture itself
+    assert stake >= rm.min_stake
+
+
 def test_reset_day_clears_halt():
     rm = CfdRiskManager(equity=1000, max_daily_loss_pct=0.03)
     rm.register_open()

@@ -12,6 +12,12 @@ by default, with backtesting on free historical data.
 > trading until you have reviewed weeks or months of paper-trading results
 > and are comfortable with the risk of loss.
 
+**The CFD/Deriv system below (see "CFD/forex trading (Deriv)") is being
+developed toward a larger goal: an AI Trading Manager, not a
+single-strategy bot.** See `docs/VISION.md` for that master vision and
+`docs/ARCHITECTURE_AUDIT.md` for what already exists vs. what's still
+missing.
+
 ## How it works
 
 1. **Strategies** (`src/trading/strategy/`) — six long-only strategies
@@ -437,17 +443,58 @@ cfd-trading.yml` triggers a run roughly hourly on weekdays via
 Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
 `frxUSDJPY` -- change via `CFD_INSTRUMENTS` (Deriv's own mixed-case,
 case-sensitive symbol names). Manual control (`scripts/cfd_cli.py status`
-/ `pause` / `resume` / `exclude-instrument` / `include-instrument`, or
-the "CFD Manual Command" GitHub Actions workflow) mirrors the stock
-system's `cli.py`. `status` reports equity growth since the first run
-(`equity - initial_floor`) as a quick sanity check, but **the ground
-truth for actual trading results is the Deriv account dashboard
-itself** -- this project doesn't yet keep its own trade-by-trade P&L
-log (a good next addition once live trading has actually run for a
-while and there are real closed contracts to validate a `profit_table`
-API integration against, rather than guessing its field names ahead of
-time the way several other integration bugs here were only caught by
-reading real responses).
+/ `performance` / `pause` / `resume` / `exclude-instrument` /
+`include-instrument`, or the "CFD Manual Command" GitHub Actions
+workflow) mirrors the stock system's `cli.py`.
+
+**Capital model: virtual equity (demo).** Deriv's demo signup fixes the
+account balance at a **fixed ~$10,000, with no API to reset it to an
+arbitrary amount** -- but the real capital this system is meant for is
+**$100**. Sizing trades off the raw $10,000 demo balance would make every
+position ~100x larger than what a real $100 account could ever risk. So
+on a demo account, every risk/performance calculation is computed from a
+**virtual equity** (`trading/cfd/capital.py`) instead: the first time the
+bot ever runs, it records the broker's balance as a baseline
+(`broker_baseline`, in `state/cfd_bot_state.json`); from then on,
+`virtual_equity = CFD_VIRTUAL_STARTING_CAPITAL (default 100) +
+(broker_balance - broker_baseline)` -- so a $10 gain on the real $10,000
+balance shows up as a $10 gain on the $100 virtual one, exactly mirroring
+real P&L, never the raw balance itself. `cfd_cli.py status` prints both
+the raw broker balance and the virtual equity, labeled, so it's always
+clear which is which. Real (non-demo) accounts are unaffected -- real
+money is never rebased, it already is what it is.
+
+One consequence: if Deriv's minimum order size for an instrument would
+force a stake bigger than `CFD_RISK_PER_TRADE` of a small (e.g. $100)
+virtual account allows, `CfdRiskManager.stake_and_limits()` **skips the
+trade** rather than rounding the stake up past the configured risk --
+see `risk.py`'s `min_stake` (`CFD_MIN_STAKE`, default $1.00, Deriv's
+confirmed live minimum).
+
+(This replaces an earlier, deliberately-deprecated approach,
+`scripts/burn_demo_balance.py`, which tried to solve the same $10,000-vs-
+$100 mismatch by actually trading the demo balance down. That directly
+conflicts with this project's rule against deliberately trading a
+balance down or up to hit a target number -- see `docs/VISION.md` -- so
+it's kept only as documented history and refuses to run without an
+explicit override flag.)
+
+**Trade Database & Performance Engine.** Every trade the live bot closes
+-- whether by its own signal-exit logic or by Deriv auto-closing a
+stop-loss/take-profit between runs -- is logged to
+`state/cfd_trades.jsonl` (`trading/cfd/trade_log.py`), all money fields
+in virtual-equity terms. `scripts/cfd_cli.py performance`
+(`trading/cfd/performance.py`) computes net return, expectancy, profit
+factor, win rate, average win/loss, average R multiple, Sharpe, Sortino,
+Calmar, max drawdown, longest losing streak, and breakdowns by strategy/
+regime/session/side from that log, entirely offline (no Deriv connection
+needed). A trade Deriv closed on its own between two runs can only be
+priced exactly when it's the *only* one that closed in that gap (the
+balance delta is unambiguous); if several closed at once, they're logged
+honestly with `pnl: null` ("unattributed") rather than a guessed split --
+excluded from every pnl-based average, never silently treated as a
+break-even trade. **The Deriv account dashboard is still the ground
+truth** for anything this log can't yet attribute precisely.
 
 **Safety model is different from Alpaca/OANDA's**, because Deriv's
 account model is: Alpaca/OANDA use one base URL with a paper/live flag
@@ -620,11 +667,16 @@ src/trading/
     positions.py             # tracked stop/target prices (+ owning bucket) for open fractional positions
     buckets.py                # safe/risk virtual sub-accounts, active once the withdrawal milestone hits
   cfd/                        # separate CFD/forex (Deriv) system -- see "CFD/forex trading" above
-    broker.py                   # Deriv WebSocket API calls -- UNTESTED against a real account as of writing
-    strategy.py                   # intraday EMA crossover, long or short
-    risk.py                        # stake/multiplier sizing, capital floor, daily-loss circuit breaker
-    scheduler.py                    # one strategy evaluation + order pass, every ~20 min (async)
-    state.py                         # paused flag, capital floor, excluded instruments -- own state file
+    broker.py                   # Deriv WebSocket API calls -- confirmed live against a real demo account
+    strategy.py                   # intraday EMA crossover, long or short (validated)
+    breakout.py                    # Donchian channel breakout, long or short (unvalidated as of writing)
+    capital.py                      # virtual equity model -- rebases demo P&L onto $100, see "Capital model" above
+    risk.py                          # stake/multiplier sizing, capital floor, daily-loss circuit breaker, min-stake SKIP TRADE guard
+    trade_log.py                      # Trade Database -- append-only JSONL log of closed trades
+    performance.py                     # Performance Engine -- metrics computed from the trade log
+    scheduler.py                        # one strategy evaluation + order pass, every ~1h (async)
+    state.py                             # paused flag, capital floor, broker baseline, open-trade tracking, excluded instruments
+    backtest.py                           # CfdBacktestEngine -- TRAIN/TEST discipline, mirrors backtest/engine.py
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
@@ -646,6 +698,10 @@ state/
   positions.json
   buckets.json
   cfd_bot_state.json
+  cfd_trades.jsonl        # Trade Database -- see "Trade Database & Performance Engine" above
+docs/
+  VISION.md                # master vision for the AI Trading Manager -- read this first
+  ARCHITECTURE_AUDIT.md      # what exists vs. the vision, and what's still missing
 tests/
 ```
 

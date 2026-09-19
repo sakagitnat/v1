@@ -81,6 +81,23 @@ class Settings:
     cfd_max_daily_loss_pct: float = field(
         default_factory=lambda: float(os.getenv("CFD_MAX_DAILY_LOSS_PCT", "0.03"))
     )
+    # Deriv's demo account balance is fixed at ~$10,000 with no API to reset
+    # it to an arbitrary amount; the user's real intended starting capital
+    # is $100. All demo-side risk sizing, drawdown, and performance tracking
+    # must use virtual equity rebased onto this number, never the raw demo
+    # balance -- see trading.cfd.capital and docs/VISION.md's "Capital
+    # model" section.
+    cfd_virtual_starting_capital: float = field(
+        default_factory=lambda: float(os.getenv("CFD_VIRTUAL_STARTING_CAPITAL", "100.0"))
+    )
+    cfd_min_stake: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MIN_STAKE", "1.0"))
+    )
+    """Deriv's confirmed live minimum stake for a Multipliers order (see
+    scripts/burn_demo_balance.py's MIN_STAKE, discovered the same way).
+    Used by CfdRiskManager to SKIP a trade rather than round its
+    risk-budgeted stake up past this floor, which would silently risk more
+    than risk_per_trade of equity on a small account."""
 
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper

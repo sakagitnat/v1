@@ -54,14 +54,12 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          if [ -f state/cfd_bot_state.json ]; then
-            git add state/cfd_bot_state.json
-            if ! git diff --cached --quiet; then
-              git commit -m "Update CFD bot state from scheduled run"
-              git push
-            else
-              echo "No state changes to commit."
-            fi
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD bot state from scheduled run"
+            git push
           else
-            echo "No state file yet (read-only command, or first run never persisted one)."
+            echo "No state changes to commit."
           fi

@@ -2,8 +2,22 @@
 
 Audit date: 2026-09-19. Compares the current codebase (see `docs/VISION.md`
 for the target) against what actually exists on
-`claude/ai-trading-manager-deriv-pmay2v`. This audit is read-only — no
-trading logic was changed as part of it.
+`claude/ai-trading-manager-deriv-pmay2v`. The audit itself is read-only —
+no trading logic was changed while writing it.
+
+## Progress log
+
+- **2026-09-19 — Phase 0 + Phase 1 done.** Virtual equity model
+  (`trading/cfd/capital.py`), the min-stake SKIP TRADE guard
+  (`risk.py`), `scripts/burn_demo_balance.py` deprecated (refuses to run
+  without an explicit override flag, removed from the manual-command
+  workflow), Trade Database (`trading/cfd/trade_log.py`,
+  `state/cfd_trades.jsonl`), and Performance Engine
+  (`trading/cfd/performance.py`, `cfd_cli.py performance`) are all live.
+  `scheduler.py` now also actually calls `risk.register_open()`/
+  `register_close()` (it didn't before this change — the daily-loss
+  circuit breaker was dead code in production until now). Everything
+  else below is still an accurate account of what's missing.
 
 ## Executive summary
 
@@ -67,11 +81,11 @@ Market Regime Engine       -> MISSING for CFD (stock-only regime.py, wrong asset
 AI Trading Manager         -> MISSING entirely (no decision-making layer above "run the one configured strategy")
 Strategy Selector          -> MISSING (strategy is a fixed config choice, not a runtime decision)
 BUY/SELL/NO TRADE          -> PARTIAL (each strategy emits BUY/SELL/HOLD; "NO TRADE" is not a first-class strategy/decision, just an absence of signal)
-Risk Governor              -> PARTIAL (CfdRiskManager exists and is structurally right, but (a) sized off raw broker balance not virtual equity, (b) nothing stops the AI Trading Manager layer from bypassing it, because that layer doesn't exist yet)
-Execution Engine           -> EXISTS (scheduler.py + broker.py)
+Risk Governor              -> PARTIAL (CfdRiskManager is now sized off virtual equity and has a min-stake SKIP TRADE guard -- Phase 0, done; still nothing stops a future AI Trading Manager layer from bypassing it, because that layer doesn't exist yet)
+Execution Engine           -> EXISTS (scheduler.py + broker.py; now also actually drives CfdRiskManager's register_open/register_close, which it didn't before)
 Deriv                      -> EXISTS
-Trade Database             -> MISSING (README says so explicitly: "this project doesn't yet keep its own trade-by-trade P&L log")
-Performance Engine         -> MINIMAL (compute_cfd_metrics: total return, CAGR, Sharpe, max DD, win rate, trade count only -- missing expectancy, profit factor, avg win/loss, R multiple, Sortino, Calmar, losing streak, by-strategy/regime/session breakdowns, long-vs-short, exposure)
+Trade Database             -> DONE for Phase 1's scope (trade_log.py, state/cfd_trades.jsonl) -- one known gap: a trade Deriv auto-closes via stop-loss/take-profit is only priced exactly when it's the sole one that closed between two runs; simultaneous external closes log with pnl=null rather than a guessed split (no profit_table API integration yet -- see "Still not validated" thread in the CFD README section)
+Performance Engine         -> DONE for Phase 1's scope (performance.py, `cfd_cli.py performance`): net return, expectancy, profit factor, win rate, avg win/loss, R multiple, Sharpe, Sortino, Calmar, max drawdown, longest losing streak, by-strategy/regime/session/side breakdowns, exposure. by_regime is schema-ready but always "unknown" until the Market Regime Engine (Phase 3) exists.
 Failure Analysis            -> MISSING entirely
 Research / Improvement Lab -> MISSING entirely (no automatic candidate generation; new strategies are hand-written)
 Validation                  -> PARTIAL (TRAIN/TEST split with an overfit check exists; no walk-forward, no Monte Carlo/stress test, no paper-trading promotion gate)
@@ -94,14 +108,17 @@ Strategy Registry            -> MISSING entirely (no versioning, no lifecycle st
   (scales risk with *cushion above floor*, i.e. more risk only from house
   money) — a fine pattern, but worth calling out so it's never confused
   with "increase risk after a loss."
-- **Minimum order size vs. $100 accounts**: `stake_and_limits()` currently
-  has no explicit "skip if Deriv's minimum stake/multiplier would force
-  risk above the configured limit" check — it computes a stake and clamps
-  it to `min(..., self.equity)`, but doesn't compare against Deriv's actual
-  minimum stake and bail out. Needs an explicit SKIP TRADE path per the
-  vision.
+- ~~**Minimum order size vs. $100 accounts**~~ — **done (Phase 0).**
+  `stake_and_limits()` now returns SKIP (0.0, 0.0, 0.0) when the
+  risk-budgeted stake comes out below `CFD_MIN_STAKE`, instead of
+  rounding it up past the configured risk.
 
 ## Decisions needed before writing more code
+
+*(Resolved 2026-09-19: kept `scripts/burn_demo_balance.py` for history,
+deprecated with a hard run guard; started with Phase 0 + Phase 1
+together. Both now done — see Progress log above. Text below is kept
+as the record of that decision.)*
 
 1. **`scripts/burn_demo_balance.py`** — recommend: keep the file (it's
    useful documented history of a real API constraint: Deriv demo accounts
