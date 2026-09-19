@@ -43,7 +43,7 @@ permissions:
 jobs:
   run-command:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # burn-demo-balance can run up to ~20 rounds x 90s (5 concurrent positions/round) -- everything else finishes in well under a minute
+    timeout-minutes: 90  # burn-demo-balance can need several reconnect cycles (Deriv's WebSocket seems to drop around ~30min) across up to 30 rounds -- everything else finishes in well under a minute
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
