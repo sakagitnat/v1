@@ -76,14 +76,18 @@ async def cmd_list_symbols(args):
         needle = (args.filter or "").lower()
         matches = [
             s for s in symbols
-            if needle in s.get("symbol", "").lower()
-            or needle in s.get("display_name", "").lower()
+            if needle in s.get("underlying_symbol", "").lower()
+            or needle in s.get("underlying_symbol_name", "").lower()
             or needle in s.get("market", "").lower()
             or needle in s.get("submarket", "").lower()
         ]
         print(f"{len(matches)}/{len(symbols)} symbols match filter {args.filter!r}:")
         for s in matches:
-            print(f"  RAW: {s!r}")
+            print(
+                f"  {s.get('underlying_symbol')}: {s.get('underlying_symbol_name')} "
+                f"(market={s.get('market')}, submarket={s.get('submarket')}, "
+                f"exchange_is_open={s.get('exchange_is_open')}, is_trading_suspended={s.get('is_trading_suspended')})"
+            )
     finally:
         await broker.close()
 

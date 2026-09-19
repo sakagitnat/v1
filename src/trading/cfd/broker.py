@@ -227,19 +227,26 @@ class DerivBroker:
         return await self._request({"sell": contract_id, "price": 0})
 
     async def list_active_symbols(self) -> list[dict]:
-        """Returns Deriv's own list of tradable symbols (each a dict with
-        at least "symbol" and "display_name", plus market/submarket
-        grouping) -- used to discover real instrument names (e.g. for
-        crypto) rather than guessing them, the same "confirm against a
-        live response, don't assume" discipline as everything else in
-        this file.
+        """Returns Deriv's own list of tradable symbols -- used to
+        discover real instrument names (e.g. for crypto) rather than
+        guessing them, the same "confirm against a live response, don't
+        assume" discipline as everything else in this file.
 
         No "product_type" param (unlike Deriv's classic/legacy API docs,
         which show one) -- confirmed by a live error against this
         project's newer /trading/v1/options flow: "Input validation
-        failed: Properties not allowed: product_type." Same pattern as
-        every other field-name surprise in this file: this newer API
-        surface doesn't always match older documentation, so it's
-        checked against the real response rather than assumed."""
+        failed: Properties not allowed: product_type."
+
+        Each dict's identifier/name fields are "underlying_symbol" and
+        "underlying_symbol_name" -- NOT "symbol"/"display_name" as
+        classic-API docs would suggest (same underlying_symbol-not-symbol
+        pattern already seen in the proposal request and portfolio
+        response elsewhere in this file). Confirmed live: crypto is
+        cryBTCUSD ("BTC/USD") and cryETHUSD ("ETH/USD"), market=
+        "cryptocurrency" -- and unlike frxXAUUSD/frxEURUSD etc., these
+        trade 24/7 (exchange_is_open=1 confirmed on a Saturday), useful
+        for testing when forex/gold markets are closed on weekends.
+        Other useful fields: market, submarket, exchange_is_open,
+        is_trading_suspended, pip_size, trade_count."""
         resp = await self._request({"active_symbols": "brief"})
         return resp.get("active_symbols", [])
