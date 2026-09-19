@@ -71,7 +71,10 @@ class DerivBroker:
         import websockets
 
         accounts_resp = requests.get(f"{OPTIONS_API_BASE}/accounts", headers=self._auth_headers())
-        accounts_resp.raise_for_status()
+        if not accounts_resp.ok:
+            raise RuntimeError(
+                f"Deriv API error (GET /accounts): HTTP {accounts_resp.status_code} -- {accounts_resp.text}"
+            )
         accounts = accounts_resp.json().get("data") or []
         if not accounts:
             raise RuntimeError("Deriv API: no accounts found for this token (GET /accounts returned none)")
@@ -87,7 +90,10 @@ class DerivBroker:
             )
 
         otp_resp = requests.post(f"{OPTIONS_API_BASE}/accounts/{account_id}/otp", headers=self._auth_headers())
-        otp_resp.raise_for_status()
+        if not otp_resp.ok:
+            raise RuntimeError(
+                f"Deriv API error (POST /accounts/{account_id}/otp): HTTP {otp_resp.status_code} -- {otp_resp.text}"
+            )
         ws_url = otp_resp.json()["data"]["url"]
 
         self._ws = await websockets.connect(ws_url)
