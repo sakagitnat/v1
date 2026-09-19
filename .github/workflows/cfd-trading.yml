@@ -44,7 +44,7 @@ jobs:
       - run: python scripts/run_cfd_trading.py
         env:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
-          DERIV_APP_ID: "1089"
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
       - name: Commit state changes (if any)
         run: |
