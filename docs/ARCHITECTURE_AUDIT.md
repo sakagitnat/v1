@@ -13,9 +13,10 @@ the same day to correct a too-narrow reading of the original brief, and
 three structural gaps against the *revised* vision were opened, tracked
 there. **All three are now closed** -- see Progress log. `docs/VISION.md`
 was then revised again the same day ("Revision 3") with a much fuller
-risk/execution model -- see "Revision 3 gap analysis" immediately below,
-**read-only, nothing in it has been fixed yet** -- the user asked for
-every conflict identified before any of it is touched.
+risk/execution model -- see "Revision 3 gap analysis" immediately below.
+Gaps #2 (risk model foundation) and #1 (exit philosophy) are now closed,
+in the user's chosen order -- see Progress log. Gaps #6-9, #4-5, #10,
+#11, and #3 remain, worked in that stated order.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -28,31 +29,9 @@ anything" pass -- every item below is verified against the actual code
 (file/line, not a guess), ranked roughly by how much it matters, and
 **none of it has been changed yet**.
 
-1. **[Most severe -- live in production right now] Every registered
-   strategy's take-profit is a fixed R-multiple, sent to Deriv as a
-   whole-position hard limit order that auto-closes the ENTIRE
-   contract.** `EmaCrossoverStrategy.signal_for_row()`
-   (`trading/cfd/strategy.py:111-119`) and
-   `DonchianBreakoutStrategy.signal_for_row()`
-   (`trading/cfd/breakout.py:94-99`) both compute
-   `target = price +/- atr_target_mult * atr` -- a fixed multiple of the
-   stop distance (2R for `ema_crossover@v1`'s defaults, currently
-   `ACTIVE` and trading live; ~1.6R for `donchian_breakout@v2`'s
-   validated params). `scheduler.py` passes this straight to
-   `broker.submit_multiplier_order(..., take_profit_amount=...)`
-   (`broker.py:222-251`), which Deriv itself auto-closes the *whole*
-   contract at, per `limit_order.take_profit` -- not a suggestion the
-   bot's own logic could override mid-trade. There is no trailing stop,
-   no partial-close, and no adaptive/regime-aware exit anywhere in the
-   codebase (confirmed: `grep`-ing the whole `trading/cfd` package for
-   "trailing" or "partial" turns up nothing but an unrelated phrase in
-   `regime.py`'s volatility-lookback docstring).
-   Directly contradicts Revision 3's "Position holding period and exit
-   philosophy" section (no uniform fixed take-profit, partial close
-   required, trailing stop required, initial risk decoupled from
-   realized upside) -- and this isn't a future-architecture gap, it is
-   actively capping every winning trade the live `ACTIVE` strategy takes
-   on the real demo account, every run, today.
+1. ~~**Every registered strategy's take-profit is a fixed R-multiple,
+   sent to Deriv as a whole-position hard limit order.**~~ **Closed
+   2026-09-20** -- see Progress log below.
 2. ~~**No portfolio-level, per-thesis, or correlated risk ceiling
    exists.**~~ **Closed 2026-09-20** -- chosen by the user as the first
    gap to fix, since it's the foundation the rest of Revision 3's risk
@@ -601,6 +580,68 @@ capital model. These all still match the revised vision as-is.
   Qualification Gate), #11 (strategy pool diversity), #3 (decision
   cadence -- deliberately last, not to be sped up before the risk
   foundation and execution safety are both in place).
+
+- **2026-09-20 — Revision 3 gap #1 ("fixed take-profit caps every
+  winner") closed.** New module `trading/cfd/exit_manager.py`
+  (pure functions, no broker/event-loop dependency):
+  - `TrailingStopState` + `update_trailing_stop()`: once a position has
+    moved favorably by `CFD_TRAILING_ACTIVATION_R_MULTIPLE` (default
+    1.0) times its ORIGINAL stop distance, a trailing stop activates and
+    ratchets toward locking in more profit every run, trailing
+    `CFD_TRAILING_ATR_MULTIPLE` (default 2.0) ATRs behind price --
+    recomputed from the LATEST candle's ATR each run, not a value frozen
+    at entry, so it adapts to current volatility. Never loosens once
+    activated. Before activation, a position is protected exactly as
+    before: Deriv's own initial `stop_loss_amount`.
+  - `split_stake_for_partial_close()`: Deriv Multipliers don't support a
+    true partial sell of one contract (unconfirmed anywhere in
+    `broker.py`, and never assumed against a live account per this
+    project's stated discipline) -- so "partial close" means splitting
+    one entry's already risk-budgeted stake into two SEPARATE contracts
+    at entry: a `"scalp"` leg (`CFD_PARTIAL_CLOSE_FRACTION`, default
+    50%, keeping the strategy's own normal fixed target -- locks in some
+    profit early) and a `"runner"` leg (the remainder, no *effective*
+    fixed target). The runner leg still gets a real
+    `take_profit_amount` sent to Deriv (proposal requests omitting
+    take-profit aren't confirmed live either) but
+    `CFD_RUNNER_BACKSTOP_MULTIPLE` (default 10x) wider than its own
+    proportional target -- a rare catastrophic backstop, never the leg's
+    real exit mechanism (the trailing stop and the strategy's own
+    signal exit are). If either leg's stake would fall below
+    `CFD_MIN_STAKE`, a single full-stake `"runner"` leg opens instead of
+    forcing an invalid split -- the common case on a small account, and
+    still a real fix (trailing-stop-managed, not fixed-TP-capped).
+  - `broker.py` gained `open_positions_list()` (every open contract as a
+    flat list, never collapsed by symbol -- `open_positions()`'s
+    existing symbol-keyed dict would silently hide one leg of a split
+    position). `scheduler.py`'s main loop now tracks positions by
+    `{instrument: [legs]}` instead of one dict entry per instrument,
+    manages each leg independently (shared strategy-signal exit check
+    across all legs of one instrument, since they can only ever come
+    from the same entry decision; trailing-stop check additionally for
+    `"runner"` legs only), and `max_open_positions` still counts distinct
+    INSTRUMENTS with any leg open, never raw contracts -- a split never
+    silently doubles that ceiling's meaning.
+  - `TradeRecord` gained a `leg` field (`"scalp"`/`"runner"`/`None` for a
+    pre-existing trade); both legs share the same `thesis_key` and were
+    already checked as one combined unit against the Portfolio Risk
+    Governor (previous entry) before either was submitted.
+  - `cfd_cli.py status`/`manager-report` switched to
+    `open_positions_list()` too, so a human checking the live account
+    sees both legs of a split position, not just one.
+  **Known, disclosed follow-up, not fixed in this pass:**
+  `backtest.py`'s `CfdBacktestEngine` and `paper_trading.py` still
+  simulate the OLD single-fixed-target exit model -- their validation/
+  forward-simulation numbers are now out of sync with what live trading
+  actually does. Deliberately not rushed into this same change (the
+  user's next queued layer, execution realism, is the right place to
+  bring backtest/paper fidelity back in line with live behavior, rather
+  than a hurried, undertested addition here). 18 new tests in
+  `tests/test_cfd_exit_manager.py` covering the trailing-stop and split
+  math directly; `run_once()` itself stays validated the same way as
+  before (no unit test exists for it anywhere in this codebase -- it's
+  broker-coupled and validated by live smoke-testing via GitHub Actions,
+  not mocked). Full suite: 310 tests passing.
 
 ## Executive summary
 

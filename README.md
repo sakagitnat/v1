@@ -644,6 +644,50 @@ trade with the `thesis_key` it counted against at entry time, and
 `cfd_cli.py manager-report` prints the current utilization of every
 ceiling (`portfolio_risk_summary`) for visibility.
 
+**Adaptive Exit Management.** `trading/cfd/exit_manager.py` closes the
+single biggest conflict Revision 3's gap analysis found: every registered
+strategy used to send Deriv a fixed R-multiple take-profit as a
+whole-position hard limit order, capping every winner at a small fixed
+multiple -- actively, in live trading, not just in theory. Now, an
+approved entry (past the Portfolio Risk Governor above) splits into:
+- a **`"scalp"` leg** (`CFD_PARTIAL_CLOSE_FRACTION`, 50% by default) --
+  keeps the strategy's own normal fixed target, locking in some profit
+  early, same mechanism as before just sized down.
+- a **`"runner"` leg** (the remainder) -- no *effective* fixed target.
+  Protected by Deriv's own initial stop-loss until the position has moved
+  favorably by `CFD_TRAILING_ACTIVATION_R_MULTIPLE` (1.0x) times its
+  original stop distance, at which point a trailing stop activates and
+  ratchets `CFD_TRAILING_ATR_MULTIPLE` (2.0x) ATRs behind price every
+  run -- recomputed from the latest candle's ATR each time, so it adapts
+  to current volatility, and it only ever tightens, never loosens. The
+  runner leg still gets a real (if very wide, `CFD_RUNNER_BACKSTOP_
+  MULTIPLE`=10x) take-profit sent to Deriv as a backstop -- Deriv's
+  proposal request accepting a limit order with take-profit omitted
+  entirely hasn't been confirmed live, and this project never assumes
+  unconfirmed behavior against a real account (see `broker.py`'s own
+  discipline) -- but under normal conditions that backstop is never what
+  actually closes the leg.
+
+Deriv Multipliers don't support a true partial sell of one contract, so
+this is two SEPARATE contracts from the same entry decision, not one
+contract closed halfway -- if splitting would put either leg's stake
+below `CFD_MIN_STAKE` (common on a small account), a single full-stake
+`"runner"` leg opens instead of forcing an invalid order; that's still a
+real fix (trailing-stop-managed, never capped at a small fixed R), just
+without the early-profit-lock a true split would add. `broker.py` gained
+`open_positions_list()` (every open contract as a flat list, never
+collapsed by symbol -- `open_positions()`'s dict form would silently
+hide one leg of a split position) and `scheduler.py`'s main loop now
+tracks `{instrument: [legs]}`, managing each leg independently but
+counting `max_open_positions` by distinct instruments, never raw
+contracts. `TradeRecord` tags each trade with its `leg`.
+
+**Known limitation, not yet fixed:** `backtest.py` and `paper_trading.py`
+still simulate the OLD single-fixed-target exit model -- their
+validation/forward-simulation numbers don't yet reflect this new exit
+behavior. Queued for the execution-realism pass next (see
+`docs/ARCHITECTURE_AUDIT.md`).
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted

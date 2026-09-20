@@ -166,13 +166,18 @@ class DerivBroker:
 
     async def open_positions(self) -> dict:
         """Returns {symbol: {"contract_id": int, "side": "long"|"short"}}
-        for every open multiplier contract. Assumes at most one open
-        contract per symbol (true for the live strategy's own trading,
-        which never opens a second position in a symbol it's already
-        in) -- for anything that might hold several simultaneous
-        contracts on the SAME symbol (e.g. scripts/burn_demo_balance.py),
-        use open_contract_ids() instead, which doesn't collapse by
-        symbol."""
+        for every open multiplier contract -- COLLAPSES to at most one
+        entry per symbol, silently keeping only one contract's data if
+        more than one is open on the same symbol. No longer safe for
+        trading.cfd.scheduler's main loop to rely on for position
+        tracking: partial-close (see trading.cfd.exit_manager) means a
+        symbol can legitimately hold two simultaneous contracts (a
+        "scalp" leg and a "runner" leg) -- use open_positions_list() (a
+        flat, never-collapsed list) or open_contract_ids() (bare ids
+        only) for anything that needs to see every contract, not just
+        one per symbol. Kept only for callers that genuinely never hold
+        more than one contract per symbol (e.g.
+        scripts/burn_demo_balance.py)."""
         resp = await self._request({"portfolio": 1})
         positions = {}
         for c in resp["portfolio"]["contracts"]:
@@ -183,6 +188,28 @@ class DerivBroker:
                 "contract_id": c["contract_id"],
                 "side": "long" if c["contract_type"] == "MULTUP" else "short",
             }
+        return positions
+
+    async def open_positions_list(self) -> list[dict]:
+        """Like open_positions(), but returns every open contract as a
+        flat list, never collapsed by symbol -- for a caller that may
+        legitimately hold more than one simultaneous contract on the
+        same instrument, e.g. scheduler.py's partial-close "scalp"/
+        "runner" leg split (see trading.cfd.exit_manager). Each dict is
+        {"contract_id": int, "instrument": str, "side": "long"|"short"} --
+        same field parsing as open_positions(), just not keyed/collapsed
+        by symbol."""
+        resp = await self._request({"portfolio": 1})
+        positions = []
+        for c in resp["portfolio"]["contracts"]:
+            symbol = c.get("underlying_symbol", c.get("symbol"))
+            if symbol is None:
+                raise RuntimeError(f"Deriv API: portfolio contract has neither underlying_symbol nor symbol: {c!r}")
+            positions.append({
+                "contract_id": c["contract_id"],
+                "instrument": symbol,
+                "side": "long" if c["contract_type"] == "MULTUP" else "short",
+            })
         return positions
 
     async def open_contract_ids(self) -> set[int]:

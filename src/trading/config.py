@@ -171,6 +171,43 @@ class Settings:
     not yet empirically tuned -- same status as the regime/ADX defaults
     elsewhere in this file."""
 
+    # Adaptive Exit Management (see trading.cfd.exit_manager) --
+    # docs/VISION.md's Revision 3 "exit philosophy": no uniform fixed
+    # take-profit, trailing stop + partial close required once
+    # meaningfully in profit. Same reasonable-starting-default status as
+    # every other threshold in this file.
+    cfd_partial_close_fraction: float = field(
+        default_factory=lambda: float(os.getenv("CFD_PARTIAL_CLOSE_FRACTION", "0.5"))
+    )
+    """Fraction of one entry's stake/risk that goes to the "scalp" leg
+    (locks in the strategy's own normal fixed target early); the
+    remainder is the "runner" leg (no effective fixed target, managed by
+    the trailing stop). If splitting would put either leg's stake below
+    CFD_MIN_STAKE, the entry falls back to a single runner-only leg at
+    full size instead of forcing an invalid sub-minimum order."""
+    cfd_trailing_activation_r_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_TRAILING_ACTIVATION_R_MULTIPLE", "1.0"))
+    )
+    """How many multiples of the ORIGINAL stop distance a position must
+    move favorably before the trailing stop activates -- before that, a
+    leg is protected only by Deriv's own initial stop_loss_amount, same
+    as every position was before this module existed."""
+    cfd_trailing_atr_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_TRAILING_ATR_MULTIPLE", "2.0"))
+    )
+    """How many ATRs behind the current price an ACTIVATED trailing stop
+    trails -- recomputed from the latest candles every run, so it adapts
+    to current volatility rather than staying frozen at entry-time ATR."""
+    cfd_runner_backstop_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_RUNNER_BACKSTOP_MULTIPLE", "10.0"))
+    )
+    """How much wider than its own proportional target the "runner"
+    leg's Deriv-side take-profit is set -- present (Deriv's proposal
+    hasn't been confirmed live to accept an omitted take-profit) but
+    meant as a rare catastrophic backstop, never the leg's real exit
+    mechanism. See exit_manager.split_stake_for_partial_close's
+    docstring."""
+
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
 

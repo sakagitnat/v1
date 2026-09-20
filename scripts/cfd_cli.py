@@ -44,6 +44,7 @@ from trading.cfd.performance import compute_performance
 from trading.cfd.state import (
     exclude_instrument,
     include_instrument,
+    list_open_trades,
     load_state,
     set_capital_floor,
     set_operating_mode,
@@ -64,7 +65,11 @@ async def cmd_status(_args):
         equity = equity_for_account(
             broker_balance, account.get("account_type"), broker_baseline, settings.cfd_virtual_starting_capital
         )
-        positions = await broker.open_positions()
+        # open_positions_list(), not open_positions() -- a partial-close
+        # split (trading.cfd.exit_manager) can leave two simultaneous
+        # legs open on the same instrument, which open_positions()'s
+        # symbol-collapsed dict would silently hide one of.
+        positions = await broker.open_positions_list()
 
         pause_note = f" ({state.get('pause_reason')})" if state.get("paused") and state.get("pause_reason") else ""
         print(f"Paused: {state.get('paused', False)}{pause_note}")
@@ -88,9 +93,12 @@ async def cmd_status(_args):
         if excluded:
             print(f"Excluded instruments: {excluded}")
 
+        tracked_open = list_open_trades()
         print(f"Open positions ({len(positions)}):")
-        for instrument, pos in positions.items():
-            print(f"  {instrument}: {pos['side']} (contract {pos['contract_id']})")
+        for pos in positions:
+            meta = tracked_open.get(str(pos["contract_id"])) or {}
+            leg_note = f", leg={meta['leg']}" if meta.get("leg") else ""
+            print(f"  {pos['instrument']}: {pos['side']} (contract {pos['contract_id']}{leg_note})")
     finally:
         await broker.close()
 

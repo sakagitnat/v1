@@ -2,9 +2,17 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
+import pandas as pd
+
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
+from trading.cfd.exit_manager import (
+    TrailingStopState,
+    split_stake_for_partial_close,
+    trailing_stop_hit,
+    update_trailing_stop,
+)
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
 from trading.cfd.paper_trading import run_paper_trading
 from trading.cfd.portfolio_allocator import compute_allocations, risk_scale_factor
@@ -47,7 +55,8 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
     """Detects contracts this system was tracking as open that are no
     longer open on Deriv's side -- closed by Deriv's own stop-loss/
     take-profit (or a manual scripts/cfd_cli.py close-position) between
-    runs, rather than by this scheduler's own signal-exit logic below.
+    runs, rather than by this scheduler's own signal-exit/trailing-stop
+    logic below.
 
     Deriv's account balance only moves on a realized close or a new stake
     being paid, never on the unrealized/floating P&L of a still-open
@@ -58,6 +67,10 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
     combined balance change between them without an extra API call this
     project doesn't make yet (see docs/ARCHITECTURE_AUDIT.md) -- those are
     still logged, honestly, with pnl=None rather than a guessed split.
+    Two legs of one entry (see exit_manager.split_stake_for_partial_close)
+    disappearing in the same run is exactly this "more than one" case --
+    e.g. a "scalp" leg's Deriv-side take-profit firing the same hour a
+    "runner" leg's stop is hit externally would both land here unpriced.
     """
     disappeared = {cid: meta for cid, meta in tracked_open.items() if int(cid) not in currently_open_ids}
     if not disappeared:
@@ -86,6 +99,7 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 exit_reason="closed_externally (stop-loss/take-profit or manual close)",
                 regime=meta.get("regime"),
                 thesis_key=meta.get("thesis_key"),
+                leg=meta.get("leg"),
             )
         )
     return records
@@ -142,7 +156,9 @@ async def run_once():
     Operating Mode (trading.cfd.operating_mode, set via
     `cfd_cli.py set-mode`) before CfdRiskManager ever sees them -- still
     bounded by CFD_MAX_RISK_PER_TRADE_CEILING, an absolute ceiling no
-    mode may cross.
+    mode may cross. max_open_positions counts distinct INSTRUMENTS with
+    at least one leg open, not raw contracts -- a partial-close split
+    (see below) never silently doubles this count.
 
     Which strategy opens a NEW position is decided per instrument, per
     run, by the Strategy Selector (trading.cfd.selector.select_for_entry)
@@ -187,6 +203,20 @@ async def run_once():
     limit -- never satisfied by max_open_positions' raw position count
     alone. See that module's docstring for the ceilings and the
     (deliberately static, not live-computed) correlation model.
+
+    An approved entry is then handed to trading.cfd.exit_manager for
+    Adaptive Exit Management (docs/VISION.md's Revision 3 exit
+    philosophy): rather than one contract with a small fixed take-profit
+    that caps every winner, it's split into a "scalp" leg (a fraction of
+    the stake, keeping the strategy's own normal target -- locks in some
+    profit early) and a "runner" leg (the remainder, no effective fixed
+    target -- managed by a trailing stop that only ever tightens,
+    computed fresh from the latest ATR every run, plus the strategy's own
+    signal exit). If the split would put either leg below CFD_MIN_STAKE,
+    a single full-stake "runner" leg is opened instead -- never the old
+    behavior of a single leg with a small fixed take-profit. Both legs
+    share the same thesis_key and both were already included as one
+    combined unit in the Portfolio Risk Governor check above.
     """
     state = load_state()
     if state.get("paused"):
@@ -325,7 +355,14 @@ async def run_once():
         )
 
         excluded = state.get("excluded_instruments") or {}
-        open_positions = await broker.open_positions()
+        # open_positions_list(), not open_positions() -- a partial-close
+        # split (below) can legitimately leave two simultaneous contracts
+        # ("scalp" and "runner") open on the SAME instrument, which
+        # open_positions()'s symbol-collapsed dict would silently hide
+        # one of. See broker.py's docstrings on both methods.
+        positions_by_instrument: dict[str, list[dict]] = {}
+        for p in await broker.open_positions_list():
+            positions_by_instrument.setdefault(p["instrument"], []).append(p)
 
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
@@ -352,72 +389,110 @@ async def run_once():
             # with real (or virtual-real) capital.
             run_paper_trading(instrument, bars, regime)
 
-            position = open_positions.get(instrument)
-            in_position = position["side"] if position else None
-
-            if in_position is not None:
-                contract_id = position["contract_id"]
-                meta = tracked_open.get(str(contract_id))  # peek only -- don't remove until actually closing
-                exit_entry = _resolve_exit_strategy_entry(meta)
+            legs = positions_by_instrument.get(instrument, [])
+            if legs:
+                # Every leg still open for one instrument always shares
+                # the same side and strategy tag -- they can only ever
+                # come from ONE entry decision, since a new entry is
+                # never opened for an instrument that already has a leg
+                # open (see the "continue" at the end of this branch).
+                first_meta = tracked_open.get(str(legs[0]["contract_id"]))
+                exit_entry = _resolve_exit_strategy_entry(first_meta)
                 if exit_entry is None:
                     logger.warning(
-                        "%s: can't determine which strategy opened contract %d (no tracked metadata, and not "
+                        "%s: can't determine which strategy opened this position (no tracked metadata, and not "
                         "exactly one ACTIVE strategy to fall back to) -- leaving it to Deriv's own stop-loss/"
                         "take-profit and reconciliation next run.",
-                        instrument, contract_id,
+                        instrument,
                     )
                     continue
 
+                in_position = legs[0]["side"]
                 exit_strategy = exit_entry.build()
                 prepared = exit_strategy.prepare(bars)
                 row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
                 signal = exit_strategy.signal_for_row(instrument, row, prev_row, in_position)
-
-                is_exit = (in_position == "long" and signal.action == Action.SELL) or (
+                is_exit_signal = (in_position == "long" and signal.action == Action.SELL) or (
                     in_position == "short" and signal.action == Action.BUY
                 )
-                if not is_exit:
-                    continue
+                current_atr = row.get("atr") if hasattr(row, "get") else None
+                current_atr = 0.0 if current_atr is None or pd.isna(current_atr) else float(current_atr)
 
-                logger.info("%s: closing %s position (%s)", instrument, in_position, signal.reason)
-                pop_open_trade(contract_id)
-                open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
-                equity_before = risk.equity
-                await broker.close_position(contract_id)
-                new_balance = await broker.account_equity()
-                new_equity = equity_for_account(
-                    new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
-                )
-                pnl = round(new_equity - equity_before, 2)
-                risk.register_close(pnl)
-                equity = new_equity
-                if meta:
-                    record_trade(
-                        TradeRecord(
-                            contract_id=contract_id,
-                            instrument=instrument,
-                            strategy=meta.get("strategy", f"{exit_entry.name}@{exit_entry.version}"),
-                            side=in_position,
-                            entry_time=meta.get("entry_time", ""),
-                            exit_time=_now_iso(),
-                            entry_price=meta.get("entry_price", 0.0),
-                            stake=meta.get("stake", 0.0),
-                            risk_amount=meta.get("risk_amount", 0.0),
-                            exit_price=signal.price,
-                            pnl=pnl,
-                            equity_before=equity_before,
-                            equity_after=new_equity,
-                            exit_reason="signal_exit: " + signal.reason,
-                            regime=meta.get("regime"),
-                            thesis_key=meta.get("thesis_key"),
+                for leg in legs:
+                    contract_id = leg["contract_id"]
+                    meta = tracked_open.get(str(contract_id))
+                    leg_tag = (meta or {}).get("leg")
+
+                    close_reason = None
+                    exit_price = row["close"]
+                    if is_exit_signal:
+                        close_reason = "signal_exit: " + signal.reason
+                        exit_price = signal.price
+                    elif leg_tag == "runner" and meta and meta.get("trailing_stop") and current_atr > 0:
+                        trailing_state = TrailingStopState.from_dict(meta["trailing_stop"])
+                        updated_state = update_trailing_stop(
+                            trailing_state,
+                            current_price=row["close"],
+                            current_atr=current_atr,
+                            activation_r_multiple=settings.cfd_trailing_activation_r_multiple,
+                            trail_atr_multiple=settings.cfd_trailing_atr_multiple,
                         )
+                        if trailing_stop_hit(updated_state, bar_low=row["low"], bar_high=row["high"]):
+                            close_reason = f"trailing_stop_hit (stop={updated_state.current_stop_price:.5f})"
+                        else:
+                            meta["trailing_stop"] = updated_state.as_dict()
+                            record_open_trade(contract_id, meta)  # persist the ratcheted stop for next run
+
+                    if close_reason is None:
+                        continue
+
+                    logger.info(
+                        "%s: closing %s leg (contract %d, %s position) -- %s",
+                        instrument, leg_tag or "untagged", contract_id, in_position, close_reason,
                     )
-                else:
-                    logger.warning(
-                        "%s: closed contract %d with no tracked entry metadata "
-                        "(opened before trade logging existed) -- pnl not logged to the trade database.",
-                        instrument, contract_id,
+                    pop_open_trade(contract_id)
+                    open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
+                    equity_before = risk.equity
+                    await broker.close_position(contract_id)
+                    new_balance = await broker.account_equity()
+                    new_equity = equity_for_account(
+                        new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
                     )
+                    pnl = round(new_equity - equity_before, 2)
+                    risk.register_close(pnl)
+                    equity = new_equity
+                    if meta:
+                        record_trade(
+                            TradeRecord(
+                                contract_id=contract_id,
+                                instrument=instrument,
+                                strategy=meta.get("strategy", f"{exit_entry.name}@{exit_entry.version}"),
+                                side=in_position,
+                                entry_time=meta.get("entry_time", ""),
+                                exit_time=_now_iso(),
+                                entry_price=meta.get("entry_price", 0.0),
+                                stake=meta.get("stake", 0.0),
+                                risk_amount=meta.get("risk_amount", 0.0),
+                                exit_price=exit_price,
+                                pnl=pnl,
+                                equity_before=equity_before,
+                                equity_after=new_equity,
+                                exit_reason=close_reason,
+                                regime=meta.get("regime"),
+                                thesis_key=meta.get("thesis_key"),
+                                leg=leg_tag,
+                            )
+                        )
+                    else:
+                        logger.warning(
+                            "%s: closed contract %d with no tracked entry metadata "
+                            "(opened before trade logging existed) -- pnl not logged to the trade database.",
+                            instrument, contract_id,
+                        )
+
+                # At least one leg was open for this instrument -- never
+                # also evaluate a new entry the same run, regardless of
+                # how many of its legs just closed above.
                 continue
 
             # Flat -- decide whether to open a new position, per the
@@ -438,7 +513,7 @@ async def run_once():
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
                 continue
-            if len(open_positions) >= effective_max_positions:
+            if len(positions_by_instrument) >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
                 continue
 
@@ -463,39 +538,69 @@ async def run_once():
                 logger.info("Skipping %s: Portfolio Risk Governor rejected this entry -- %s", instrument, rejection)
                 continue
 
-            logger.info(
-                "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
-                side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, regime, signal.reason, strategy_tag,
+            # Adaptive Exit Management (trading.cfd.exit_manager, see
+            # run_once()'s docstring): split into "scalp" (keeps the
+            # strategy's own normal target, locks in profit early) and
+            # "runner" (no effective fixed target -- trailing-stop
+            # managed) legs, or a single full-stake "runner" leg if
+            # splitting would put either leg below CFD_MIN_STAKE.
+            split = split_stake_for_partial_close(
+                stake, stop_loss_amount, take_profit_amount,
+                settings.cfd_partial_close_fraction, settings.cfd_min_stake, settings.cfd_runner_backstop_multiple,
             )
-            result = await broker.submit_multiplier_order(
-                instrument, side, stake, risk.multiplier, stop_loss_amount, take_profit_amount
-            )
-            contract_id = result.get("buy", {}).get("contract_id")
-            open_positions[instrument] = {"contract_id": contract_id, "side": side}
-            if contract_id is not None:
-                risk.register_open()
-                record_open_trade(
-                    contract_id,
-                    {
-                        "instrument": instrument,
-                        "strategy": strategy_tag,
-                        "side": side,
-                        "entry_time": _now_iso(),
-                        "entry_price": signal.price,
-                        "stake": stake,
-                        "risk_amount": stop_loss_amount,
-                        "multiplier": risk.multiplier,
-                        "thesis_key": compute_thesis_key(instrument, side),
-                        "equity_before": risk.equity,
-                        "regime": regime,
-                    },
+            if split is not None:
+                scalp, runner = split
+                legs_to_open = [("scalp", scalp), ("runner", runner)]
+            else:
+                full_runner_tp = round(take_profit_amount * settings.cfd_runner_backstop_multiple, 2)
+                legs_to_open = [
+                    ("runner", {"stake": stake, "risk_amount": stop_loss_amount, "take_profit_amount": full_runner_tp})
+                ]
+
+            entry_thesis_key = compute_thesis_key(instrument, side)
+            opened_legs = []
+            for leg_tag, leg_terms in legs_to_open:
+                leg_stake, leg_risk, leg_tp = leg_terms["stake"], leg_terms["risk_amount"], leg_terms["take_profit_amount"]
+                logger.info(
+                    "%s %s leg=%s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
+                    side.upper(), instrument, leg_tag, leg_stake, leg_risk, leg_tp, regime, signal.reason, strategy_tag,
                 )
+                result = await broker.submit_multiplier_order(instrument, side, leg_stake, risk.multiplier, leg_risk, leg_tp)
+                contract_id = result.get("buy", {}).get("contract_id")
+                if contract_id is None:
+                    logger.warning("%s: leg=%s order submitted but no contract_id returned -- not tracked.", instrument, leg_tag)
+                    continue
+
+                leg_meta = {
+                    "instrument": instrument,
+                    "strategy": strategy_tag,
+                    "side": side,
+                    "entry_time": _now_iso(),
+                    "entry_price": signal.price,
+                    "stake": leg_stake,
+                    "risk_amount": leg_risk,
+                    "multiplier": risk.multiplier,
+                    "thesis_key": entry_thesis_key,
+                    "equity_before": risk.equity,
+                    "regime": regime,
+                    "leg": leg_tag,
+                }
+                if leg_tag == "runner":
+                    leg_meta["trailing_stop"] = TrailingStopState(
+                        entry_price=signal.price, initial_stop_price=signal.stop_price, side=side,
+                    ).as_dict()
+                record_open_trade(contract_id, leg_meta)
                 open_risk_positions.append(
                     OpenRiskPosition(
                         contract_id=contract_id, instrument=instrument, side=side,
-                        risk_amount=stop_loss_amount, notional=new_notional,
+                        risk_amount=leg_risk, notional=leg_stake * risk.multiplier,
                     )
                 )
+                opened_legs.append({"contract_id": contract_id, "side": side})
+
+            if opened_legs:
+                risk.register_open()
+                positions_by_instrument[instrument] = opened_legs
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
     finally:

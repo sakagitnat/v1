@@ -58,6 +58,14 @@ class TradeRecord:
     trail survives even if the thesis-grouping rule itself changes in a
     future revision. None only for a trade logged before this field
     existed."""
+    leg: Optional[str] = None
+    """"scalp" or "runner" -- see trading.cfd.exit_manager.
+    split_stake_for_partial_close. A "scalp" leg keeps the strategy's own
+    normal fixed target; a "runner" leg has no effective fixed target and
+    is managed by the trailing stop instead. None for a trade logged
+    before Adaptive Exit Management existed, or for a runner-only entry
+    that never actually split (still tagged "runner", just at full
+    size -- see split_stake_for_partial_close's docstring for why)."""
 
 
 def record_trade(trade: TradeRecord, path: Optional[Path] = None) -> None:
