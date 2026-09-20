@@ -1170,11 +1170,27 @@ capital model. These all still match the revised vision as-is.
     open_long`, `test_flat_high_far_above_stale_resistance_does_not_
     open_short`) covering exactly the scenario that produced the bad
     numbers. Full suite: 409 passing.
-  - `support_resistance@v1` stays `CANDIDATE` -- the live grid search
-    has not yet been re-run against the fixed logic, so whether this
-    approach actually works on real data is still genuinely unknown, not
-    quietly assumed positive because the bug is fixed. Gap #11 remains
-    open regardless of how that re-run turns out.
+  - Re-ran the grid search against the fixed logic (GitHub Actions run
+    35512685177). Numbers are sane now -- 2,714 TRAIN / 1,172 TEST
+    trades, in line with the other CFD strategies' counts on this data,
+    confirming the fix worked -- but the honest result is a clear
+    failure: baseline `TRAIN cagr=-91.8% maxdd=-99.5% win_rate=48.1%`,
+    `TEST cagr=-94.5% maxdd=-91.4% win_rate=45.4%` (near account
+    wipeout on both splits), and **0/81** parameter combinations cleared
+    even the cheap TRAIN gate (min trades, CAGR>0, drawdown within
+    -25%). `support_resistance@v1` moved `CANDIDATE -> RETIRED` (`cfd_
+    cli.py promote-strategy support_resistance v1 RETIRED --reason
+    "..."`) with the full numbers in its registry history -- same
+    honest-negative-result treatment as `mean_reversion@v1` and
+    `rsi_reversion@v1`, not left as a misleadingly-still-viable
+    `CANDIDATE` just because the bug that inflated its first numbers is
+    fixed. Full suite: 409 passing throughout (the retirement itself is
+    a registry state change, not a code change).
+  - Three structurally distinct approaches (Bollinger-band fade,
+    RSI+ADX fade, swing-structure reversion) are now ruled out on this
+    data. Gap #11 stays open -- still untried: a session/time-of-day
+    approach, a different timeframe (every attempt so far is H1), or a
+    genuinely different data source/instrument subset.
 
 ## Executive summary
 

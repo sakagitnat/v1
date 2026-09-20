@@ -894,14 +894,19 @@ discipline as `mean_reversion@v1` and `rsi_reversion@v1`'s honest
 negatives, just applied to a number that was too good rather than too
 bad to be true.
 
-Two structurally distinct approaches (`mean_reversion`, `rsi_reversion`)
-are ruled out on this data so far; `support_resistance`'s real result is
-still pending a re-run of the grid search now that the bug above is
-fixed -- `support_resistance@v1` stays `CANDIDATE`, not `VALIDATED`,
-until that honestly-obtained number exists. The "ranging" regime gap in
-gap #11 is still open regardless of how that re-run comes back -- a
+The re-run against the fixed logic confirmed the fix (2,714 TRAIN /
+1,172 TEST trades -- sane, in line with every other CFD strategy here on
+this data) but delivered an honest failure: baseline `TRAIN cagr=-91.8%
+maxdd=-99.5% win_rate=48.1%`, `TEST cagr=-94.5% maxdd=-91.4%
+win_rate=45.4%` -- near account wipeout on both splits -- and **0/81**
+grid combinations cleared even the cheap TRAIN gate. `support_
+resistance@v1` is `RETIRED` too, same treatment as the other two.
+
+Three structurally distinct approaches (`mean_reversion`, `rsi_reversion`,
+`support_resistance`) are now ruled out on this data, not just one
+guess. The "ranging" regime gap in gap #11 is still open -- a
 session/time-of-day approach, a different timeframe, or a different data
-source are still untried either way.
+source are still untried.
 
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
