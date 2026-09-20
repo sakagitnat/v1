@@ -886,21 +886,48 @@ of simulated paths that ever dropped to half of starting equity) plus
 percentiles of final equity and max drawdown. Both are pure functions
 over data a backtest already produces -- no new market data or API calls.
 
-**Research Lab.** `trading/cfd/research_lab.py` (`scripts/
-research_cfd_strategy.py`) automates running a strategy's parameter grid
-through the *entire* pipeline -- Backtest -> Out-of-Sample -> Walk-Forward
--> Monte Carlo -- and auto-registers any candidate that clears every gate
-into the Strategy Registry as `VALIDATED`, **never higher**: the
-remaining steps (Paper Trading, then Promote) still need a human's
-explicit `promote-strategy` call, per docs/VISION.md's rule against
-promoting a strategy on backtest results alone. This doesn't invent new
-strategy logic -- "candidate" means a new, systematically-searched
-parameter set for an *existing* strategy class, the same grid search
-`optimize_cfd_breakout.py` already does by hand; what's new is that a
-passing result gets registered automatically, audit trail and all,
-instead of a human reading a printed table and typing the registration
-command themselves. Run via the "CFD Manual Command" workflow's
-`research-strategy` command.
+**Research Lab.** `trading/cfd/research_lab.py` automates running a
+strategy's parameter grid through the *entire* pipeline -- Backtest ->
+Out-of-Sample -> Walk-Forward -> Monte Carlo -- and auto-registers any
+candidate that clears every gate into the Strategy Registry as
+`VALIDATED`, **never higher**: the remaining steps (Paper Trading, then
+Promote) still need a human's explicit `promote-strategy` call, per
+docs/VISION.md's rule against promoting a strategy on backtest results
+alone. This doesn't invent new strategy logic -- "candidate" means a
+new, systematically-searched parameter set for an *existing* strategy
+class, the same grid search `optimize_cfd_breakout.py` already does by
+hand; what's new is that a passing result gets registered automatically,
+audit trail and all, instead of a human reading a printed table and
+typing the registration command themselves. `scripts/
+research_cfd_strategy.py` runs this for `donchian_breakout` alone, on
+demand (`research-strategy` command).
+
+**Autonomous weekly research (self-improvement loop).** `scripts/
+research_cfd_strategies.py` (plural) generalizes the above across
+*every* registered strategy class (`ema_crossover`, `donchian_breakout`,
+`mean_reversion`) in one pass, and `.github/workflows/cfd-research.yml`
+runs it **on its own, every Sunday, with no one having to trigger it**
+-- the self-improvement loop closing the gap where a grid search only
+ever ran when someone remembered to ask for one. Each run fetches fresh
+market history once and shares it across all three strategies' searches
+(rather than three separate fetches), wraps each strategy's pass in its
+own try/except so one strategy's data or logic problem can't abort the
+others, and prints a consolidated summary of what got registered (or
+didn't -- a run that finds nothing new is a normal, honestly-reported
+outcome, not a failure). The hard boundary is unchanged from every
+other automation in this project: it can register a new candidate at
+`VALIDATED` on its own, and **never** higher -- it can't promote to
+`PAPER`/`ACTIVE`, can't touch `CFD_ALLOW_LIVE_TRADING`, and can't change
+a risk ceiling. Those still need a deliberate, reasoned
+`promote-strategy` command a human types; this loop only removes the
+"someone has to remember to run the search" step, not the
+human-decides-to-trade-it step. Also runnable on demand via the "CFD
+Manual Command" workflow's `research-strategies` command. Extending it
+to a genuinely new strategy *structure* (not just new parameters for an
+existing one) still needs a person -- or Claude, asked -- to design and
+add it to `STRATEGY_SPECS`, the same way `mean_reversion.py` was added;
+this loop only automates re-searching parameter space for structures
+that already exist.
 
 **Operating Modes.** `trading/cfd/operating_mode.py`
 (`cfd_cli.py set-mode {defensive,normal,aggressive,recovery}`) scales
@@ -1164,6 +1191,7 @@ src/trading/
     broker.py                   # Deriv WebSocket API calls -- confirmed live against a real demo account
     strategy.py                   # intraday EMA crossover, long or short (validated)
     breakout.py                    # Donchian channel breakout, long or short (unvalidated as of writing)
+    mean_reversion.py               # Bollinger Band mean-reversion, targets the "ranging" regime (RETIRED as of writing -- see "Strategy Pool Diversity" above)
     capital.py                      # virtual equity model -- rebases demo P&L onto $100, see "Capital model" above
     risk.py                          # stake/multiplier sizing, capital floor, daily-loss circuit breaker, min-stake SKIP TRADE guard
     strategy_registry.py              # Strategy Registry -- name@version, lifecycle states, promotion audit trail
@@ -1177,7 +1205,7 @@ src/trading/
     manager_report.py                         # AI Trading Manager report -- consolidated view + recommended commands, never auto-applied
     trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
     performance.py                      # Performance Engine -- metrics computed from the trade log
-    scheduler.py                         # one strategy evaluation + order pass, every ~1h (async)
+    scheduler.py                         # one strategy evaluation + order pass, every ~15min (async)
     state.py                              # paused flag, capital floor, broker baseline, open-trade tracking, excluded instruments
     backtest.py                            # CfdBacktestEngine -- TRAIN/TEST discipline, mirrors backtest/engine.py
 scripts/
@@ -1188,6 +1216,8 @@ scripts/
   cli.py                         # status / pause / resume / buy / sell / set-floor / cancel -- used by manual-command.yml
   run_cfd_trading.py               # used by cfd-trading.yml
   cfd_cli.py                         # status / pause / resume / exclude-instrument -- used by cfd-manual-command.yml
+  research_cfd_strategy.py            # Research Lab driver, donchian_breakout only, on demand
+  research_cfd_strategies.py           # Research Lab driver, every registered strategy class -- used by cfd-research.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
@@ -1196,6 +1226,7 @@ scripts/
   optimize-strategy.yml
   cfd-trading.yml
   cfd-manual-command.yml
+  cfd-research.yml                 # weekly autonomous multi-strategy Research Lab run
 state/
   bot_state.json
   positions.json

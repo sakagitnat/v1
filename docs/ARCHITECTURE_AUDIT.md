@@ -930,6 +930,53 @@ capital model. These all still match the revised vision as-is.
   - This was the last gap in the user's stated Revision 3 priority
     order. Gap #11 (strategy pool diversity) remains open on its own
     merits (see the entry above), not because it was skipped in order.
+- **2026-09-20 — Autonomous weekly Research Lab (new capability, not a
+  Revision 3 gap -- the user asked directly for a self-improvement loop
+  that runs without waiting for a command).** New `scripts/
+  research_cfd_strategies.py`: generalizes the existing single-strategy
+  driver (`scripts/research_cfd_strategy.py`, `donchian_breakout` only)
+  across every entry in `STRATEGY_SPECS` (currently `ema_crossover`,
+  `donchian_breakout`, `mean_reversion`) -- fetches each configured
+  instrument's history once, shares it across all three strategies' grid
+  searches, and runs each through the same TRAIN filter -> `trading.cfd.
+  research_lab`'s full Backtest/Out-of-Sample/Walk-Forward/Monte-Carlo
+  gate already used elsewhere, auto-registering anything that clears
+  every gate as a new version at `VALIDATED` -- never higher. Each
+  strategy's pass is wrapped in try/except so one strategy's data or
+  logic problem can't abort the others' passes in the same run --
+  necessary now that this runs completely unattended.
+  - New `.github/workflows/cfd-research.yml`: `cron: "0 6 * * 0"`
+    (weekly, Sunday, before Monday's trading week) plus
+    `workflow_dispatch` for an on-demand run; also wired into the "CFD
+    Manual Command" workflow as `research-strategies` (plural,
+    distinct from the existing singular `research-strategy`).
+  - Hard boundary, unchanged and re-verified here: this can only ever
+    reach `VALIDATED`. `trading.cfd.research_lab.register_if_passed()`
+    (unmodified) has no path to `PAPER`/`ACTIVE`, and nothing in this new
+    script calls `set_state` directly -- promotion stays a deliberate,
+    reasoned `cfd_cli.py promote-strategy` command a human types, per
+    docs/VISION.md's "What the AI Trading Manager chooses vs. what it may
+    never touch." This is the "system improves itself" mechanism the
+    vision describes -- generating and validating new candidates without
+    a human remembering to ask -- explicitly NOT the "system trades
+    itself into more risk on its own" pattern the vision forbids: risk
+    ceilings, promotion, and real-money permission are untouched by it.
+  - Also explicitly NOT code generation: a genuinely new strategy
+    *structure* (the way `mean_reversion.py` departed from trend-
+    following) still needs a person -- or Claude, asked -- to design and
+    add to `STRATEGY_SPECS`; this loop only automates re-searching
+    parameter space for structures that already exist there.
+  - No new unit tests: this is an orchestration script over
+    already-tested library code (`trading.cfd.research_lab`, covered by
+    `tests/test_cfd_research_lab.py`, and the shared TRAIN/TEST/fetch
+    helpers in `optimize_cfd_strategy.py`), the same untested-script
+    precedent every other `optimize_cfd_*.py`/`research_cfd_strategy.py`
+    driver already follows -- these need a live network connection and
+    are validated by running them, not by a unit test suite. Full
+    existing suite still 372 passing (no library code changed). Syntax/
+    import-chain verified locally; live execution verified via workflow
+    runs (see README's "Autonomous weekly research" section for what it
+    reported once run).
 
 ## Executive summary
 
