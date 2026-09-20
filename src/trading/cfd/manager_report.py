@@ -2,12 +2,16 @@
 
 Ties together everything built so far (Trade Database, Performance
 Engine, Failure Analysis, Strategy Registry, Portfolio Allocator,
-Research Lab, Paper Trading) into one consolidated report: what's
-actually happening across every registered strategy, and what still
-needs a human's attention. allocation_summary in the returned dict is
-trading.cfd.portfolio_allocator's current per-strategy risk weighting --
-purely informational here too, same as degradation: the live scheduler
-already applies these weights every run, this just makes them visible.
+Portfolio Risk Governor, Research Lab, Paper Trading) into one
+consolidated report: what's actually happening across every registered
+strategy, and what still needs a human's attention. allocation_summary
+and portfolio_risk_summary in the returned dict are purely informational,
+same as degradation: the live scheduler already applies
+trading.cfd.portfolio_allocator's weights and trading.cfd.portfolio_risk's
+ceilings every run, this just makes the current numbers visible.
+portfolio_risk_summary's equity figure is an offline approximation
+(starting_equity + realized net_return) -- this report never connects to
+Deriv, so it can't see live broker equity or unrealized P&L.
 
 This module itself NEVER takes action -- it only reports, in the form of
 the exact `cfd_cli.py` command that would carry out each suggestion (or,
@@ -31,6 +35,8 @@ from typing import Optional
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.performance import compute_performance
 from trading.cfd.portfolio_allocator import compute_allocations
+from trading.cfd.portfolio_risk import OpenRiskPosition, factor_group_totals, thesis_key
+from trading.cfd.state import list_open_trades
 from trading.cfd.strategy_registry import LifecycleState, list_all
 from trading.config import settings
 
@@ -114,6 +120,47 @@ def _paper_promotion_recommendations(paper_trades: list[dict], registry_entries:
     return recs
 
 
+def _portfolio_risk_summary(equity_estimate: float) -> dict:
+    """Current utilization of every trading.cfd.portfolio_risk ceiling,
+    purely informational (this report never rejects anything -- the live
+    scheduler's own check_new_position() call already does that at entry
+    time). equity_estimate is starting_equity + realized net_return -- an
+    approximation, not live broker equity, since this report runs offline
+    (no Deriv connection) and doesn't know about unrealized P&L on any
+    currently open position."""
+    open_trades = list_open_trades()
+    positions = [
+        OpenRiskPosition(
+            contract_id=int(cid),
+            instrument=meta.get("instrument", ""),
+            side=meta.get("side", ""),
+            risk_amount=meta.get("risk_amount", 0.0),
+            notional=meta.get("stake", 0.0) * meta.get("multiplier", 0.0),
+        )
+        for cid, meta in open_trades.items()
+    ]
+    thesis_totals: dict[str, float] = {}
+    for pos in positions:
+        key = thesis_key(pos.instrument, pos.side)
+        thesis_totals[key] = thesis_totals.get(key, 0.0) + pos.risk_amount
+
+    return {
+        "equity_basis": round(equity_estimate, 2),
+        "equity_basis_note": "starting_equity + realized net_return -- offline approximation, not live broker equity",
+        "open_position_count": len(positions),
+        "thesis_risk": {k: round(v, 2) for k, v in thesis_totals.items()},
+        "correlated_risk": {k: round(v, 2) for k, v in factor_group_totals(positions).items()},
+        "total_portfolio_risk": round(sum(p.risk_amount for p in positions), 2),
+        "total_notional_exposure": round(sum(p.notional for p in positions), 2),
+        "ceilings": {
+            "max_thesis_risk_pct": settings.cfd_max_thesis_risk_pct,
+            "max_correlated_risk_pct": settings.cfd_max_correlated_risk_pct,
+            "max_portfolio_risk_pct": settings.cfd_max_portfolio_risk_pct,
+            "max_exposure_multiple": settings.cfd_max_exposure_multiple,
+        },
+    }
+
+
 def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: Optional[float] = None) -> dict:
     """trades: trading.cfd.trade_log.load_trades()'s real Trade Database.
     paper_trades: the same, but from trading.cfd.paper_trading's separate
@@ -126,6 +173,8 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
     loss_breakdown = summarize_losses(trades)
     active_entries = [e for e in registry_entries if e.state == LifecycleState.ACTIVE.value]
     allocation_summary = compute_allocations(trades, active_entries)
+    equity_estimate = starting_equity + overall_performance.get("net_return", 0.0)
+    portfolio_risk_summary = _portfolio_risk_summary(equity_estimate)
 
     recommendations = (
         _degradation_recommendations(trades, registry_entries)
@@ -137,6 +186,7 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
         "overall_performance": overall_performance,
         "loss_breakdown": loss_breakdown,
         "allocation_summary": allocation_summary,
+        "portfolio_risk_summary": portfolio_risk_summary,
         "registry_summary": {
             state.value: [f"{e.name}@{e.version}" for e in registry_entries if e.state == state.value]
             for state in LifecycleState

@@ -1,6 +1,8 @@
 import pandas as pd
 
+from trading.cfd.portfolio_risk import OpenRiskPosition, PortfolioRiskCeilings, check_new_position
 from trading.cfd.risk import CfdRiskManager
+from trading.config import settings
 from trading.strategy.base import Action
 
 
@@ -66,7 +68,15 @@ class CfdBacktestEngine:
     level, no slippage -- matching Deriv's own guaranteed-stop-out
     behavior for Multipliers (the real product's stop/take-profit levels
     are dollar P&L triggers Deriv itself executes exactly, not orders
-    resting in a market that can gap past them)."""
+    resting in a market that can gap past them).
+
+    Every new entry also passes trading.cfd.portfolio_risk.
+    check_new_position() -- the same Portfolio Risk Governor
+    trading.cfd.scheduler applies live (per-thesis, correlated,
+    portfolio, and leverage ceilings), so a backtest across several
+    symbols at once can't validate a result live trading's own risk
+    ceilings would actually have rejected. ceilings defaults to the
+    configured settings (same values live trading uses) if not given."""
 
     def __init__(
         self,
@@ -76,6 +86,7 @@ class CfdBacktestEngine:
         max_open_positions: int = 3,
         max_daily_loss_pct: float = 0.03,
         multiplier: int = 20,
+        ceilings: PortfolioRiskCeilings = None,
     ):
         self.strategy = strategy
         self.risk = CfdRiskManager(
@@ -84,6 +95,12 @@ class CfdBacktestEngine:
             max_open_positions=max_open_positions,
             max_daily_loss_pct=max_daily_loss_pct,
             multiplier=multiplier,
+        )
+        self.ceilings = ceilings or PortfolioRiskCeilings(
+            max_thesis_risk_pct=settings.cfd_max_thesis_risk_pct,
+            max_correlated_risk_pct=settings.cfd_max_correlated_risk_pct,
+            max_portfolio_risk_pct=settings.cfd_max_portfolio_risk_pct,
+            max_exposure_multiple=settings.cfd_max_exposure_multiple,
         )
 
     @staticmethod
@@ -153,18 +170,31 @@ class CfdBacktestEngine:
 
                 elif signal.action in (Action.BUY, Action.SELL) and not self.risk.halted:
                     side = "long" if signal.action == Action.BUY else "short"
-                    stake, _, _ = self.risk.stake_and_limits(signal.price, signal.stop_price, signal.take_profit_price)
+                    stake, risk_amount, _ = self.risk.stake_and_limits(signal.price, signal.stop_price, signal.take_profit_price)
                     if stake > 0:
-                        positions[sym] = {
-                            "side": side,
-                            "entry": signal.price,
-                            "stop": signal.stop_price,
-                            "target": signal.take_profit_price,
-                            "stake": stake,
-                            "multiplier": self.risk.multiplier,
-                            "entry_date": date,
-                        }
-                        self.risk.register_open()
+                        notional = stake * self.risk.multiplier
+                        open_risk_positions = [
+                            OpenRiskPosition(
+                                contract_id=0, instrument=other_sym, side=pos["side"],
+                                risk_amount=pos["risk_amount"], notional=pos["stake"] * pos["multiplier"],
+                            )
+                            for other_sym, pos in positions.items()
+                        ]
+                        rejection = check_new_position(
+                            open_risk_positions, sym, side, risk_amount, notional, self.risk.equity, self.ceilings,
+                        )
+                        if rejection is None:
+                            positions[sym] = {
+                                "side": side,
+                                "entry": signal.price,
+                                "stop": signal.stop_price,
+                                "target": signal.take_profit_price,
+                                "stake": stake,
+                                "risk_amount": risk_amount,
+                                "multiplier": self.risk.multiplier,
+                                "entry_date": date,
+                            }
+                            self.risk.register_open()
 
             unrealized = 0.0
             for sym, pos in positions.items():

@@ -8,6 +8,12 @@ from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
 from trading.cfd.paper_trading import run_paper_trading
 from trading.cfd.portfolio_allocator import compute_allocations, risk_scale_factor
+from trading.cfd.portfolio_risk import (
+    OpenRiskPosition,
+    PortfolioRiskCeilings,
+    check_new_position,
+    thesis_key as compute_thesis_key,
+)
 from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
@@ -79,6 +85,7 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 equity_after=equity_now if pnl is not None else None,
                 exit_reason="closed_externally (stop-loss/take-profit or manual close)",
                 regime=meta.get("regime"),
+                thesis_key=meta.get("thesis_key"),
             )
         )
     return records
@@ -169,6 +176,17 @@ async def run_once():
     with no human approval needed -- per docs/VISION.md's "Autonomy
     boundaries," the AI may act on its own to reduce risk (demote,
     pause, go flat), never to increase it or promote something.
+
+    Every new entry also passes trading.cfd.portfolio_risk.
+    check_new_position() -- the Portfolio Risk Governor docs/VISION.md's
+    Revision 3 "Risk model" requires: per-thesis, correlated,
+    total-portfolio, and leverage/exposure ceilings, checked against
+    every position this system currently has open (persisted across
+    runs, not just ones opened this run), rejecting (SKIP TRADE) an
+    otherwise-valid entry purely because the PORTFOLIO is already at its
+    limit -- never satisfied by max_open_positions' raw position count
+    alone. See that module's docstring for the ceilings and the
+    (deliberately static, not live-computed) correlation model.
     """
     state = load_state()
     if state.get("paused"):
@@ -271,13 +289,40 @@ async def run_once():
         # run, before this run does anything else.
         tracked_open = list_open_trades()
         currently_open_ids = await broker.open_contract_ids()
+        reconciled_ids: set[int] = set()
         for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity):
             record_trade(record)
             pop_open_trade(record.contract_id)
+            reconciled_ids.add(record.contract_id)
             logger.info(
                 "%s: reconciled externally-closed contract %d (pnl=%s)",
                 record.instrument, record.contract_id, record.pnl,
             )
+
+        # Portfolio Risk Governor snapshot: every position this system
+        # currently has open, across every run so far (not just ones
+        # opened this run) -- rebuilt fresh each run from the same
+        # persisted state.list_open_trades() _resolve_exit_strategy_entry
+        # already trusts, minus anything just reconciled away above.
+        # Mutated in place below as positions open/close within this
+        # run's own loop, so later instruments see the up-to-date total.
+        open_risk_positions = [
+            OpenRiskPosition(
+                contract_id=int(cid),
+                instrument=meta.get("instrument", ""),
+                side=meta.get("side", ""),
+                risk_amount=meta.get("risk_amount", 0.0),
+                notional=meta.get("stake", 0.0) * meta.get("multiplier", 0.0),
+            )
+            for cid, meta in tracked_open.items()
+            if int(cid) not in reconciled_ids
+        ]
+        risk_ceilings = PortfolioRiskCeilings(
+            max_thesis_risk_pct=settings.cfd_max_thesis_risk_pct,
+            max_correlated_risk_pct=settings.cfd_max_correlated_risk_pct,
+            max_portfolio_risk_pct=settings.cfd_max_portfolio_risk_pct,
+            max_exposure_multiple=settings.cfd_max_exposure_multiple,
+        )
 
         excluded = state.get("excluded_instruments") or {}
         open_positions = await broker.open_positions()
@@ -336,6 +381,7 @@ async def run_once():
 
                 logger.info("%s: closing %s position (%s)", instrument, in_position, signal.reason)
                 pop_open_trade(contract_id)
+                open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
                 equity_before = risk.equity
                 await broker.close_position(contract_id)
                 new_balance = await broker.account_equity()
@@ -363,6 +409,7 @@ async def run_once():
                             equity_after=new_equity,
                             exit_reason="signal_exit: " + signal.reason,
                             regime=meta.get("regime"),
+                            thesis_key=meta.get("thesis_key"),
                         )
                     )
                 else:
@@ -408,6 +455,14 @@ async def run_once():
                 continue
 
             side = "long" if signal.action == Action.BUY else "short"
+            new_notional = stake * risk.multiplier
+            rejection = check_new_position(
+                open_risk_positions, instrument, side, stop_loss_amount, new_notional, risk.equity, risk_ceilings,
+            )
+            if rejection is not None:
+                logger.info("Skipping %s: Portfolio Risk Governor rejected this entry -- %s", instrument, rejection)
+                continue
+
             logger.info(
                 "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
                 side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, regime, signal.reason, strategy_tag,
@@ -429,9 +484,17 @@ async def run_once():
                         "entry_price": signal.price,
                         "stake": stake,
                         "risk_amount": stop_loss_amount,
+                        "multiplier": risk.multiplier,
+                        "thesis_key": compute_thesis_key(instrument, side),
                         "equity_before": risk.equity,
                         "regime": regime,
                     },
+                )
+                open_risk_positions.append(
+                    OpenRiskPosition(
+                        contract_id=contract_id, instrument=instrument, side=side,
+                        risk_amount=stop_loss_amount, notional=new_notional,
+                    )
                 )
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)

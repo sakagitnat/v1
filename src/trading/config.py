@@ -130,6 +130,47 @@ class Settings:
         default_factory=lambda: float(os.getenv("CFD_MAX_RISK_PER_TRADE_CEILING", "0.03"))
     )
 
+    # Portfolio Risk Governor (see trading.cfd.portfolio_risk) --
+    # docs/VISION.md's Revision 3 "Risk model" ceilings, all hard limits
+    # only a human may raise (same status as CFD_MAX_RISK_PER_TRADE_CEILING
+    # above -- reasonable, stated defaults, not yet empirically tuned).
+    # Every one is a fraction of equity except the leverage ceiling, which
+    # is a multiple of it.
+    cfd_max_thesis_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_THESIS_RISK_PCT", "0.02"))
+    )
+    """Cap on aggregate risk from positions that are the SAME underlying
+    bet (same instrument, same side) -- e.g. several long orders on
+    frxXAUUSD must never add up to more than this fraction of equity, no
+    matter how each individual order's own risk_per_trade looks in
+    isolation. See portfolio_risk.py's thesis_key()."""
+    cfd_max_correlated_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_CORRELATED_RISK_PCT", "0.03"))
+    )
+    """Cap on aggregate risk from positions correlated via a shared factor
+    (e.g. several different instruments that are all really a "USD
+    weakens" bet) -- capped separately from, and independently of, the
+    thesis ceiling above and the raw portfolio ceiling below. See
+    portfolio_risk.py's CORRELATION_FACTORS."""
+    cfd_max_portfolio_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_PORTFOLIO_RISK_PCT", "0.05"))
+    )
+    """Cap on aggregate risk across EVERY currently open position,
+    regardless of thesis or correlation -- the outermost ceiling. Matches
+    docs/VISION.md's own worked example: five independent $1 positions on
+    a $100 account is 5% total portfolio risk, and that's the target
+    ceiling for genuinely independent opportunities."""
+    cfd_max_exposure_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_EXPOSURE_MULTIPLE", "10.0"))
+    )
+    """Cap on aggregate NOTIONAL exposure (sum of stake * multiplier
+    across every open position) as a multiple of equity -- separate from
+    every risk-dollar ceiling above, because Deriv Multipliers' leverage
+    means notional exposure can be far larger than the dollar amount
+    actually at risk if a stop is hit. A starting, conservative default,
+    not yet empirically tuned -- same status as the regime/ADX defaults
+    elsewhere in this file."""
+
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
 

@@ -51,6 +51,13 @@ class TradeRecord:
     """The trading.cfd.regime classification (e.g. "trending") in effect
     when this trade was opened -- set by scheduler.py from the same
     regime the Strategy Selector used to pick this trade's strategy."""
+    thesis_key: Optional[str] = None
+    """trading.cfd.portfolio_risk.thesis_key(instrument, side) -- which
+    risk bucket this trade counted against for the per-thesis ceiling at
+    entry time, tagged here (not just recomputed later) so the audit
+    trail survives even if the thesis-grouping rule itself changes in a
+    future revision. None only for a trade logged before this field
+    existed."""
 
 
 def record_trade(trade: TradeRecord, path: Optional[Path] = None) -> None:

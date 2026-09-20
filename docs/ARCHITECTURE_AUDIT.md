@@ -53,19 +53,10 @@ anything" pass -- every item below is verified against the actual code
    realized upside) -- and this isn't a future-architecture gap, it is
    actively capping every winning trade the live `ACTIVE` strategy takes
    on the real demo account, every run, today.
-2. **No portfolio-level, per-thesis, or correlated risk ceiling exists --
-   only a per-position `risk_per_trade` and a raw position-*count* cap.**
-   `CfdRiskManager._can_open_new_position()` (`risk.py:67-68`) checks
-   only `halted`, `_open_positions >= max_open_positions`, and
-   `below_floor()` -- no aggregate open-risk dollar/percentage figure is
-   ever computed or capped, no correlation model exists anywhere, and
-   `TradeRecord` (`trade_log.py`) has no thesis/risk-bucket field at
-   all -- there is no way today to even detect "these 5 positions are
-   really one thesis" or "these positions are correlated," let alone cap
-   them as Revision 3 requires. This blocks essentially all of
-   Revision 3's "Risk model" and "Portfolio-level risk analysis"
-   sections at once; per-thesis/correlated/portfolio ceilings and
-   portfolio-level NO TRADE all need this foundation first.
+2. ~~**No portfolio-level, per-thesis, or correlated risk ceiling
+   exists.**~~ **Closed 2026-09-20** -- chosen by the user as the first
+   gap to fix, since it's the foundation the rest of Revision 3's risk
+   model depends on. See Progress log below.
 3. **Only one open position per instrument, and only an hourly decision
    cadence.** `DerivBroker.open_positions()` (`broker.py:167-186`)
    explicitly assumes "at most one open contract per symbol";
@@ -539,6 +530,77 @@ capital model. These all still match the revised vision as-is.
   passing. All three revised-gap-analysis items are now closed; the
   system matches the revised `docs/VISION.md` architecture on every point
   that audit identified.
+
+- **2026-09-20 — Revision 3 gap #2 ("no portfolio-level, per-thesis, or
+  correlated risk ceiling") closed -- the risk-model foundation the user
+  chose to build first.** New module `trading/cfd/portfolio_risk.py`
+  implements the Portfolio Risk Governor docs/VISION.md's Revision 3
+  requires, explicitly NOT satisfiable by counting positions:
+  - `thesis_key(instrument, side)` -- two positions are the same
+    underlying bet only if they share both; `CORRELATION_FACTORS`, a
+    **static, explicitly documented-as-static** map (not a computed
+    rolling correlation -- this project has no market-data
+    infrastructure for that), gives each of today's four configured
+    instruments a signed exposure to a `"usd"` factor (gold/EUR/GBP
+    long = bet against USD; USDJPY long = bet USD strengthens, since USD
+    is the base currency) -- `factor_exposures()` flips every sign for a
+    short.
+  - `check_new_position(open_positions, new_instrument, new_side,
+    new_risk_amount, new_notional, equity, ceilings)` checks, in order,
+    per-thesis, correlated (grouped by the *signed* direction of factor
+    exposure, so a natural hedge on the same factor never inflates the
+    figure -- verified by `test_natural_hedge_on_same_factor_does_not_
+    inflate_correlated_risk`), total portfolio, and leverage/exposure
+    ceilings, returning a human-readable rejection reason or `None` --
+    the caller's job is to SKIP TRADE on rejection, same semantics as
+    every other hard risk check in this codebase (min-stake-skip,
+    daily-loss-halt). It never scales a position down to fit; the user
+    explicitly asked for reject, not silent resizing.
+  - Four new hard ceilings in `Settings`
+    (`CFD_MAX_THESIS_RISK_PCT`=2%, `CFD_MAX_CORRELATED_RISK_PCT`=3%,
+    `CFD_MAX_PORTFOLIO_RISK_PCT`=5% -- matching docs/VISION.md's own
+    worked example of five independent 1% positions, `CFD_MAX_EXPOSURE_
+    MULTIPLE`=10x) -- same human-only-raisable status as
+    `CFD_MAX_RISK_PER_TRADE_CEILING`, stated as reasonable starting
+    defaults, not yet empirically tuned.
+  - `TradeRecord` (`trade_log.py`) gained a `thesis_key` field, tagged at
+    entry time and copied through on every exit path (signal-exit and
+    reconciliation) -- an explicit, audited tag in the trade record
+    itself, not just a value recomputable later from instrument/side.
+  - `scheduler.py` builds a live snapshot of every currently-open
+    position from `state.list_open_trades()` (persisted across runs, not
+    just positions opened this run) right after reconciliation, checks
+    every new entry against it before submitting the order, and updates
+    the snapshot in place as positions open/close within the same run so
+    later instruments see the current total. Newly-stored open-trade
+    metadata now also carries `multiplier` and `thesis_key`.
+  - `backtest.py`'s `CfdBacktestEngine` got the identical check (same
+    `PortfolioRiskCeilings`, defaulting to the live settings) applied
+    across its own multi-symbol simulation loop, so a backtest result
+    can no longer validate a scenario live trading's own Risk Governor
+    would actually have rejected -- `ceilings` is constructor-overridable
+    for testing a specific scenario deterministically.
+  - `manager_report.py`'s `build_report()` gained a `portfolio_risk_
+    summary` section (current thesis/correlated/portfolio/leverage
+    utilization against every ceiling) for visibility -- purely
+    informational, offline (equity approximated as starting_equity +
+    realized net_return, since this command never connects to Deriv) --
+    and `cfd_cli.py manager-report` prints it.
+  30 new tests across `tests/test_cfd_portfolio_risk.py` (17, covering
+  thesis/correlation/hedge/portfolio/leverage math in isolation),
+  `tests/test_cfd_backtest.py` (+2, a correlated pair blocked and an
+  uncorrelated pair allowed through, in a live multi-symbol backtest run),
+  and `tests/test_cfd_manager_report.py` (+1). Full suite: 292 tests
+  passing. Per the user's explicit instruction, position-count limits
+  (`max_open_positions`) were never used as a substitute for any of the
+  four new ceilings -- every one is checked in real risk dollars (or
+  notional, for leverage), independent of how many positions that
+  happens to be. Remaining Revision 3 gaps, in the user's stated order:
+  #1 (exit philosophy), #6-9 (execution realism/attribution), #4-5
+  (automatic drawdown de-risking + smoothed equity), #10 (consolidated
+  Qualification Gate), #11 (strategy pool diversity), #3 (decision
+  cadence -- deliberately last, not to be sped up before the risk
+  foundation and execution safety are both in place).
 
 ## Executive summary
 

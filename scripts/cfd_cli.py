@@ -142,12 +142,13 @@ def cmd_manager_report(_args):
     """Prints the AI Trading Manager's consolidated report
     (trading.cfd.manager_report): overall performance, loss breakdown,
     every registered strategy grouped by lifecycle state, the current
-    Portfolio Allocation weight per ACTIVE strategy (trading.cfd.
-    portfolio_allocator -- the live scheduler already applies these every
-    run, this just makes them visible), and concrete recommended
-    cfd_cli.py commands -- never applied automatically. See that module's
-    docstring for why lifecycle changes always stay a human's deliberate,
-    audited decision."""
+    Portfolio Allocation weight per ACTIVE strategy and Portfolio Risk
+    Governor ceiling utilization (trading.cfd.portfolio_allocator /
+    portfolio_risk -- the live scheduler already applies both every run,
+    this just makes them visible), and concrete recommended cfd_cli.py
+    commands -- never applied automatically. See that module's docstring
+    for why lifecycle changes always stay a human's deliberate, audited
+    decision."""
     trades = load_trades()
     paper_trades = load_trades(PAPER_LOG_PATH)
     report = build_report(trades, paper_trades)
@@ -165,6 +166,21 @@ def cmd_manager_report(_args):
         print("  (no ACTIVE strategies)")
     for tag, weight in report["allocation_summary"].items():
         print(f"  {tag}: {weight:.2%}")
+
+    risk_summary = report["portfolio_risk_summary"]
+    ceilings = risk_summary["ceilings"]
+    print(f"\nPortfolio Risk Governor (equity basis: ${risk_summary['equity_basis']:.2f}, {risk_summary['equity_basis_note']}):")
+    print(f"  Open positions: {risk_summary['open_position_count']}")
+    print(f"  Total portfolio risk: ${risk_summary['total_portfolio_risk']:.2f} (ceiling {ceilings['max_portfolio_risk_pct']:.2%} of equity)")
+    print(f"  Total notional exposure: ${risk_summary['total_notional_exposure']:.2f} (ceiling {ceilings['max_exposure_multiple']:.2f}x equity)")
+    if risk_summary["thesis_risk"]:
+        print("  By thesis:")
+        for key, amount in risk_summary["thesis_risk"].items():
+            print(f"    {key}: ${amount:.2f} (ceiling {ceilings['max_thesis_risk_pct']:.2%} of equity)")
+    if risk_summary["correlated_risk"]:
+        print("  By correlated factor group:")
+        for key, amount in risk_summary["correlated_risk"].items():
+            print(f"    {key}: ${amount:.2f} (ceiling {ceilings['max_correlated_risk_pct']:.2%} of equity)")
 
     print("\nLoss breakdown:")
     if not report["loss_breakdown"]:

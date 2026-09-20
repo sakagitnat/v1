@@ -1,10 +1,14 @@
-from trading.cfd import strategy_registry as reg
+from trading.cfd import state, strategy_registry as reg
 from trading.cfd.manager_report import build_report
 from trading.cfd.strategy_registry import LifecycleState
 
 
 def _use_tmp_registry(tmp_path, monkeypatch):
     monkeypatch.setattr(reg, "_REGISTRY_PATH", tmp_path / "cfd_strategy_registry.json")
+    # build_report() now also reads trading.cfd.state.list_open_trades()
+    # for the Portfolio Risk Governor summary -- isolate that too, or
+    # every test here would read the real production state file.
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
 
 
 def _trade(pnl, strategy="ema_crossover@v1", contract_id=1, exit_time="2026-01-01T01:00:00+00:00",
@@ -24,7 +28,28 @@ def test_report_with_no_data_is_empty_but_does_not_crash(tmp_path, monkeypatch):
     assert report["loss_breakdown"] == {}
     assert report["recommendations"] == []
     assert report["allocation_summary"] == {}
+    assert report["portfolio_risk_summary"]["open_position_count"] == 0
+    assert report["portfolio_risk_summary"]["total_portfolio_risk"] == 0.0
     assert all(v == [] for v in report["registry_summary"].values())
+
+
+def test_portfolio_risk_summary_aggregates_currently_open_positions(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    state.record_open_trade(1, {
+        "instrument": "frxXAUUSD", "side": "long", "risk_amount": 1.5, "stake": 30.0, "multiplier": 20,
+    })
+    state.record_open_trade(2, {
+        "instrument": "frxEURUSD", "side": "long", "risk_amount": 1.0, "stake": 20.0, "multiplier": 20,
+    })
+    report = build_report([], [])
+    summary = report["portfolio_risk_summary"]
+    assert summary["open_position_count"] == 2
+    assert summary["total_portfolio_risk"] == 2.5
+    assert summary["thesis_risk"]["frxXAUUSD:long"] == 1.5
+    assert summary["thesis_risk"]["frxEURUSD:long"] == 1.0
+    assert summary["correlated_risk"]["usd:short"] == 2.5  # both are "USD weakens" bets
+    assert summary["total_notional_exposure"] == 1000.0  # (30*20) + (20*20)
+    assert summary["ceilings"]["max_portfolio_risk_pct"] > 0
 
 
 def test_registry_summary_groups_by_state(tmp_path, monkeypatch):

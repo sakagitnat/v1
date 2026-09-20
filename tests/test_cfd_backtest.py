@@ -1,6 +1,7 @@
 import pandas as pd
 
 from trading.cfd.backtest import CfdBacktestEngine
+from trading.cfd.portfolio_risk import PortfolioRiskCeilings
 from trading.strategy.base import Action, Signal
 
 
@@ -110,6 +111,62 @@ def test_max_open_positions_blocks_a_second_symbol_entry():
     result = engine.run(bars)
     assert len(result["trades"]) == 0  # neither closed yet, but only one should have opened
     assert engine.risk.open_positions == 1
+
+
+def test_portfolio_risk_governor_blocks_a_correlated_second_entry():
+    # frxXAUUSD long and frxEURUSD long are both "USD weakens" bets (see
+    # trading.cfd.portfolio_risk.CORRELATION_FACTORS) -- a tight correlated
+    # ceiling must block the second entry even though max_open_positions
+    # alone would have allowed it.
+    closes = [100, 100, 100]
+    bars = {"frxXAUUSD": _bars(closes), "frxEURUSD": _bars(closes)}
+    actions = {1: Signal("_", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=110.0)}
+    strategy_a = _ScriptedStrategy(actions)
+    strategy_b = _ScriptedStrategy(actions)
+
+    class _DualStrategy:
+        def prepare(self, bars):
+            return bars.copy()
+
+        def signal_for_row(self, instrument, row, prev_row, in_position):
+            s = strategy_a if instrument == "frxXAUUSD" else strategy_b
+            return s.signal_for_row(instrument, row, prev_row, in_position)
+
+    # risk_amount per entry = 1000 * 0.01 = $10; correlated ceiling of
+    # 1.5% of $1000 ($15) allows the first $10 entry but blocks a second
+    # correlated $10 entry (would total $20).
+    ceilings = PortfolioRiskCeilings(
+        max_thesis_risk_pct=1.0, max_correlated_risk_pct=0.015,
+        max_portfolio_risk_pct=1.0, max_exposure_multiple=1000.0,
+    )
+    engine = CfdBacktestEngine(_DualStrategy(), starting_equity=1000.0, max_open_positions=5, ceilings=ceilings)
+    result = engine.run(bars)
+    assert len(result["trades"]) == 0  # neither closed yet
+    assert engine.risk.open_positions == 1  # only one of the two correlated entries got through
+
+
+def test_portfolio_risk_governor_allows_uncorrelated_entries_up_to_max_open_positions():
+    closes = [100, 100, 100]
+    bars = {"frxXAUUSD": _bars(closes), "frxUSDJPY": _bars(closes)}  # opposite USD-factor sign
+    actions = {1: Signal("_", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=110.0)}
+    strategy_a = _ScriptedStrategy(actions)
+    strategy_b = _ScriptedStrategy(actions)
+
+    class _DualStrategy:
+        def prepare(self, bars):
+            return bars.copy()
+
+        def signal_for_row(self, instrument, row, prev_row, in_position):
+            s = strategy_a if instrument == "frxXAUUSD" else strategy_b
+            return s.signal_for_row(instrument, row, prev_row, in_position)
+
+    ceilings = PortfolioRiskCeilings(
+        max_thesis_risk_pct=1.0, max_correlated_risk_pct=0.015,
+        max_portfolio_risk_pct=1.0, max_exposure_multiple=1000.0,
+    )
+    engine = CfdBacktestEngine(_DualStrategy(), starting_equity=1000.0, max_open_positions=5, ceilings=ceilings)
+    result = engine.run(bars)
+    assert engine.risk.open_positions == 2  # both got through -- opposite-signed factor, not correlated
 
 
 def test_equity_curve_reflects_unrealized_pnl_while_open():

@@ -599,6 +599,51 @@ strategies only ever lowers or holds any one strategy's risk, so -- like
 demotion -- it needs no human approval. `cfd_cli.py manager-report`
 prints the current weights (`allocation_summary`) for visibility.
 
+**Portfolio Risk Governor.** `trading/cfd/portfolio_risk.py`
+(`check_new_position`, called by `scheduler.py` for every candidate entry
+and by `backtest.py`'s `CfdBacktestEngine` in its own multi-symbol
+simulation loop) is the risk-model foundation docs/VISION.md's Revision 3
+requires -- deliberately **not** satisfiable by `max_open_positions`
+alone: four ceilings, all checked in real risk dollars (or notional, for
+leverage), and any breach **rejects** the entry (SKIP TRADE), never
+silently shrinks it.
+- **Per-thesis** (`CFD_MAX_THESIS_RISK_PCT`, 2%): `thesis_key(instrument,
+  side)` -- two positions are the same underlying bet only if they share
+  both. Five long orders on `frxXAUUSD` is one thesis, not five
+  independent opportunities, exactly the disguised risk-split
+  docs/VISION.md forbids.
+- **Correlated** (`CFD_MAX_CORRELATED_RISK_PCT`, 3%): a **static,
+  explicitly-documented-as-static** factor map (`CORRELATION_FACTORS` --
+  not a computed rolling correlation; this project has no market-data
+  infrastructure for that yet) gives each configured instrument a signed
+  exposure to a `"usd"` factor (long gold/EUR/GBP = bet against USD; long
+  USDJPY = bet USD strengthens, since USD is the pair's base currency).
+  Positions are grouped by the *signed direction* of that exposure, so a
+  natural hedge (opposite-signed bets on the same factor) is tracked
+  separately and never inflates the figure -- only genuinely same-direction
+  correlated bets (e.g. long gold *and* long EURUSD, both "USD weakens"
+  bets) get summed together.
+- **Total portfolio** (`CFD_MAX_PORTFOLIO_RISK_PCT`, 5%): every
+  currently-open position's risk, summed, regardless of thesis or
+  correlation -- matches docs/VISION.md's own worked example (five
+  genuinely independent $1 positions on a $100 account is 5%, and that's
+  fine).
+- **Leverage/exposure** (`CFD_MAX_EXPOSURE_MULTIPLE`, 10x equity): total
+  notional (stake × multiplier, summed) -- separate from every
+  risk-dollar ceiling above, since Deriv's leverage means notional
+  exposure can be far larger than the dollar amount actually at risk if a
+  stop is hit.
+
+All four are hard ceilings, same human-only-raisable status as
+`CFD_MAX_RISK_PER_TRADE_CEILING` -- stated, reasonable starting defaults,
+not yet empirically tuned. The snapshot of currently-open positions comes
+from `state.list_open_trades()` (persisted across runs, not just
+positions opened this run) and is kept up to date in place as positions
+open/close within the same scheduler run. `TradeRecord` now tags each
+trade with the `thesis_key` it counted against at entry time, and
+`cfd_cli.py manager-report` prints the current utilization of every
+ceiling (`portfolio_risk_summary`) for visibility.
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted
