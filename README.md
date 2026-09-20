@@ -804,6 +804,26 @@ log, tracked as follow-up work rather than faked here. The overall
 verdict is `ready_for_human_review` only once every checkable criterion
 passes; anything less reads `not_yet`.
 
+**Strategy Pool Diversity.** `trading/cfd/mean_reversion.py`
+(`MeanReversionStrategy`) starts closing Revision 3 gap #11: both
+previously registered strategies (`ema_crossover`, `donchian_breakout`)
+are trend-following, so `trading.cfd.regime`'s `"ranging"` classification
+had zero registered strategies suited to it since the Strategy Selector
+was built -- every ranging period was a `NO TRADE` by omission, not
+design. Mean reversion fades price extremes back toward a Bollinger Band
+mean instead of following a breakout or crossover -- a genuinely
+different structural bet, real diversification against the existing
+pool rather than another correlated trend-following variant. Entry: a
+close outside the bands (long below the lower band, short above the
+upper); exit: reversion to the middle band, or an ATR-based stop/target
+backstop, same protective shape the other two strategies already use.
+Registered as `mean_reversion@v1` (`CANDIDATE`, `suited_regimes=
+["ranging"]`) with reasonable, sourced placeholder params -- not yet
+validated. `scripts/optimize_cfd_mean_reversion.py` (wired into the "CFD
+Manual Command" workflow as `optimize-mean-reversion`) runs the same
+TRAIN/TEST grid search `donchian_breakout@v2` was validated through
+before this strategy can be promoted past `CANDIDATE`.
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted

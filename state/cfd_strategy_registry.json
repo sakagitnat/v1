@@ -81,5 +81,30 @@
     "suited_regimes": [
       "trending"
     ]
+  },
+  "mean_reversion@v1": {
+    "name": "mean_reversion",
+    "version": "v1",
+    "params": {
+      "band_window": 20,
+      "band_std": 2.0,
+      "atr_window": 14,
+      "atr_stop_mult": 2.0,
+      "atr_target_mult": 1.5
+    },
+    "state": "CANDIDATE",
+    "created_at": "2026-09-20T07:19:38.805898+00:00",
+    "updated_at": "2026-09-20T07:19:38.805943+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented, not yet run through optimize_cfd_mean_reversion.py's TRAIN/TEST validation -- same starting point donchian_breakout@v1 had before its own grid search found v2. Params are reasonable, sourced placeholders (see mean_reversion.py's docstring), not validated numbers.",
+        "at": "2026-09-20T07:19:38.805948+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging"
+    ]
   }
 }

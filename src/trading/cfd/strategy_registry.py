@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from trading.cfd.breakout import DonchianBreakoutStrategy
+from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.strategy import EmaCrossoverStrategy
 
 _REGISTRY_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_strategy_registry.json"
@@ -60,6 +61,7 @@ _FORWARD_ORDER = [
 STRATEGY_CLASSES = {
     "ema_crossover": EmaCrossoverStrategy,
     "donchian_breakout": DonchianBreakoutStrategy,
+    "mean_reversion": MeanReversionStrategy,
 }
 
 

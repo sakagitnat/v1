@@ -70,15 +70,21 @@ anything" pass -- every item below is verified against the actual code
 10. ~~**Qualification Gate is not consolidated into one measurable
     report.**~~ **Closed 2026-09-20** -- see Progress log below.
 11. **Strategy pool is still 2 members, both trend-following, both on a
-    single timeframe (H1).** Already tracked as an open gap before this
-    revision, but now more consequential: Revision 3's "Opportunity
-    Detection" stage and its whole growth formula
-    (`opportunities × expectancy × diversification × ...`) depend on
-    there being real opportunity diversity to find. 4 configured
-    instruments and `CFD_MAX_OPEN_POSITIONS=3` mean the *machinery* for
-    holding several concurrent independent positions already exists and
-    isn't itself a gap -- it's just thin in practice with only two
-    same-direction strategies to fill those slots with.
+    single timeframe (H1).** ~~Partially closed 2026-09-20~~ -- see
+    Progress log below. A third strategy (`mean_reversion`, structurally
+    a mean-reversion/fade rather than trend-following) is now registered
+    (`mean_reversion@v1`, `CANDIDATE`, `suited_regimes=["ranging"]`),
+    closing the specific hole where the "ranging" regime had zero
+    registered strategies. Still open: it's registered as `CANDIDATE`
+    with unvalidated placeholder params, not yet promoted past
+    `optimize_cfd_mean_reversion.py`'s TRAIN/TEST gate the way
+    `donchian_breakout@v2` was; and the pool is still single-timeframe
+    (H1) and still only 3 members against 4 configured instruments --
+    real opportunity diversity per Revision 3's growth formula
+    (`opportunities × expectancy × diversification × ...`) is closer but
+    not exhausted. 4 configured instruments and `CFD_MAX_OPEN_POSITIONS=3`
+    mean the *machinery* for holding several concurrent independent
+    positions already exists and isn't itself a gap.
 
 **Not gaps -- already consistent with Revision 3, worth stating so they
 don't get "fixed" into something worse:** no fixed daily trade-count
@@ -783,6 +789,46 @@ capital model. These all still match the revised vision as-is.
   pass. Only gaps #11 (strategy pool diversity) and #3 (decision
   cadence, still deliberately last) remain from the Revision 3 gap
   analysis.
+- **2026-09-20 — Revision 3 gap #11 ("strategy pool is still 2 members,
+  both trend-following") partially closed.** New module
+  `trading/cfd/mean_reversion.py` (`MeanReversionStrategy`): fades price
+  extremes back toward a Bollinger Band mean instead of following a
+  breakout/crossover -- entry on a close outside the bands (long below
+  the lower band, short above the upper), exit on reversion to the
+  middle band or an ATR-based stop/target backstop (same protective
+  shape `EmaCrossoverStrategy`/`DonchianBreakoutStrategy` already use, so
+  entry logic is the one structural variable under test, not exit
+  mechanics). A genuinely different structural bet from the existing
+  pool, not a parameter retune -- picked specifically because
+  `trading.cfd.regime`'s `"ranging"` classification has had zero
+  registered strategies suited to it since the Strategy Selector was
+  built, meaning every ranging period was a `NO TRADE` by omission, not
+  design.
+  - Registered into `strategy_registry.STRATEGY_CLASSES` and seeded as
+    `mean_reversion@v1` (`CANDIDATE`, `suited_regimes=["ranging"]`,
+    `scripts/seed_strategy_registry.py`) with the same disposition
+    `donchian_breakout@v1` originally had: reasonable, sourced
+    placeholder params (20/2.0 Bollinger Band textbook defaults; ATR
+    stop/target mirroring the other two strategies' shape), explicitly
+    UNVALIDATED, not yet run through a TRAIN/TEST grid search.
+  - New `scripts/optimize_cfd_mean_reversion.py`, same TRAIN/TEST/
+    overfit-safety discipline as `optimize_cfd_breakout.py` (imports its
+    shared harness rather than copying it), wired into the "CFD Manual
+    Command" GitHub Actions workflow as `optimize-mean-reversion`. Not
+    yet run against live history -- `mean_reversion@v1` stays
+    `CANDIDATE` with placeholder params until it is, same gate
+    `donchian_breakout@v2` went through before promotion to `VALIDATED`.
+  - 9 new tests (`tests/test_cfd_mean_reversion.py`, mirroring
+    `test_cfd_breakout.py`'s pattern: entry/exit signal shape, stop/
+    target computation, warmup-NaN handling, plus one `prepare()`
+    coverage test for the indicator columns it adds), full suite: 367
+    tests passing.
+  - Still open from gap #11: `mean_reversion@v1` needs the actual grid
+    search run and, if it clears TRAIN/TEST, promotion through
+    `VALIDATED` before it can ever reach `ACTIVE` and actually trade;
+    the pool is still single-timeframe (H1); no volatility- or
+    session-based strategy variant exists yet. Tracked as remaining work,
+    not silently closed.
 
 ## Executive summary
 

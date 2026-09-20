@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, performance, paper-performance, failures, manager-report, qualify-strategy, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy]
+        options: [status, performance, paper-performance, failures, manager-report, qualify-strategy, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy, optimize-mean-reversion]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
@@ -141,6 +141,9 @@ jobs:
               ;;
             optimize-breakout)
               python scripts/optimize_cfd_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            optimize-mean-reversion)
+              python scripts/optimize_cfd_mean_reversion.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
               ;;
             research-strategy)
               python scripts/research_cfd_strategy.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"

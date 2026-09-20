@@ -1,8 +1,9 @@
-"""One-time seed: registers the two CFD strategies that already exist in
-code (trading/cfd/strategy.py's EmaCrossoverStrategy, trading/cfd/
-breakout.py's DonchianBreakoutStrategy) into the Strategy Registry
-(trading/cfd/strategy_registry.py) -- see docs/VISION.md's "Strategy
-lifecycle" section and docs/ARCHITECTURE_AUDIT.md's Phase 2.
+"""One-time seed: registers the CFD strategies that already exist in code
+(trading/cfd/strategy.py's EmaCrossoverStrategy, trading/cfd/breakout.py's
+DonchianBreakoutStrategy, trading/cfd/mean_reversion.py's
+MeanReversionStrategy) into the Strategy Registry (trading/cfd/
+strategy_registry.py) -- see docs/VISION.md's "Strategy lifecycle"
+section and docs/ARCHITECTURE_AUDIT.md's Phase 2.
 
 Idempotent: skips any (name, version) already registered, so it's safe
 to run again later (e.g. after adding a new strategy to this file)
@@ -54,10 +55,12 @@ def _retire_if_not_already(name: str, version: str, reason: str) -> None:
 
 
 def main() -> None:
-    # Both existing strategies are trend-following in nature -- see
-    # trading.cfd.regime's docstring for why "trending" is the only
-    # regime either is tagged for, and what happens (NO TRADE) in a
-    # "ranging" one until a mean-reversion/range strategy joins the pool.
+    # ema_crossover and donchian_breakout are both trend-following in
+    # nature -- see trading.cfd.regime's docstring for why "trending" is
+    # the only regime either is tagged for. mean_reversion (below) is the
+    # first strategy tagged "ranging", closing the gap where every
+    # ranging period was a NO TRADE by omission (see
+    # docs/ARCHITECTURE_AUDIT.md gap #11).
     _seed(
         "ema_crossover",
         "v1",
@@ -114,6 +117,22 @@ def main() -> None:
         "Superseded by v2, registered with the parameters actually found and validated by "
         "optimize_cfd_breakout.py's grid search -- v1's params were always placeholders (see breakout.py's "
         "own docstring) and were never the ones tested.",
+    )
+    _seed(
+        "mean_reversion",
+        "v1",
+        {
+            "band_window": 20,
+            "band_std": 2.0,
+            "atr_window": 14,
+            "atr_stop_mult": 2.0,
+            "atr_target_mult": 1.5,
+        },
+        LifecycleState.CANDIDATE,
+        "Implemented, not yet run through optimize_cfd_mean_reversion.py's TRAIN/TEST validation -- "
+        "same starting point donchian_breakout@v1 had before its own grid search found v2. Params are "
+        "reasonable, sourced placeholders (see mean_reversion.py's docstring), not validated numbers.",
+        regimes=["ranging"],
     )
 
 
