@@ -11,7 +11,170 @@ been exercised against the real Deriv demo account** -- but see
 "Revised gap analysis (2026-09-20)" below: `docs/VISION.md` was revised
 the same day to correct a too-narrow reading of the original brief, and
 three structural gaps against the *revised* vision were opened, tracked
-there. **All three are now closed** -- see Progress log.
+there. **All three are now closed** -- see Progress log. `docs/VISION.md`
+was then revised again the same day ("Revision 3") with a much fuller
+risk/execution model -- see "Revision 3 gap analysis" immediately below,
+**read-only, nothing in it has been fixed yet** -- the user asked for
+every conflict identified before any of it is touched.
+
+## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
+
+`docs/VISION.md`'s Revision 3 (the user's message converging with GPT's
+independent read of the same architecture) is far more specific than
+either prior revision about the risk model, exit philosophy, and
+execution integrity a real Adaptive AI Trading Manager needs. This
+section is the user-requested "point out every conflict before fixing
+anything" pass -- every item below is verified against the actual code
+(file/line, not a guess), ranked roughly by how much it matters, and
+**none of it has been changed yet**.
+
+1. **[Most severe -- live in production right now] Every registered
+   strategy's take-profit is a fixed R-multiple, sent to Deriv as a
+   whole-position hard limit order that auto-closes the ENTIRE
+   contract.** `EmaCrossoverStrategy.signal_for_row()`
+   (`trading/cfd/strategy.py:111-119`) and
+   `DonchianBreakoutStrategy.signal_for_row()`
+   (`trading/cfd/breakout.py:94-99`) both compute
+   `target = price +/- atr_target_mult * atr` -- a fixed multiple of the
+   stop distance (2R for `ema_crossover@v1`'s defaults, currently
+   `ACTIVE` and trading live; ~1.6R for `donchian_breakout@v2`'s
+   validated params). `scheduler.py` passes this straight to
+   `broker.submit_multiplier_order(..., take_profit_amount=...)`
+   (`broker.py:222-251`), which Deriv itself auto-closes the *whole*
+   contract at, per `limit_order.take_profit` -- not a suggestion the
+   bot's own logic could override mid-trade. There is no trailing stop,
+   no partial-close, and no adaptive/regime-aware exit anywhere in the
+   codebase (confirmed: `grep`-ing the whole `trading/cfd` package for
+   "trailing" or "partial" turns up nothing but an unrelated phrase in
+   `regime.py`'s volatility-lookback docstring).
+   Directly contradicts Revision 3's "Position holding period and exit
+   philosophy" section (no uniform fixed take-profit, partial close
+   required, trailing stop required, initial risk decoupled from
+   realized upside) -- and this isn't a future-architecture gap, it is
+   actively capping every winning trade the live `ACTIVE` strategy takes
+   on the real demo account, every run, today.
+2. **No portfolio-level, per-thesis, or correlated risk ceiling exists --
+   only a per-position `risk_per_trade` and a raw position-*count* cap.**
+   `CfdRiskManager._can_open_new_position()` (`risk.py:67-68`) checks
+   only `halted`, `_open_positions >= max_open_positions`, and
+   `below_floor()` -- no aggregate open-risk dollar/percentage figure is
+   ever computed or capped, no correlation model exists anywhere, and
+   `TradeRecord` (`trade_log.py`) has no thesis/risk-bucket field at
+   all -- there is no way today to even detect "these 5 positions are
+   really one thesis" or "these positions are correlated," let alone cap
+   them as Revision 3 requires. This blocks essentially all of
+   Revision 3's "Risk model" and "Portfolio-level risk analysis"
+   sections at once; per-thesis/correlated/portfolio ceilings and
+   portfolio-level NO TRADE all need this foundation first.
+3. **Only one open position per instrument, and only an hourly decision
+   cadence.** `DerivBroker.open_positions()` (`broker.py:167-186`)
+   explicitly assumes "at most one open contract per symbol";
+   `scheduler.py`'s `open_positions[instrument]` tracking is single-slot
+   per instrument to match. `.github/workflows/cfd-trading.yml` runs the
+   scheduler on `cron: "5 * * * 1-5"` -- roughly once an hour, matching
+   `EmaCrossoverStrategy`'s H1 bars. Not a direct contradiction of
+   Revision 3's A-E example (those can be different instruments), but it
+   caps how many genuinely independent opportunities the system can even
+   notice in a day, and rules out ever holding two independent theses on
+   the same instrument at once -- worth having in view given "0 to 15
+   trades a day, driven by real opportunity count" is now an explicit
+   target range, not just a hypothetical.
+4. **No automatic drawdown-tiered risk reduction -- the mechanism exists,
+   nothing triggers it.** `trading/cfd/operating_mode.py`'s
+   Defensive/Normal/Aggressive/Recovery multipliers are correctly bounded
+   by `CFD_MAX_RISK_PER_TRADE_CEILING`, but `cfd_cli.py set-mode` is the
+   *only* way a mode ever changes -- nothing computes current drawdown
+   severity and switches modes automatically. Revision 3's "Drawdown
+   handling" section wants this to happen on its own (a risk-reducing
+   action, squarely inside the Autonomy boundaries the AI already may act
+   on unilaterally) rather than waiting on a human to notice and run
+   `set-mode`.
+5. **No smoothed-equity / high-water-mark risk basis.**
+   `CfdRiskManager.equity` (`risk.py:27`) is raw current virtual equity,
+   used directly every run for `risk_amount = equity * risk_per_trade` --
+   no smoothing, no high-water-mark gate on how fast a recent gain
+   re-baselines risk upward. Revision 3 explicitly asks for this to avoid
+   risk oscillating with short-term noise (e.g. $100 -> $120 shouldn't
+   instantly scale every risk calculation to the new figure).
+6. **Backtests don't model spread, slippage, commission, financing/
+   rollover, or price gaps.** `CfdBacktestEngine._pnl()`
+   (`backtest.py:89-92`) is pure `stake * multiplier * pct_price_move`,
+   and the class docstring explicitly documents stop/target fills at
+   "the exact configured price level, no slippage." Every backtest,
+   walk-forward, and Monte Carlo number produced so far for both
+   registered strategies is therefore optimistic relative to live
+   reality -- and for any multi-hour/multi-day hold Revision 3 now
+   explicitly permits, overnight financing/rollover isn't modeled at
+   all, meaning a longer hold's *validated* numbers currently don't
+   reflect a cost that would actually apply to it live.
+7. **`risk_per_trade` sizing has no slippage/execution buffer.**
+   `stake_and_limits()` (`risk.py:107-112`) sizes the stake to hit
+   exactly `risk_amount` assuming a perfect fill at the stop price.
+   Revision 3's clarification that "risk 1%" must leave headroom for
+   execution/slippage around the stop isn't reflected in the sizing
+   formula today -- related to gap #6 but distinct (this is about
+   sizing, not backtest cost accounting).
+8. **Manual or foreign broker activity would silently blend into virtual
+   equity.** `equity_for_account()`/`virtual_equity()`
+   (`capital.py:18-51`) derive virtual equity purely from the delta
+   between the current broker balance and the recorded baseline -- any
+   balance-moving activity this system didn't itself initiate (a manual
+   trade placed directly in Deriv's UI, or an unrelated script hitting
+   the same account) would be silently absorbed into the bot's own P&L
+   with no detection or flagging. Worth being honest that this session's
+   own manual CLI smoke-testing against the live account (e.g. ad-hoc
+   `test-order`/`close-position` calls, if any actually changed the
+   balance) would have hit this same gap.
+9. **Idempotency is real but partial -- no duplicate-order risk, but a
+   real attribution-loss window.** New-entry decisions are correctly
+   grounded in Deriv's own live portfolio
+   (`broker.open_positions()`/`open_contract_ids()`, fetched fresh every
+   run), so a GitHub Actions retry genuinely cannot double-open a
+   position -- this part already satisfies Revision 3's "never a
+   duplicate order" requirement. But `state.record_open_trade()`
+   (`state.py:101-108`) writes to the *local* state file immediately,
+   while `.github/workflows/cfd-trading.yml`'s git commit+push of that
+   file happens only in a separate step at the very end of the job. If
+   the job crashes or the push fails between order submission and that
+   commit, the entry's strategy/regime tag (and, once it exists, its
+   thesis/risk-bucket tag) is lost for that run -- the existing "no
+   tracked metadata" fallback in `_resolve_exit_strategy_entry`
+   (`scheduler.py:85-104`) handles the position not being orphaned, but
+   the audit trail for it is gone.
+10. **Qualification Gate is not consolidated into one measurable report.**
+    `validation.py` (walk-forward, Monte Carlo), `research_lab.py`
+    (candidate generation + gating to `VALIDATED`), and `paper_trading.py`
+    (forward simulation) each do their own piece, and strategy versions
+    are already naturally frozen once registered (`register()` refuses to
+    overwrite an existing version -- this part of Revision 3's
+    "Qualification environment" requirement is already satisfied for
+    free). But nothing produces the single "qualified for risk level X:
+    yes/no" report Revision 3's "Qualification Gate" section describes,
+    checking every item (duplicate-execution history, live-vs-backtest
+    deviation, etc.) in one place before a human is asked to consider
+    real money.
+11. **Strategy pool is still 2 members, both trend-following, both on a
+    single timeframe (H1).** Already tracked as an open gap before this
+    revision, but now more consequential: Revision 3's "Opportunity
+    Detection" stage and its whole growth formula
+    (`opportunities × expectancy × diversification × ...`) depend on
+    there being real opportunity diversity to find. 4 configured
+    instruments and `CFD_MAX_OPEN_POSITIONS=3` mean the *machinery* for
+    holding several concurrent independent positions already exists and
+    isn't itself a gap -- it's just thin in practice with only two
+    same-direction strategies to fill those slots with.
+
+**Not gaps -- already consistent with Revision 3, worth stating so they
+don't get "fixed" into something worse:** no fixed daily trade-count
+exists anywhere in the code (trade frequency is already purely
+signal-driven, never quota-driven); default `risk_per_trade` (1%) with
+`CFD_MAX_RISK_PER_TRADE_CEILING` as a hard, human-only-raisable ceiling
+already matches "growth from multiplication, not from bigger bets";
+autonomous demotion (`decay_supervisor.py`) and portfolio allocation
+(`portfolio_allocator.py`) from the prior revision already match "AI may
+move risk down on its own, never up" and don't need to be revisited for
+Revision 3 -- they compose with the ceilings above once those exist,
+they don't conflict with them.
 
 ## Revised gap analysis (2026-09-20)
 
