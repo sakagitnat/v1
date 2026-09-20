@@ -10,7 +10,9 @@ from trading.cfd.regime import (
     VOLATILITY_NORMAL,
     VOLATILITY_UNKNOWN,
     classify_regime,
+    classify_regime_series,
     classify_volatility,
+    classify_volatility_series,
 )
 
 
@@ -128,3 +130,40 @@ def test_classify_volatility_reads_high_for_a_more_active_tail():
 
 def test_classify_volatility_returns_unknown_with_too_little_history():
     assert classify_volatility(_ranging_bars(n=20), atr_window=14) == VOLATILITY_UNKNOWN
+
+
+# classify_regime_series()/classify_volatility_series() are vectorized
+# siblings of the live, last-bar-only functions above, built for
+# scripts/diagnose_cfd_regime.py's per-bar research -- correctness here
+# means "agrees with the live function at the last bar," not a second,
+# independent definition of the same thresholds to drift out of sync.
+
+
+def test_regime_series_matches_the_live_classifier_at_the_last_bar():
+    for bars in (_trending_bars(), _ranging_bars(), _unstable_bars()):
+        series = classify_regime_series(bars)
+        assert series.index.equals(bars.index)
+        assert series.iloc[-1] == classify_regime(bars)
+
+
+def test_regime_series_reads_unknown_before_enough_adx_history():
+    bars = _trending_bars(5)
+    series = classify_regime_series(bars, adx_window=14)
+    assert (series == UNKNOWN).all()
+
+
+def test_volatility_series_matches_the_live_classifier_at_the_last_bar():
+    for bars in (
+        _ranging_bars(n=60, amplitude=0.3),
+        _tail_volatility_bars(calm_amplitude=0.3, tail_amplitude=0.05),
+        _tail_volatility_bars(calm_amplitude=0.3, tail_amplitude=0.6),
+    ):
+        series = classify_volatility_series(bars)
+        assert series.index.equals(bars.index)
+        assert series.iloc[-1] == classify_volatility(bars)
+
+
+def test_volatility_series_reads_unknown_before_enough_history():
+    bars = _ranging_bars(n=20)
+    series = classify_volatility_series(bars, atr_window=14)
+    assert (series == VOLATILITY_UNKNOWN).all()

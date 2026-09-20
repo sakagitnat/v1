@@ -101,6 +101,73 @@ def classify_volatility(
     return VOLATILITY_NORMAL
 
 
+def classify_volatility_series(
+    bars: pd.DataFrame,
+    atr_window: int = 14,
+    lookback: int = 100,
+    low_ratio: float = 0.6,
+    high_ratio: float = 1.5,
+) -> pd.Series:
+    """Vectorized sibling of classify_volatility(): the same latest/
+    trailing-median-ratio logic, evaluated at every bar instead of just
+    the most recent one. Exists for research/diagnostic use (e.g.
+    scripts/diagnose_cfd_regime.py's regime-substructure analysis) where
+    the per-bar history is needed, not just today's read -- not used by
+    any live decision path, which only ever needs "right now" and keeps
+    calling classify_volatility(). `.rolling(lookback).median()` is the
+    honest bar-by-bar equivalent of classify_volatility()'s `iloc[
+    -lookback:].median()` when called at successive live bars: at each
+    point it only looks backward, so this carries no more lookahead than
+    the live function already doesn't have."""
+    # _atr_pct_series() dropna()s the leading atr_window warmup bars, so
+    # it's shorter than bars.index -- build the result on ITS index (the
+    # only one every other series here shares) and reindex onto the full
+    # bars.index only at the end, rather than mixing a shorter boolean
+    # mask into a full-length Series (misaligned index -> pandas raises).
+    atr_pct = _atr_pct_series(bars, atr_window)
+    median = atr_pct.rolling(lookback, min_periods=MIN_VOLATILITY_HISTORY).median()
+    ratio = atr_pct / median
+    result = pd.Series(VOLATILITY_UNKNOWN, index=atr_pct.index)
+    valid = median.notna() & (median > 0)
+    result.loc[valid & (ratio >= high_ratio)] = VOLATILITY_HIGH
+    result.loc[valid & (ratio <= low_ratio)] = VOLATILITY_LOW
+    result.loc[valid & (ratio > low_ratio) & (ratio < high_ratio)] = VOLATILITY_NORMAL
+    return result.reindex(bars.index, fill_value=VOLATILITY_UNKNOWN)
+
+
+def classify_regime_series(
+    bars: pd.DataFrame,
+    adx_window: int = 14,
+    trend_threshold: float = 25.0,
+    atr_window: int = 14,
+    volatility_lookback: int = 100,
+    unstable_volatility_ratio: float = 2.5,
+) -> pd.Series:
+    """Vectorized sibling of classify_regime(): same thresholds, same
+    TRENDING/RANGING/UNSTABLE/UNKNOWN labels, evaluated at every bar
+    instead of only the latest one. Exists for the same research/
+    diagnostic reason classify_volatility_series() does -- see its
+    docstring. Not used by any live decision path."""
+    adx_series = adx(bars["high"], bars["low"], bars["close"], adx_window)
+    trending = adx_series >= trend_threshold
+
+    # _atr_pct_series() dropna()s its atr_window warmup bars, so it's
+    # shorter than bars.index/adx_series -- reindex back onto the full
+    # index (NaN for the dropped bars) before combining with `trending`,
+    # or the misaligned-shorter-index boolean mask raises.
+    atr_pct = _atr_pct_series(bars, atr_window).reindex(bars.index)
+    vol_median = atr_pct.rolling(volatility_lookback, min_periods=MIN_VOLATILITY_HISTORY).median()
+    vol_ratio = atr_pct / vol_median
+    unstable = (~trending) & vol_median.notna() & (vol_median > 0) & (vol_ratio >= unstable_volatility_ratio)
+
+    result = pd.Series(UNKNOWN, index=bars.index)
+    known = adx_series.notna()
+    result.loc[known & trending] = TRENDING
+    result.loc[known & ~trending] = RANGING
+    result.loc[known & unstable] = UNSTABLE
+    return result
+
+
 def classify_regime(
     bars: pd.DataFrame,
     adx_window: int = 14,

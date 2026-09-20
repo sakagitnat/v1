@@ -908,6 +908,21 @@ guess. The "ranging" regime gap in gap #11 is still open -- a
 session/time-of-day approach, a different timeframe, or a different data
 source are still untried.
 
+Before building a fourth fade on the same assumption, `scripts/
+diagnose_cfd_regime.py` checks the assumption itself: does
+`trading.cfd.regime`'s `RANGING` label actually mean "price reverts
+toward a level/mean" on this data, or is it mixing genuinely quiet
+consolidation with pre-breakout compression or noisy chop -- three
+structures a single fade has no business treating identically? It's
+descriptive, not a strategy: no parameters fitted, no CAGR reported,
+just regime composition (by instrument and rough session), episode
+persistence/transitions, and forward return/excursion after a `RANGING`
+episode starts, with no trading logic applied. Backed by two new
+vectorized functions in `trading/cfd/regime.py`
+(`classify_regime_series()`/`classify_volatility_series()` -- per-bar
+siblings of the existing live, last-bar-only classifiers, used only for
+this kind of research). Not yet run live.
+
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
 news context (the user asked for a second AI's independent input on

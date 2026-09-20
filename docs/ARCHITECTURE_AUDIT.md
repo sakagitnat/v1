@@ -1191,6 +1191,46 @@ capital model. These all still match the revised vision as-is.
     data. Gap #11 stays open -- still untried: a session/time-of-day
     approach, a different timeframe (every attempt so far is H1), or a
     genuinely different data source/instrument subset.
+- **2026-09-20 — Ranging-regime diagnostic (new, not a strategy) --
+  checking the shared assumption behind all three retired attempts
+  before building a fourth.** Posted the three retirements back to
+  issue #5; GPT's read was that three structurally distinct fades
+  failing is itself evidence worth investigating before assuming the
+  next fade will do better -- asked for a diagnostic on `trading.cfd.
+  regime`'s `RANGING` label itself: composition by instrument/session/
+  volatility, episode persistence and transitions, and forward-return/
+  excursion behavior after a `RANGING` episode starts, with no strategy
+  logic applied, to check whether the label is mixing genuinely quiet
+  consolidation with pre-breakout compression or noisy chop -- three
+  different structures a single fade has no business treating
+  identically.
+  - Added `classify_regime_series()`/`classify_volatility_series()` to
+    `trading/cfd/regime.py` -- vectorized siblings of the existing,
+    live last-bar-only `classify_regime()`/`classify_volatility()`,
+    same thresholds, evaluated at every bar instead of just "now."
+    Neither is used by any live decision path; both exist purely for
+    this kind of per-bar research. 4 new tests confirm each series
+    agrees with its live counterpart at the last bar (not a second,
+    independent definition of the same thresholds to drift out of
+    sync).
+  - New `scripts/diagnose_cfd_regime.py`: not a strategy or a backtest
+    -- fits no parameters, reports no CAGR. Fetches full yfinance
+    history per instrument (no TRAIN/TEST split -- there's nothing
+    here that could overfit, so splitting would only throw away
+    statistical power on a purely descriptive question), then reports
+    regime composition (overall and by rough UTC-hour session bucket),
+    episode length distribution and what a `RANGING` episode
+    transitions into when it ends, and forward return/max-favorable/
+    max-adverse-excursion over 5/10/20-bar horizons split by the ATR%
+    volatility bucket at the episode's start. 10 new tests for the
+    script's pure helper functions (episode-splitting, percentile/
+    percentage formatting, session-bucket boundaries). Wired into
+    `cfd-manual-command.yml` as `diagnose-regime`. Full suite: 423
+    passing.
+  - Not yet run live -- next step is triggering it via GitHub Actions
+    and reading the actual numbers, per GPT's proposed order
+    (diagnostics before another strategy attempt, timeframe change only
+    after confirming the H1 label itself isn't the main problem).
 
 ## Executive summary
 
