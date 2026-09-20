@@ -7,8 +7,54 @@ no trading logic was changed while writing it.
 
 **Status as of the last entry below: all five phases of the original
 roadmap (Phase 0 through Phase 5) are complete, and the pipeline has now
-been exercised against the real Deriv demo account** -- see the final
-progress log entry.
+been exercised against the real Deriv demo account** -- but see
+"Revised gap analysis (2026-09-20)" below: `docs/VISION.md` was revised
+the same day to correct a too-narrow reading of the original brief, and
+three structural gaps against the *revised* vision are now open,
+tracked there.
+
+## Revised gap analysis (2026-09-20)
+
+`docs/VISION.md` was revised after the user flagged that Phases 2-5 built
+a **single-winner strategy selector with human-gated everything**, when
+the actual intent was a **portfolio manager that can run multiple
+strategies at once and demote/pause on its own initiative** (never
+promote, never raise risk, on its own). Comparing what exists against the
+revised vision:
+
+1. **No multi-strategy Portfolio/Allocation stage.**
+   `trading.cfd.selector.select_for_entry()` picks exactly one ACTIVE
+   strategy per regime (and `strategy_registry.set_state()`/`register()`
+   actively *enforce* "at most one ACTIVE per regime" as an invariant --
+   the opposite of what's needed now). There's no concept of splitting
+   allocation/risk budget across several simultaneously-suited
+   strategies, no weighting by conviction or recent performance. This is
+   the biggest structural gap against the revised pipeline's explicit
+   "Portfolio / Allocation Decision" stage.
+2. **No autonomous demotion.** `trading.cfd.failure_analysis.
+   detect_degradation()` only *reports* a degraded strategy;
+   `trading.cfd.manager_report` only *recommends* the
+   `promote-strategy ... PAUSED` command. Nothing in the codebase ever
+   calls `strategy_registry.set_state()` itself. Per the revised
+   "Autonomy boundaries" section, demotion/pause/allocation-reduction on
+   detected decay should happen automatically (logged, explained, never
+   silent) -- promotion past PAPER is the only lifecycle direction that
+   should still require a human.
+3. **Regime taxonomy is narrower than the target.**
+   `trading.cfd.regime.classify_regime()` only returns
+   trending/ranging/unknown from a single ADX reading. The revised
+   vision wants a volatility dimension (high/low) alongside trend
+   strength, and an explicit "unstable, don't trade" condition distinct
+   from "ranging" -- not built yet.
+
+Not gaps, already correctly built and unaffected by the revision: the
+Risk Governor boundary (AI never raises risk or crosses a hard limit --
+already true, this revision only *adds* explicit permission to lower
+risk autonomously, it doesn't loosen the ceiling side at all), the
+Strategy Registry's lifecycle states and audit trail, Research Lab's
+Backtest->Walk-Forward->Monte Carlo gate landing candidates at VALIDATED
+only, Paper Trading's simulated execution, and the virtual equity
+capital model. These all still match the revised vision as-is.
 
 ## Progress log
 
