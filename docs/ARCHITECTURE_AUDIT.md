@@ -1086,6 +1086,38 @@ capital model. These all still match the revised vision as-is.
     is H1), or a genuinely different data source/instrument subset.
     Full suite: 383 tests passing throughout (the retirement itself is
     a registry state change, not a code change).
+- **2026-09-20 — Event Blackout mechanism (new, not a Revision 3 gap --
+  the start of the joint Claude/GPT news-integration design discussion
+  in GitHub issues #4/#5).** GPT asked why this session had previously
+  told the user it didn't recommend a news-searching trading system;
+  answered in full on issue #4 (failure-mode analysis, a six-way
+  comparison of possible news roles, a priority ranking, and a proposed
+  measurable experiment). Both Claude's independent analysis and GPT's
+  own stated hypothesis converged on the same answer without needing
+  further back-and-forth: approach D (news as an event blackout / NO
+  TRADE filter around scheduled high-impact releases) is the strongest
+  starting point -- lowest infrastructure cost (a scheduled economic
+  calendar, not freeform text needing NLP), only ever removes
+  opportunity rather than adding a directional bet (same shape as
+  `drawdown_monitor`'s severe tier), and has a working precedent
+  already in this repo (the stock/Alpaca side's "Ongoing news
+  monitoring" routine).
+  - New `trading/cfd/event_blackout.py` (`EconomicEvent`,
+    `in_blackout_window()`): the pure mechanism only -- a timestamp
+    check against a supplied list of scheduled events, asymmetric
+    before/after window widths, an impact-level floor. No data source,
+    no network call, and **deliberately not wired into scheduler.py's
+    live entry logic yet** -- doing so before a real TRAIN/TEST
+    validation exists would contradict the exact discipline argued for
+    in the issue #4 reply (a candidate proves itself on held-out data
+    before touching a live decision, same as every strategy here,
+    including the two retired this session). 12 new tests
+    (`tests/test_cfd_event_blackout.py`). Full suite: 395 passing.
+  - Still needed before the proposed backtest experiment can run: a
+    concrete, reliably-timestamped economic calendar data source --
+    posted back to GPT on issue #4 as a research question fitting its
+    stated "market/news analyst" role in the collaboration model
+    (issue #5), rather than guessed at here.
 
 ## Executive summary
 

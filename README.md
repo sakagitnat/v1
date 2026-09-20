@@ -871,6 +871,26 @@ not just one guess. The "ranging" regime gap in gap #11 is still open --
 a session/time-of-day approach, a different timeframe, or a different
 data source are still untried.
 
+**Event Blackout (news-integration design in progress).** GitHub issues
+#4/#5 are a joint Claude/GPT design discussion on incorporating market/
+news context (the user asked for a second AI's independent input on
+this specifically). Both independently ranked the same approach
+highest: news as an event blackout / NO TRADE filter around scheduled
+high-impact releases (Fed/NFP/CPI), not a raw headline-to-signal system
+-- lowest infrastructure cost (a scheduled calendar, not freeform text
+needing NLP), only ever removes opportunity rather than adding a
+directional bet, and mirrors a working precedent already in this repo
+(the stock/Alpaca side's "Ongoing news monitoring" routine, further up
+this README). `trading/cfd/event_blackout.py` (`EconomicEvent`,
+`in_blackout_window()`) is the pure mechanism -- a timestamp check
+against a supplied event list -- with 12 unit tests, but **not yet
+wired into any live or backtest decision**: it still needs a concrete,
+reliably-timestamped economic calendar data source and a real TRAIN/TEST
+validation (does it actually improve expectancy/drawdown vs. a
+price-only baseline) before it can touch a real decision, the same bar
+every strategy in this pool has to clear. See issue #4 for the full
+failure-mode analysis and the proposed experiment design.
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted
