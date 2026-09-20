@@ -63,6 +63,7 @@ from trading.cfd.backtest import CfdBacktestEngine
 from trading.cfd.breakout import DonchianBreakoutStrategy
 from trading.cfd.broker import DerivBroker
 from trading.cfd.mean_reversion import MeanReversionStrategy
+from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.research_lab import evaluate_candidate, generate_candidate_params, register_if_passed
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.strategy_registry import list_all
@@ -70,6 +71,7 @@ from trading.config import settings
 
 from optimize_cfd_breakout import PARAM_GRID as BREAKOUT_PARAM_GRID
 from optimize_cfd_mean_reversion import PARAM_GRID as MEAN_REVERSION_PARAM_GRID
+from optimize_cfd_rsi_reversion import PARAM_GRID as RSI_REVERSION_PARAM_GRID
 from optimize_cfd_strategy import (
     MAX_DRAWDOWN_CAP,
     MIN_TRADES,
@@ -107,6 +109,13 @@ STRATEGY_SPECS = [
         "name": "mean_reversion",
         "cls": MeanReversionStrategy,
         "param_grid": MEAN_REVERSION_PARAM_GRID,
+        "filter_fn": None,
+        "suited_regimes": ["ranging"],
+    },
+    {
+        "name": "rsi_reversion",
+        "cls": RsiReversionStrategy,
+        "param_grid": RSI_REVERSION_PARAM_GRID,
         "filter_fn": None,
         "suited_regimes": ["ranging"],
     },
