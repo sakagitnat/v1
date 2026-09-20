@@ -12,6 +12,8 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "paper_positions": {}, "paper_equity": {}, "paper_trade_counter": 0,
         "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
         "pending_entries": {},
+        "smoothed_equity": None,
+        "high_water_mark": None,
     }
 
 
@@ -155,3 +157,14 @@ def test_clear_pending_entry_on_missing_instrument_is_a_noop(tmp_path, monkeypat
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
     state.clear_pending_entry("frxXAUUSD")  # never set -- must not raise
     assert state.get_pending_entries() == {}
+
+
+def test_equity_tracking_defaults_to_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_equity_tracking() == {"smoothed_equity": None, "high_water_mark": None}
+
+
+def test_equity_tracking_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_equity_tracking(smoothed_equity=105.0, high_water_mark=110.0)
+    assert state.get_equity_tracking() == {"smoothed_equity": 105.0, "high_water_mark": 110.0}

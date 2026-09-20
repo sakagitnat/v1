@@ -30,6 +30,8 @@ def test_report_with_no_data_is_empty_but_does_not_crash(tmp_path, monkeypatch):
     assert report["allocation_summary"] == {}
     assert report["portfolio_risk_summary"]["open_position_count"] == 0
     assert report["portfolio_risk_summary"]["total_portfolio_risk"] == 0.0
+    assert report["drawdown_summary"]["tier"] == "normal"
+    assert report["drawdown_summary"]["high_water_mark"] is None
     assert all(v == [] for v in report["registry_summary"].values())
 
 
@@ -50,6 +52,20 @@ def test_portfolio_risk_summary_aggregates_currently_open_positions(tmp_path, mo
     assert summary["correlated_risk"]["usd:short"] == 2.5  # both are "USD weakens" bets
     assert summary["total_notional_exposure"] == 1000.0  # (30*20) + (20*20)
     assert summary["ceilings"]["max_portfolio_risk_pct"] > 0
+
+
+def test_drawdown_summary_reflects_a_persisted_high_water_mark(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    state.set_equity_tracking(smoothed_equity=95.0, high_water_mark=100.0)
+    # starting_equity default (CFD_VIRTUAL_STARTING_CAPITAL) with no
+    # trades means equity_estimate == starting_equity -- below the
+    # persisted 100.0 high-water-mark, so a real drawdown should show.
+    report = build_report([], [], starting_equity=90.0)
+    summary = report["drawdown_summary"]
+    assert summary["high_water_mark"] == 100.0
+    assert summary["smoothed_equity"] == 95.0
+    assert summary["tier"] in {"moderate", "deep", "severe"}  # 10% drawdown at default thresholds
+    assert summary["risk_multiplier"] < 1.0
 
 
 def test_registry_summary_groups_by_state(tmp_path, monkeypatch):

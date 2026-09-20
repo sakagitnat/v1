@@ -14,10 +14,10 @@ three structural gaps against the *revised* vision were opened, tracked
 there. **All three are now closed** -- see Progress log. `docs/VISION.md`
 was then revised again the same day ("Revision 3") with a much fuller
 risk/execution model -- see "Revision 3 gap analysis" immediately below.
-Gaps #2 (risk model foundation), #1 (exit philosophy), and #6-9
-(execution realism/attribution) are now closed, in the user's chosen
-order -- see Progress log. Gaps #4-5, #10, #11, and #3 remain, worked in
-that stated order.
+Gaps #2 (risk model foundation), #1 (exit philosophy), #6-9 (execution
+realism/attribution), and #4-5 (drawdown de-risking/smoothed equity) are
+now closed, in the user's chosen order -- see Progress log. Gaps #10,
+#11, and #3 remain, worked in that stated order.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -50,23 +50,10 @@ anything" pass -- every item below is verified against the actual code
    the same instrument at once -- worth having in view given "0 to 15
    trades a day, driven by real opportunity count" is now an explicit
    target range, not just a hypothetical.
-4. **No automatic drawdown-tiered risk reduction -- the mechanism exists,
-   nothing triggers it.** `trading/cfd/operating_mode.py`'s
-   Defensive/Normal/Aggressive/Recovery multipliers are correctly bounded
-   by `CFD_MAX_RISK_PER_TRADE_CEILING`, but `cfd_cli.py set-mode` is the
-   *only* way a mode ever changes -- nothing computes current drawdown
-   severity and switches modes automatically. Revision 3's "Drawdown
-   handling" section wants this to happen on its own (a risk-reducing
-   action, squarely inside the Autonomy boundaries the AI already may act
-   on unilaterally) rather than waiting on a human to notice and run
-   `set-mode`.
-5. **No smoothed-equity / high-water-mark risk basis.**
-   `CfdRiskManager.equity` (`risk.py:27`) is raw current virtual equity,
-   used directly every run for `risk_amount = equity * risk_per_trade` --
-   no smoothing, no high-water-mark gate on how fast a recent gain
-   re-baselines risk upward. Revision 3 explicitly asks for this to avoid
-   risk oscillating with short-term noise (e.g. $100 -> $120 shouldn't
-   instantly scale every risk calculation to the new figure).
+4. ~~**No automatic drawdown-tiered risk reduction.**~~ **Closed
+   2026-09-20** -- see Progress log below.
+5. ~~**No smoothed-equity / high-water-mark risk basis.**~~ **Closed
+   2026-09-20** -- see Progress log below.
 6. ~~**Backtests don't model spread, slippage, commission, financing/
    rollover, or price gaps.**~~ **Closed 2026-09-20**, with a correction:
    "no slippage" on stop/target fills turned out to already be CORRECT
@@ -680,6 +667,63 @@ capital model. These all still match the revised vision as-is.
   (automatic drawdown de-risking + smoothed equity), #10 (consolidated
   Qualification Gate), #11 (strategy pool diversity), #3 (decision
   cadence -- still deliberately last).
+
+- **2026-09-20 — Revision 3 gaps #4-5 ("automatic drawdown de-risking" +
+  "smoothed equity") closed.** Two new modules:
+  - `trading/cfd/smoothed_equity.py`: `update_smoothed_equity()` is an
+    EMA that's deliberately ASYMMETRIC -- it damps how fast the
+    sizing-equity figure catches up to a GAIN (`CFD_EQUITY_SMOOTHING_
+    ALPHA`, default 0.3), but is capped at `min(ema, current_equity)` so
+    it never lags a LOSS: on any drop it snaps immediately to the new,
+    lower current equity. This directly matches docs/VISION.md's own
+    framing ("don't use recent profit as an excuse to scale risk up
+    fast") without slowing down how fast the system reacts to an actual
+    loss, which every other protective check in this codebase (capital
+    floor, daily-loss halt) already depends on being immediate.
+    `update_high_water_mark()` is a simple ratchet -- the highest virtual
+    equity ever observed, never decreasing.
+  - `trading/cfd/drawdown_monitor.py`: `classify_drawdown_tier()` reads
+    current equity against the high-water-mark and returns
+    normal/moderate/deep/severe (`CFD_DRAWDOWN_MODERATE_PCT`=10%,
+    `_DEEP_PCT`=20%, `_SEVERE_PCT`=30%, all illustrative, unvalidated
+    defaults matching docs/VISION.md's own example tiers);
+    `drawdown_risk_multiplier()` maps that to 1.0/0.75/0.5/0.0
+    (`CFD_DRAWDOWN_MODERATE_MULTIPLIER`, `_DEEP_MULTIPLIER`) -- severe
+    means every new entry's risk-budgeted stake computes to $0 and
+    SKIP TRADEs, the exact same mechanism the existing daily-loss/
+    capital-floor halts already use, not a new halt flag. Deliberately
+    does NOT try to distinguish a losing streak from genuine strategy
+    decay -- that stays `decay_supervisor`'s per-strategy job; this is a
+    blunt, portfolio-wide response to being below the high-water-mark,
+    whatever the cause.
+  - `scheduler.py` computes both raw-equity-based (high-water-mark,
+    drawdown tier -- fast, unlagged, for protection) and updates the
+    persisted smoothed figure (for sizing only) once per run, right
+    after virtual equity itself is computed. The drawdown multiplier and
+    the smoothed/raw equity ratio combine into one `sizing_scale_factor`
+    that multiplies into the SAME `risk_per_trade_override` mechanism
+    `portfolio_allocator` already uses -- so it composes cleanly with
+    per-strategy allocation weighting, and `risk.py`'s existing
+    `min(risk_per_trade, override)` clamp still enforces the hard
+    ceiling at the lowest level regardless of what these multipliers
+    compute to. Neither ever forces an exit on an already-open position
+    -- only new entries are affected, both `state.py` (new
+    `smoothed_equity`/`high_water_mark` fields,
+    `get_equity_tracking`/`set_equity_tracking`) persists across runs
+    the same way `daily_risk_tracking` already does.
+  - `manager_report.py` gained a `drawdown_summary` section (current
+    tier, multiplier, high-water-mark, smoothed equity) for visibility;
+    `cfd_cli.py manager-report` and `status` (the latter using real live
+    equity, not the offline approximation) both print it.
+  36 new tests (`tests/test_cfd_smoothed_equity.py` 9,
+  `tests/test_cfd_drawdown_monitor.py` 10, `tests/test_cfd_state.py` +2,
+  `tests/test_cfd_manager_report.py` +1, plus the drawdown-tier
+  boundary/edge cases). Full suite: 347 tests passing. Live-smoke-tested
+  against the real Deriv demo account after pushing, per the usual
+  discipline for a scheduler.py change. Only gaps #10 (consolidated
+  Qualification Gate), #11 (strategy pool diversity), and #3 (decision
+  cadence, still deliberately last) remain from the Revision 3 gap
+  analysis.
 
 ## Executive summary
 

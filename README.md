@@ -737,6 +737,44 @@ Revision 3 gaps #6-9.
   doesn't expose here) -- but it can no longer happen *silently*, which is
   what this gap actually asked for.
 
+**Automatic Drawdown De-Risking + Smoothed Equity.** Closes Revision 3
+gaps #4-5. `trading/cfd/smoothed_equity.py` and
+`trading/cfd/drawdown_monitor.py`, both wired into `scheduler.py` once
+per run, right after virtual equity is computed.
+- **Smoothed equity** (`CFD_EQUITY_SMOOTHING_ALPHA`, default 0.3): an EMA
+  that's deliberately asymmetric -- it damps how fast the SIZING-equity
+  figure catches up to a GAIN, but is capped so it can never lag a LOSS
+  (any drop snaps immediately to current equity). Matches
+  docs/VISION.md's own framing directly: don't let recent profit be an
+  excuse to scale risk up fast, but never slow down how fast the system
+  reacts to an actual loss -- every other protective check here (capital
+  floor, daily-loss halt) already depends on reacting immediately.
+- **High-water-mark**: the highest virtual equity ever observed, a simple
+  ratchet, never decreasing -- what "drawdown" is actually measured
+  against (how far below the best ever done, not how far below the
+  starting balance).
+- **Drawdown tiers** (`CFD_DRAWDOWN_MODERATE_PCT`=10%, `_DEEP_PCT`=20%,
+  `_SEVERE_PCT`=30%, illustrative unvalidated defaults matching
+  docs/VISION.md's own example): normal/moderate/deep/severe, mapping to
+  a 1.0/0.75/0.5/0.0 risk multiplier
+  (`CFD_DRAWDOWN_MODERATE_MULTIPLIER`, `_DEEP_MULTIPLIER`). Severe means
+  every new entry's risk-budgeted stake computes to $0 and SKIP TRADEs --
+  the same mechanism the daily-loss/capital-floor halts already use, not
+  a new one. This is a risk-reducing autonomous action (docs/VISION.md's
+  "Autonomy boundaries") -- no human approval needed, the same authority
+  Autonomous Demotion already has. Deliberately does NOT try to
+  distinguish a losing streak from genuine strategy decay (that's
+  Autonomous Demotion's per-strategy job) -- this is a blunt,
+  portfolio-wide response to being below the high-water-mark, whatever
+  the cause. Neither mechanism ever forces an exit on an already-open
+  position -- only new entries are affected.
+
+Both multipliers stack into the SAME `risk_per_trade_override` mechanism
+Portfolio Allocation already uses, so they compose cleanly with
+per-strategy weighting, and `risk.py`'s existing hard-ceiling clamp still
+applies regardless of what they compute to. `cfd_cli.py status`/
+`manager-report` both print the current tier and equity figures.
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted

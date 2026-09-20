@@ -7,6 +7,12 @@ import pandas as pd
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
+from trading.cfd.drawdown_monitor import (
+    NORMAL as DRAWDOWN_NORMAL,
+    DrawdownThresholds,
+    classify_drawdown_tier,
+    drawdown_risk_multiplier,
+)
 from trading.cfd.exit_manager import (
     TrailingStopState,
     split_stake_for_partial_close,
@@ -25,10 +31,12 @@ from trading.cfd.portfolio_risk import (
 from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
+from trading.cfd.smoothed_equity import update_high_water_mark, update_smoothed_equity
 from trading.cfd.state import (
     clear_pending_entry,
     exclude_instrument,
     get_daily_risk_tracking,
+    get_equity_tracking,
     get_pending_entries,
     list_open_trades,
     load_state,
@@ -36,6 +44,7 @@ from trading.cfd.state import (
     record_open_trade,
     set_broker_baseline,
     set_daily_risk_tracking,
+    set_equity_tracking,
     set_pending_entry,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
@@ -276,6 +285,17 @@ async def run_once():
     new entries (a risk-reducing action, no human approval needed) until
     a human investigates. Both close docs/VISION.md's Revision 3
     execution-realism requirements.
+
+    Every new entry's risk is further scaled (never raised) by
+    trading.cfd.drawdown_monitor and trading.cfd.smoothed_equity: a
+    drawdown from the persisted virtual-equity high-water-mark moves
+    risk down a tier automatically (moderate/deep/severe, severe halting
+    new entries entirely) with no human approval needed -- the same
+    autonomous-risk-reduction authority trading.cfd.decay_supervisor
+    already has; and a smoothed (gain-damped, loss-immediate) equity
+    figure keeps a quick win from instantly scaling the next trade's
+    risk up by the same proportion. Neither ever forces an exit on an
+    already-open position -- only new entries are affected.
     """
     state = load_state()
     if state.get("paused"):
@@ -325,6 +345,40 @@ async def run_once():
             )
 
         equity = equity_for_account(broker_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
+
+        # Smoothed Equity / High-Water-Mark + Automatic Drawdown-Tiered
+        # Risk Reduction (docs/VISION.md's Revision 3 "Drawdown
+        # handling"): computed from RAW equity right here, before any
+        # protective check below reads it, so both react to this run's
+        # real numbers, never a stale value from an earlier run.
+        equity_tracking = get_equity_tracking()
+        smoothed_equity = update_smoothed_equity(
+            equity_tracking.get("smoothed_equity"), equity, settings.cfd_equity_smoothing_alpha,
+        )
+        high_water_mark = update_high_water_mark(equity_tracking.get("high_water_mark"), equity)
+        set_equity_tracking(smoothed_equity, high_water_mark)
+
+        drawdown_thresholds = DrawdownThresholds(
+            moderate_pct=settings.cfd_drawdown_moderate_pct,
+            deep_pct=settings.cfd_drawdown_deep_pct,
+            severe_pct=settings.cfd_drawdown_severe_pct,
+            moderate_multiplier=settings.cfd_drawdown_moderate_multiplier,
+            deep_multiplier=settings.cfd_drawdown_deep_multiplier,
+        )
+        drawdown_tier = classify_drawdown_tier(equity, high_water_mark, drawdown_thresholds)
+        drawdown_multiplier = drawdown_risk_multiplier(drawdown_tier, drawdown_thresholds)
+        if drawdown_tier != DRAWDOWN_NORMAL:
+            logger.warning(
+                "Drawdown tier=%s (equity %.2f vs high-water-mark %.2f) -- new-entry risk scaled by %.2fx this run.",
+                drawdown_tier, equity, high_water_mark, drawdown_multiplier,
+            )
+        # Sizing-only scale factor: combines the drawdown multiplier with
+        # how far the smoothed (gain-damped) equity figure currently
+        # trails raw equity -- both only ever shrink new-entry risk,
+        # never raise it above what risk_per_trade alone would already
+        # allow (enforced again, at the lowest level, in risk.py's
+        # stake_and_limits()).
+        sizing_scale_factor = drawdown_multiplier * (smoothed_equity / equity if equity > 0 else 1.0)
 
         # No floor is set automatically -- capital_floor stays None (no
         # protection) until explicitly set via `cfd_cli.py set-floor`,
@@ -616,7 +670,7 @@ async def run_once():
 
             strategy_tag = f"{entry_candidate.name}@{entry_candidate.version}"
             weight = allocations.get(strategy_tag, 1.0 / n_active if n_active else 1.0)
-            risk_per_trade_override = effective_risk * risk_scale_factor(weight, n_active)
+            risk_per_trade_override = effective_risk * risk_scale_factor(weight, n_active) * sizing_scale_factor
 
             stake, stop_loss_amount, take_profit_amount = risk.stake_and_limits(
                 signal.price, signal.stop_price, signal.take_profit_price,

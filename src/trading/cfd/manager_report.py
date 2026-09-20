@@ -2,16 +2,19 @@
 
 Ties together everything built so far (Trade Database, Performance
 Engine, Failure Analysis, Strategy Registry, Portfolio Allocator,
-Portfolio Risk Governor, Research Lab, Paper Trading) into one
-consolidated report: what's actually happening across every registered
-strategy, and what still needs a human's attention. allocation_summary
-and portfolio_risk_summary in the returned dict are purely informational,
-same as degradation: the live scheduler already applies
-trading.cfd.portfolio_allocator's weights and trading.cfd.portfolio_risk's
-ceilings every run, this just makes the current numbers visible.
-portfolio_risk_summary's equity figure is an offline approximation
-(starting_equity + realized net_return) -- this report never connects to
-Deriv, so it can't see live broker equity or unrealized P&L.
+Portfolio Risk Governor, Drawdown Monitor, Research Lab, Paper Trading)
+into one consolidated report: what's actually happening across every
+registered strategy, and what still needs a human's attention.
+allocation_summary, portfolio_risk_summary, and drawdown_summary in the
+returned dict are purely informational, same as degradation: the live
+scheduler already applies trading.cfd.portfolio_allocator's weights,
+trading.cfd.portfolio_risk's ceilings, and trading.cfd.drawdown_monitor's
+tier every run, this just makes the current numbers visible. Every
+equity figure here is an offline approximation (starting_equity +
+realized net_return) except drawdown_summary's high_water_mark, which is
+exact (updated from real broker equity on every live run) -- this report
+never connects to Deriv, so it can't see live broker equity or
+unrealized P&L itself.
 
 This module itself NEVER takes action -- it only reports, in the form of
 the exact `cfd_cli.py` command that would carry out each suggestion (or,
@@ -32,11 +35,12 @@ no black box: every one names the specific number(s) that triggered it.
 from dataclasses import dataclass
 from typing import Optional
 
+from trading.cfd.drawdown_monitor import DrawdownThresholds, classify_drawdown_tier, drawdown_risk_multiplier
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.performance import compute_performance
 from trading.cfd.portfolio_allocator import compute_allocations
 from trading.cfd.portfolio_risk import OpenRiskPosition, factor_group_totals, thesis_key
-from trading.cfd.state import list_open_trades
+from trading.cfd.state import get_equity_tracking, list_open_trades
 from trading.cfd.strategy_registry import LifecycleState, list_all
 from trading.config import settings
 
@@ -161,6 +165,33 @@ def _portfolio_risk_summary(equity_estimate: float) -> dict:
     }
 
 
+def _drawdown_summary(equity_estimate: float) -> dict:
+    """Current drawdown tier and its risk multiplier, purely
+    informational (the live scheduler already applies this every run --
+    see trading.cfd.drawdown_monitor). equity_estimate is the same
+    offline approximation _portfolio_risk_summary uses -- the persisted
+    high_water_mark itself is exact (it's updated from real broker
+    equity every live run), only the CURRENT equity read here is
+    approximated."""
+    tracking = get_equity_tracking()
+    high_water_mark = tracking.get("high_water_mark")
+    thresholds = DrawdownThresholds(
+        moderate_pct=settings.cfd_drawdown_moderate_pct,
+        deep_pct=settings.cfd_drawdown_deep_pct,
+        severe_pct=settings.cfd_drawdown_severe_pct,
+        moderate_multiplier=settings.cfd_drawdown_moderate_multiplier,
+        deep_multiplier=settings.cfd_drawdown_deep_multiplier,
+    )
+    tier = classify_drawdown_tier(equity_estimate, high_water_mark or 0.0, thresholds)
+    return {
+        "equity_basis": round(equity_estimate, 2),
+        "high_water_mark": high_water_mark,
+        "smoothed_equity": tracking.get("smoothed_equity"),
+        "tier": tier,
+        "risk_multiplier": drawdown_risk_multiplier(tier, thresholds),
+    }
+
+
 def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: Optional[float] = None) -> dict:
     """trades: trading.cfd.trade_log.load_trades()'s real Trade Database.
     paper_trades: the same, but from trading.cfd.paper_trading's separate
@@ -175,6 +206,7 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
     allocation_summary = compute_allocations(trades, active_entries)
     equity_estimate = starting_equity + overall_performance.get("net_return", 0.0)
     portfolio_risk_summary = _portfolio_risk_summary(equity_estimate)
+    drawdown_summary = _drawdown_summary(equity_estimate)
 
     recommendations = (
         _degradation_recommendations(trades, registry_entries)
@@ -187,6 +219,7 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
         "loss_breakdown": loss_breakdown,
         "allocation_summary": allocation_summary,
         "portfolio_risk_summary": portfolio_risk_summary,
+        "drawdown_summary": drawdown_summary,
         "registry_summary": {
             state.value: [f"{e.name}@{e.version}" for e in registry_entries if e.state == state.value]
             for state in LifecycleState

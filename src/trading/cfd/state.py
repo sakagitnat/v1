@@ -20,6 +20,8 @@ _DEFAULTS = {
     "paper_trade_counter": 0,
     "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
     "pending_entries": {},
+    "smoothed_equity": None,
+    "high_water_mark": None,
 }
 
 
@@ -67,6 +69,24 @@ def get_daily_risk_tracking() -> dict:
 def set_daily_risk_tracking(date: str, start_equity: float, halted: bool) -> None:
     state = load_state()
     state["daily_risk_tracking"] = {"date": date, "start_equity": start_equity, "halted": halted}
+    _write_state(state)
+
+
+def get_equity_tracking() -> dict:
+    """{"smoothed_equity": ..., "high_water_mark": ...} -- see
+    trading.cfd.smoothed_equity. Both None until the first run ever
+    records an observation. Persisted here for the same reason
+    daily_risk_tracking is: trading.cfd.scheduler runs as a fresh
+    process every ~hour (GitHub Actions), so an in-memory-only value
+    would reset every single run."""
+    state = load_state()
+    return {"smoothed_equity": state.get("smoothed_equity"), "high_water_mark": state.get("high_water_mark")}
+
+
+def set_equity_tracking(smoothed_equity: float, high_water_mark: float) -> None:
+    state = load_state()
+    state["smoothed_equity"] = smoothed_equity
+    state["high_water_mark"] = high_water_mark
     _write_state(state)
 
 

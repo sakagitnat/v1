@@ -123,6 +123,39 @@ class Settings:
     rate; a stated, reasonable placeholder -- matters more now that
     Revision 3's exit philosophy explicitly allows multi-day holds."""
 
+    # Smoothed Equity / High-Water-Mark (see trading.cfd.smoothed_equity)
+    # and Automatic Drawdown-Tiered Risk Reduction (see trading.cfd.
+    # drawdown_monitor) -- docs/VISION.md's Revision 3 "Drawdown
+    # handling" section. Same reasonable-starting-default status as
+    # every other threshold in this file.
+    cfd_equity_smoothing_alpha: float = field(
+        default_factory=lambda: float(os.getenv("CFD_EQUITY_SMOOTHING_ALPHA", "0.3"))
+    )
+    """How much of the gap between the smoothed sizing-equity figure and
+    current raw equity closes each run on a GAIN -- 1.0 means no
+    smoothing, smaller values smooth harder. Never applies to a loss
+    (see smoothed_equity.py's docstring for why)."""
+    cfd_drawdown_moderate_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_MODERATE_PCT", "0.10"))
+    )
+    cfd_drawdown_deep_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_DEEP_PCT", "0.20"))
+    )
+    cfd_drawdown_severe_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_SEVERE_PCT", "0.30"))
+    )
+    """Drawdown-from-high-water-mark thresholds. Below moderate: no
+    change. At/above moderate: risk scales to cfd_drawdown_moderate_
+    multiplier. At/above deep: cfd_drawdown_deep_multiplier. At/above
+    severe: every new entry SKIP TRADEs (multiplier 0.0) until equity
+    recovers -- never a forced exit of an already-open position."""
+    cfd_drawdown_moderate_multiplier: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_MODERATE_MULTIPLIER", "0.75"))
+    )
+    cfd_drawdown_deep_multiplier: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_DEEP_MULTIPLIER", "0.5"))
+    )
+
     # Market Regime Engine (CFD) -- see trading.cfd.regime. ADX's
     # conventional textbook cutoff for "trending" (Wilder's original
     # interpretation); not yet walked through a TRAIN/TEST split the way

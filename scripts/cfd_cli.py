@@ -41,8 +41,10 @@ from trading.cfd.manager_report import build_report
 from trading.cfd.operating_mode import VALID_MODES
 from trading.cfd.paper_trading import PAPER_LOG_PATH
 from trading.cfd.performance import compute_performance
+from trading.cfd.drawdown_monitor import DrawdownThresholds, classify_drawdown_tier, drawdown_risk_multiplier
 from trading.cfd.state import (
     exclude_instrument,
+    get_equity_tracking,
     include_instrument,
     list_open_trades,
     load_state,
@@ -88,6 +90,21 @@ async def cmd_status(_args):
         growth = equity - start
         growth_pct = (growth / start * 100) if start > 0 else 0.0
         print(f"Growth since virtual start: {growth:+.2f} ({growth_pct:+.1f}%) -- virtual starting capital {start:.2f}")
+
+        equity_tracking = get_equity_tracking()
+        hwm = equity_tracking.get("high_water_mark")
+        thresholds = DrawdownThresholds(
+            moderate_pct=settings.cfd_drawdown_moderate_pct,
+            deep_pct=settings.cfd_drawdown_deep_pct,
+            severe_pct=settings.cfd_drawdown_severe_pct,
+            moderate_multiplier=settings.cfd_drawdown_moderate_multiplier,
+            deep_multiplier=settings.cfd_drawdown_deep_multiplier,
+        )
+        tier = classify_drawdown_tier(equity, hwm or 0.0, thresholds)
+        print(
+            f"Drawdown tier: {tier} (new-entry risk multiplier {drawdown_risk_multiplier(tier, thresholds):.2f}x) "
+            f"-- high-water-mark {hwm}, smoothed equity {equity_tracking.get('smoothed_equity')}"
+        )
 
         excluded = state.get("excluded_instruments") or {}
         if excluded:
@@ -189,6 +206,10 @@ def cmd_manager_report(_args):
         print("  By correlated factor group:")
         for key, amount in risk_summary["correlated_risk"].items():
             print(f"    {key}: ${amount:.2f} (ceiling {ceilings['max_correlated_risk_pct']:.2%} of equity)")
+
+    dd = report["drawdown_summary"]
+    print(f"\nDrawdown tier: {dd['tier']} (new-entry risk multiplier {dd['risk_multiplier']:.2f}x)")
+    print(f"  High-water-mark: {dd['high_water_mark']}, smoothed equity: {dd['smoothed_equity']}")
 
     print("\nLoss breakdown:")
     if not report["loss_breakdown"]:
