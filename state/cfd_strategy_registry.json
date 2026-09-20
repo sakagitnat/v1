@@ -157,15 +157,21 @@
       "atr_stop_mult": 1.5,
       "atr_target_mult": 2.5
     },
-    "state": "CANDIDATE",
+    "state": "RETIRED",
     "created_at": "2026-09-20T12:54:23.399462+00:00",
-    "updated_at": "2026-09-20T12:54:23.399493+00:00",
+    "updated_at": "2026-09-20T13:19:39.284310+00:00",
     "history": [
       {
         "from": null,
         "to": "CANDIDATE",
         "reason": "Implemented (proposed by GPT in GitHub issue #5's joint design discussion, built by this session), not yet run through optimize_cfd_support_resistance.py's TRAIN/TEST validation -- same starting point every other CFD strategy had before its own grid search. Third attempt at the 'ranging' regime, and the first with a genuinely different data representation from the first two: confirmed swing-high/swing-low price structure, not a derived statistic over closes (mean_reversion@v1's Bollinger bands, rsi_reversion@v1's RSI oscillator). Params are reasonable, sourced placeholders (see support_resistance.py's docstring), not validated numbers.",
         "at": "2026-09-20T12:54:23.399497+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "Bug-fixed grid search (81 combinations, real TRAIN/TEST split, run 35512685177): 0/81 combinations cleared even the cheap TRAIN gate (min trades, CAGR>0, drawdown within -25% cap). Baseline itself TRAIN cagr=-91.8% maxdd=-99.5% win_rate=48.1% trades=2714, TEST cagr=-94.5% maxdd=-91.4% win_rate=45.4% trades=1172 -- near account wipeout on both splits. Third structurally distinct ranging-regime approach (after mean_reversion@v1 and rsi_reversion@v1, both also RETIRED) to be honestly ruled out on this data, not left as a misleadingly-still-viable CANDIDATE.",
+        "at": "2026-09-20T13:19:39.284293+00:00"
       }
     ],
     "suited_regimes": [
