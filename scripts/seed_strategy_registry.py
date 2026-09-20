@@ -157,6 +157,26 @@ def main() -> None:
         "reasonable, sourced placeholders (see rsi_reversion.py's docstring), not validated numbers.",
         regimes=["ranging"],
     )
+    _seed(
+        "support_resistance",
+        "v1",
+        {
+            "pivot_window": 5,
+            "touch_threshold_pct": 0.001,
+            "atr_window": 14,
+            "atr_stop_mult": 1.5,
+            "atr_target_mult": 2.5,
+        },
+        LifecycleState.CANDIDATE,
+        "Implemented (proposed by GPT in GitHub issue #5's joint design discussion, built by this "
+        "session), not yet run through optimize_cfd_support_resistance.py's TRAIN/TEST validation -- "
+        "same starting point every other CFD strategy had before its own grid search. Third attempt at "
+        "the 'ranging' regime, and the first with a genuinely different data representation from the "
+        "first two: confirmed swing-high/swing-low price structure, not a derived statistic over closes "
+        "(mean_reversion@v1's Bollinger bands, rsi_reversion@v1's RSI oscillator). Params are reasonable, "
+        "sourced placeholders (see support_resistance.py's docstring), not validated numbers.",
+        regimes=["ranging"],
+    )
 
 
 if __name__ == "__main__":

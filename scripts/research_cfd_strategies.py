@@ -67,11 +67,13 @@ from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.research_lab import evaluate_candidate, generate_candidate_params, register_if_passed
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.strategy_registry import list_all
+from trading.cfd.support_resistance import SupportResistanceReversionStrategy
 from trading.config import settings
 
 from optimize_cfd_breakout import PARAM_GRID as BREAKOUT_PARAM_GRID
 from optimize_cfd_mean_reversion import PARAM_GRID as MEAN_REVERSION_PARAM_GRID
 from optimize_cfd_rsi_reversion import PARAM_GRID as RSI_REVERSION_PARAM_GRID
+from optimize_cfd_support_resistance import PARAM_GRID as SUPPORT_RESISTANCE_PARAM_GRID
 from optimize_cfd_strategy import (
     MAX_DRAWDOWN_CAP,
     MIN_TRADES,
@@ -116,6 +118,13 @@ STRATEGY_SPECS = [
         "name": "rsi_reversion",
         "cls": RsiReversionStrategy,
         "param_grid": RSI_REVERSION_PARAM_GRID,
+        "filter_fn": None,
+        "suited_regimes": ["ranging"],
+    },
+    {
+        "name": "support_resistance",
+        "cls": SupportResistanceReversionStrategy,
+        "param_grid": SUPPORT_RESISTANCE_PARAM_GRID,
         "filter_fn": None,
         "suited_regimes": ["ranging"],
     },
