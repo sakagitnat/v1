@@ -112,5 +112,33 @@
     "suited_regimes": [
       "ranging"
     ]
+  },
+  "rsi_reversion@v1": {
+    "name": "rsi_reversion",
+    "version": "v1",
+    "params": {
+      "rsi_window": 14,
+      "rsi_oversold": 25.0,
+      "rsi_overbought": 75.0,
+      "adx_window": 14,
+      "adx_flat_threshold": 15.0,
+      "atr_window": 14,
+      "atr_stop_mult": 2.0,
+      "atr_target_mult": 1.5
+    },
+    "state": "CANDIDATE",
+    "created_at": "2026-09-20T11:57:15.025025+00:00",
+    "updated_at": "2026-09-20T11:57:15.025043+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented (via a GitHub PR built to a spec from this session, reviewed and merged), not yet run through optimize_cfd_rsi_reversion.py's TRAIN/TEST validation -- same starting point every other CFD strategy had before its own grid search. A second, structurally distinct attempt at the 'ranging' regime after mean_reversion@v1's honest negative result: fades RSI momentum exhaustion behind an ADX flat-market gate, not Bollinger-band price deviation. Params are reasonable, sourced placeholders (see rsi_reversion.py's docstring), not validated numbers.",
+        "at": "2026-09-20T11:57:15.025045+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging"
+    ]
   }
 }

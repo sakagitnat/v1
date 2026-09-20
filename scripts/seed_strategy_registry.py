@@ -1,7 +1,8 @@
 """One-time seed: registers the CFD strategies that already exist in code
 (trading/cfd/strategy.py's EmaCrossoverStrategy, trading/cfd/breakout.py's
 DonchianBreakoutStrategy, trading/cfd/mean_reversion.py's
-MeanReversionStrategy) into the Strategy Registry (trading/cfd/
+MeanReversionStrategy, trading/cfd/rsi_reversion.py's
+RsiReversionStrategy) into the Strategy Registry (trading/cfd/
 strategy_registry.py) -- see docs/VISION.md's "Strategy lifecycle"
 section and docs/ARCHITECTURE_AUDIT.md's Phase 2.
 
@@ -132,6 +133,28 @@ def main() -> None:
         "Implemented, not yet run through optimize_cfd_mean_reversion.py's TRAIN/TEST validation -- "
         "same starting point donchian_breakout@v1 had before its own grid search found v2. Params are "
         "reasonable, sourced placeholders (see mean_reversion.py's docstring), not validated numbers.",
+        regimes=["ranging"],
+    )
+    _seed(
+        "rsi_reversion",
+        "v1",
+        {
+            "rsi_window": 14,
+            "rsi_oversold": 25.0,
+            "rsi_overbought": 75.0,
+            "adx_window": 14,
+            "adx_flat_threshold": 15.0,
+            "atr_window": 14,
+            "atr_stop_mult": 2.0,
+            "atr_target_mult": 1.5,
+        },
+        LifecycleState.CANDIDATE,
+        "Implemented (via a GitHub PR built to a spec from this session, reviewed and merged), not yet "
+        "run through optimize_cfd_rsi_reversion.py's TRAIN/TEST validation -- same starting point every "
+        "other CFD strategy had before its own grid search. A second, structurally distinct attempt at "
+        "the 'ranging' regime after mean_reversion@v1's honest negative result: fades RSI momentum "
+        "exhaustion behind an ADX flat-market gate, not Bollinger-band price deviation. Params are "
+        "reasonable, sourced placeholders (see rsi_reversion.py's docstring), not validated numbers.",
         regimes=["ranging"],
     )
 
