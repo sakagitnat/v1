@@ -775,6 +775,35 @@ per-strategy weighting, and `risk.py`'s existing hard-ceiling clamp still
 applies regardless of what they compute to. `cfd_cli.py status`/
 `manager-report` both print the current tier and equity figures.
 
+**Qualification Gate.** `trading/cfd/qualification_gate.py`
+(`cfd_cli.py qualify-strategy NAME VERSION`) closes Revision 3 gap #10:
+docs/VISION.md is explicit that the system must never simply *assert*
+it's ready for real money, so this consolidates its 9-item checklist
+into one read-only report per strategy version -- never a promotion,
+never an approval, `CFD_ALLOW_LIVE_TRADING` stays a human's own decision
+regardless of the verdict. Every criterion is checked against data this
+project actually persists in a structured form -- trade logs, paper
+trade logs, the Strategy Registry's own audit trail -- never an invented
+number: positive expectancy and drawdown-within-envelope (from live
+trade history once there are 20+ of the strategy's own priced trades,
+falling back to paper trades before that), regime diversity (from
+`compute_performance()`'s own `by_regime` grouping), out-of-sample
+evidence (scanned from the registry's audit-trail `history`), the
+strategy version having stayed frozen during qualification (always PASS,
+structurally guaranteed by `register()` refusing to overwrite an
+existing version -- explained, not just claimed), no autonomous
+demotion ever recorded against this version, and -- once `ACTIVE` --
+live-vs-paper win-rate divergence since promotion. Two of the vision's
+nine criteria (risk controls actually firing under test, no
+duplicate-execution incidents) are reported **`unverifiable`**, not
+silently passed: nothing in this codebase persists a structured,
+queryable log of a Portfolio Risk Governor rejection or a
+pending-entry/foreign-position event today, only GitHub Actions log
+lines -- a genuinely complete gate still needs that structured incident
+log, tracked as follow-up work rather than faked here. The overall
+verdict is `ready_for_human_review` only once every checkable criterion
+passes; anything less reads `not_yet`.
+
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
 losing trade as `normal_statistical_loss` (lost about its budgeted

@@ -15,6 +15,7 @@ Usage:
   python scripts/cfd_cli.py paper-performance
   python scripts/cfd_cli.py failures
   python scripts/cfd_cli.py manager-report
+  python scripts/cfd_cli.py qualify-strategy NAME VERSION
   python scripts/cfd_cli.py list-strategies
   python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
@@ -38,6 +39,7 @@ from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.manager_report import build_report
+from trading.cfd.qualification_gate import qualify
 from trading.cfd.operating_mode import VALID_MODES
 from trading.cfd.paper_trading import PAPER_LOG_PATH
 from trading.cfd.performance import compute_performance
@@ -223,6 +225,29 @@ def cmd_manager_report(_args):
     for rec in report["recommendations"]:
         print(f"  [{rec['type']}] {rec['strategy']}: {rec['reason']}")
         print(f"    -> {rec['command']}")
+
+
+def cmd_qualify_strategy(args):
+    """Prints the Qualification Gate report (trading.cfd.
+    qualification_gate) for one registered strategy version -- every
+    piece of evidence docs/VISION.md's "Qualification Gate before real
+    money" section asks for, consolidated into one place. Read-only:
+    never promotes anything, never enables real money -- CFD_ALLOW_LIVE_
+    TRADING is always a human's own decision, whatever this reports.
+    Offline: no Deriv connection needed."""
+    report = qualify(args.name, args.version)
+    if report.verdict == "unknown_strategy":
+        print(f"{args.name}@{args.version} is not registered -- see `cfd_cli.py list-strategies`.")
+        return
+
+    print(f"Qualification Gate: {report.strategy}")
+    print(f"Verdict: {report.verdict}")
+    if report.verdict == "ready_for_human_review":
+        print("  (every checkable criterion passed -- still needs a human's own decision, never automatic)")
+    print()
+    for c in report.criteria:
+        print(f"  [{c.status}] {c.name}")
+        print(f"    {c.detail}")
 
 
 def cmd_failures(_args):
@@ -457,6 +482,11 @@ def main():
     sub.add_parser("failures").set_defaults(func=cmd_failures, is_async=False)
 
     sub.add_parser("manager-report").set_defaults(func=cmd_manager_report, is_async=False)
+
+    qualify_parser = sub.add_parser("qualify-strategy")
+    qualify_parser.add_argument("name")
+    qualify_parser.add_argument("version")
+    qualify_parser.set_defaults(func=cmd_qualify_strategy, is_async=False)
 
     sub.add_parser("list-strategies").set_defaults(func=cmd_list_strategies, is_async=False)
 

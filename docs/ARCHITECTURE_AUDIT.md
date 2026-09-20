@@ -15,9 +15,9 @@ there. **All three are now closed** -- see Progress log. `docs/VISION.md`
 was then revised again the same day ("Revision 3") with a much fuller
 risk/execution model -- see "Revision 3 gap analysis" immediately below.
 Gaps #2 (risk model foundation), #1 (exit philosophy), #6-9 (execution
-realism/attribution), and #4-5 (drawdown de-risking/smoothed equity) are
-now closed, in the user's chosen order -- see Progress log. Gaps #10,
-#11, and #3 remain, worked in that stated order.
+realism/attribution), #4-5 (drawdown de-risking/smoothed equity), and
+#10 (Qualification Gate) are now closed, in the user's chosen order --
+see Progress log. Gaps #11 and #3 remain, worked in that stated order.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -67,18 +67,8 @@ anything" pass -- every item below is verified against the actual code
    virtual equity.**~~ **Closed 2026-09-20** -- see Progress log below.
 9. ~~**Idempotency is real but partial -- attribution-loss window.**~~
    **Closed 2026-09-20** -- see Progress log below.
-10. **Qualification Gate is not consolidated into one measurable report.**
-    `validation.py` (walk-forward, Monte Carlo), `research_lab.py`
-    (candidate generation + gating to `VALIDATED`), and `paper_trading.py`
-    (forward simulation) each do their own piece, and strategy versions
-    are already naturally frozen once registered (`register()` refuses to
-    overwrite an existing version -- this part of Revision 3's
-    "Qualification environment" requirement is already satisfied for
-    free). But nothing produces the single "qualified for risk level X:
-    yes/no" report Revision 3's "Qualification Gate" section describes,
-    checking every item (duplicate-execution history, live-vs-backtest
-    deviation, etc.) in one place before a human is asked to consider
-    real money.
+10. ~~**Qualification Gate is not consolidated into one measurable
+    report.**~~ **Closed 2026-09-20** -- see Progress log below.
 11. **Strategy pool is still 2 members, both trend-following, both on a
     single timeframe (H1).** Already tracked as an open gap before this
     revision, but now more consequential: Revision 3's "Opportunity
@@ -722,6 +712,75 @@ capital model. These all still match the revised vision as-is.
   against the real Deriv demo account after pushing, per the usual
   discipline for a scheduler.py change. Only gaps #10 (consolidated
   Qualification Gate), #11 (strategy pool diversity), and #3 (decision
+  cadence, still deliberately last) remain from the Revision 3 gap
+  analysis.
+
+- **2026-09-20 — Revision 3 gap #10 ("Qualification Gate not
+  consolidated") closed.** New module
+  `trading/cfd/qualification_gate.py` (`qualify(name, version)`,
+  read-only -- decides nothing, promotes nothing, never touches
+  `CFD_ALLOW_LIVE_TRADING`): consolidates docs/VISION.md's 9-item
+  Qualification Gate checklist into one report, checked ONLY against
+  data this project actually persists in a structured, queryable
+  form -- never an invented or assumed number:
+  - `positive_expectancy_net_of_costs`, `passed_multiple_regimes`
+    (`compute_performance()`'s own `by_regime` grouping -- distinct
+    regime labels the strategy's own trade history spans, excluding
+    `"unknown"`), and `drawdown_within_envelope` (same
+    `MAX_DRAWDOWN_CAP`=-25% `research_lab.py`'s own candidate gate
+    already uses) -- computed from live trade history once there are
+    >= 20 of the strategy's own priced trades, falling back to paper
+    trade history before that (paper is the only evidence available
+    pre-`ACTIVE`).
+  - `passed_out_of_sample`: scans the registry entry's own audit-trail
+    `history` for a transition reason recording TEST/out-of-sample
+    evidence (`research_lab.register_if_passed()`'s auto-written note
+    already contains this for an auto-validated candidate; a
+    grandfathered entry's note is checked the same way).
+  - `strategy_version_frozen_during_qualification`: always PASS, with
+    an explanation, not a bare claim -- structurally guaranteed by
+    `strategy_registry.register()` refusing to overwrite an existing
+    (name, version) at all, so there is nothing to verify at runtime.
+  - `no_safety_rule_violations`: scans the registry history for any
+    `"autonomous demotion"`-reasoned transition to `PAUSED` -- a
+    strategy that ever decayed enough to trigger `decay_supervisor`
+    fails this criterion, even if it was later resumed.
+  - `live_demo_behavior_not_diverged`: `NOT_APPLICABLE` before
+    `ACTIVE` (no live behavior exists yet to compare); once `ACTIVE`,
+    splits the strategy's own paper trades at its `PAPER -> ACTIVE`
+    promotion timestamp (from the registry history) and compares
+    live-since-promotion win rate against pre-promotion paper win rate
+    against a stated, unvalidated 25-point tolerance band.
+  - Two of docs/VISION.md's nine listed criteria
+    (`risk_controls_fired_correctly_under_test`,
+    `no_duplicate_execution_incidents`) are reported `UNVERIFIABLE`,
+    not silently passed or silently dropped: nothing in this codebase
+    persists a structured log of a Portfolio Risk Governor rejection
+    or a pending-entry adoption/foreign-position detection today --
+    those events are only ever `logger.warning`/`logger.info` lines in
+    the GitHub Actions run log, not a queryable record. Honest about
+    the gap rather than claiming a check that isn't real; a genuinely
+    complete gate still needs a structured incident log to replace
+    this manual-review placeholder, tracked as follow-up work, not
+    done here.
+  - Overall `verdict` is `"ready_for_human_review"` only when every
+    checkable criterion is `PASS` (an `INSUFFICIENT_DATA` or `FAIL` on
+    any of them means `"not_yet"`) -- and even a full pass is still
+    only ever evidence for a human to weigh, per docs/VISION.md's
+    "Autonomy boundaries": this module has no path to enabling real
+    money itself.
+  - `cfd_cli.py qualify-strategy NAME VERSION` (wired into the "CFD
+    Manual Command" GitHub Actions workflow's dispatch options)
+    prints the full itemized report. Offline: no Deriv connection
+    needed.
+  11 new tests (`tests/test_cfd_qualification_gate.py`), full suite:
+  358 tests passing. Live-smoke-tested against the real registry/trade
+  logs on the live account (read-only; no scheduler.py change in this
+  pass, so no live cron behavior changed) -- both `ema_crossover@v1`
+  (currently `ACTIVE`, zero trades on record yet) and
+  `donchian_breakout@v2` (`VALIDATED`) correctly report `"not_yet"`
+  with honest `INSUFFICIENT_DATA`/`NOT_APPLICABLE` reasons, not a false
+  pass. Only gaps #11 (strategy pool diversity) and #3 (decision
   cadence, still deliberately last) remain from the Revision 3 gap
   analysis.
 
