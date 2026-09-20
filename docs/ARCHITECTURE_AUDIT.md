@@ -14,9 +14,10 @@ three structural gaps against the *revised* vision were opened, tracked
 there. **All three are now closed** -- see Progress log. `docs/VISION.md`
 was then revised again the same day ("Revision 3") with a much fuller
 risk/execution model -- see "Revision 3 gap analysis" immediately below.
-Gaps #2 (risk model foundation) and #1 (exit philosophy) are now closed,
-in the user's chosen order -- see Progress log. Gaps #6-9, #4-5, #10,
-#11, and #3 remain, worked in that stated order.
+Gaps #2 (risk model foundation), #1 (exit philosophy), and #6-9
+(execution realism/attribution) are now closed, in the user's chosen
+order -- see Progress log. Gaps #4-5, #10, #11, and #3 remain, worked in
+that stated order.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -66,51 +67,19 @@ anything" pass -- every item below is verified against the actual code
    re-baselines risk upward. Revision 3 explicitly asks for this to avoid
    risk oscillating with short-term noise (e.g. $100 -> $120 shouldn't
    instantly scale every risk calculation to the new figure).
-6. **Backtests don't model spread, slippage, commission, financing/
-   rollover, or price gaps.** `CfdBacktestEngine._pnl()`
-   (`backtest.py:89-92`) is pure `stake * multiplier * pct_price_move`,
-   and the class docstring explicitly documents stop/target fills at
-   "the exact configured price level, no slippage." Every backtest,
-   walk-forward, and Monte Carlo number produced so far for both
-   registered strategies is therefore optimistic relative to live
-   reality -- and for any multi-hour/multi-day hold Revision 3 now
-   explicitly permits, overnight financing/rollover isn't modeled at
-   all, meaning a longer hold's *validated* numbers currently don't
-   reflect a cost that would actually apply to it live.
-7. **`risk_per_trade` sizing has no slippage/execution buffer.**
-   `stake_and_limits()` (`risk.py:107-112`) sizes the stake to hit
-   exactly `risk_amount` assuming a perfect fill at the stop price.
-   Revision 3's clarification that "risk 1%" must leave headroom for
-   execution/slippage around the stop isn't reflected in the sizing
-   formula today -- related to gap #6 but distinct (this is about
-   sizing, not backtest cost accounting).
-8. **Manual or foreign broker activity would silently blend into virtual
-   equity.** `equity_for_account()`/`virtual_equity()`
-   (`capital.py:18-51`) derive virtual equity purely from the delta
-   between the current broker balance and the recorded baseline -- any
-   balance-moving activity this system didn't itself initiate (a manual
-   trade placed directly in Deriv's UI, or an unrelated script hitting
-   the same account) would be silently absorbed into the bot's own P&L
-   with no detection or flagging. Worth being honest that this session's
-   own manual CLI smoke-testing against the live account (e.g. ad-hoc
-   `test-order`/`close-position` calls, if any actually changed the
-   balance) would have hit this same gap.
-9. **Idempotency is real but partial -- no duplicate-order risk, but a
-   real attribution-loss window.** New-entry decisions are correctly
-   grounded in Deriv's own live portfolio
-   (`broker.open_positions()`/`open_contract_ids()`, fetched fresh every
-   run), so a GitHub Actions retry genuinely cannot double-open a
-   position -- this part already satisfies Revision 3's "never a
-   duplicate order" requirement. But `state.record_open_trade()`
-   (`state.py:101-108`) writes to the *local* state file immediately,
-   while `.github/workflows/cfd-trading.yml`'s git commit+push of that
-   file happens only in a separate step at the very end of the job. If
-   the job crashes or the push fails between order submission and that
-   commit, the entry's strategy/regime tag (and, once it exists, its
-   thesis/risk-bucket tag) is lost for that run -- the existing "no
-   tracked metadata" fallback in `_resolve_exit_strategy_entry`
-   (`scheduler.py:85-104`) handles the position not being orphaned, but
-   the audit trail for it is gone.
+6. ~~**Backtests don't model spread, slippage, commission, financing/
+   rollover, or price gaps.**~~ **Closed 2026-09-20**, with a correction:
+   "no slippage" on stop/target fills turned out to already be CORRECT
+   for this product (Deriv Multipliers guarantee exact stop/take-profit
+   execution -- see broker.py's docstring), not an optimistic
+   simplification. Spread and overnight financing were the two real,
+   unmodeled costs -- see Progress log below.
+7. ~~**`risk_per_trade` sizing has no slippage/execution buffer.**~~
+   **Closed 2026-09-20** -- see Progress log below.
+8. ~~**Manual or foreign broker activity would silently blend into
+   virtual equity.**~~ **Closed 2026-09-20** -- see Progress log below.
+9. ~~**Idempotency is real but partial -- attribution-loss window.**~~
+   **Closed 2026-09-20** -- see Progress log below.
 10. **Qualification Gate is not consolidated into one measurable report.**
     `validation.py` (walk-forward, Monte Carlo), `research_lab.py`
     (candidate generation + gating to `VALIDATED`), and `paper_trading.py`
@@ -642,6 +611,75 @@ capital model. These all still match the revised vision as-is.
   before (no unit test exists for it anywhere in this codebase -- it's
   broker-coupled and validated by live smoke-testing via GitHub Actions,
   not mocked). Full suite: 310 tests passing.
+
+- **2026-09-20 — Revision 3 gaps #6-9 ("execution realism and
+  attribution") closed.**
+  - **Gap #7 (sizing buffer)**: `CfdRiskManager` gained
+    `stake_safety_margin` (`CFD_STAKE_SAFETY_MARGIN`, default 0.97),
+    applied to `risk_amount` itself (not just the derived stake) so the
+    stop-loss-price-to-dollar-amount relationship Deriv actually enforces
+    stays internally consistent at the smaller size. Wired into
+    `scheduler.py`'s live `CfdRiskManager` only -- `backtest.py`'s own
+    construction is untouched (defaults to 1.0/no change), since a
+    backtest's fill price *is* the signal price by construction; the
+    margin is specifically about the live entry-price gap between signal
+    computation and actual Deriv fill.
+  - **Gap #6 (backtest cost realism)**, with a correction to the original
+    framing: Deriv Multipliers guarantee exact stop-loss/take-profit
+    execution (`broker.py`'s own docstring), so "no slippage" on those
+    fills was already correct, not optimistic. The two real, unmodeled
+    costs -- spread and overnight financing -- are now supported in
+    `CfdBacktestEngine` via `spread_pct`/`daily_financing_pct`
+    (`CFD_BACKTEST_SPREAD_PCT`=0.05%, `CFD_BACKTEST_DAILY_FINANCING_PCT`
+    =0.005%/day, both stated placeholders, not calibrated to live Deriv
+    numbers -- no confirmed commission structure exists for this product
+    beyond these two, so none was invented). Both default to 0.0 on the
+    engine itself, preserving every existing unit test's exact-fill
+    assertions unchanged; all 6 real script call sites
+    (`research_cfd_strategy.py`, `optimize_cfd_strategy.py`,
+    `optimize_cfd_breakout.py`, `sweep_cfd_risk*.py`) now pass the
+    configured non-zero values explicitly, so real validation runs
+    include these costs by default. Spread is deducted once per closed
+    trade from that trade's own `pnl`; financing accrues directly against
+    equity at every UTC day boundary a position stays open -- matters
+    far more now that Revision 3 explicitly permits multi-day holds.
+  - **Gap #9 (idempotency/attribution) + gap #8 (foreign positions)**,
+    closed together with one mechanism: `trading.cfd.state` gained
+    `set_pending_entry`/`get_pending_entries`/`clear_pending_entry` --
+    `scheduler.py` now records intent (every leg's full metadata) right
+    before submitting any order for an entry, and clears it right after,
+    whether every leg succeeded or not. New `_reconcile_unknown_
+    positions()` (called at the start of every run, before the
+    Portfolio Risk Governor snapshot is built) splits every open
+    contract with no local `tracked_open` metadata into two buckets:
+    contracts matching a *stale* pending entry from a run that crashed
+    between submitting an order and its state-file commit ever landing
+    (a separate, later workflow step) are **adopted** -- full
+    strategy/thesis/risk_amount attribution recovered, not lost; anything
+    else is **foreign** -- never opened by this bot's own tracked intent
+    at all. A foreign contract is never silently absorbed into this
+    bot's own attribution: its instrument is auto-excluded from new
+    entries (the existing, already-audited `excluded_instruments`
+    mechanism -- a risk-reducing action, no human approval needed) and
+    logged loudly for a human to investigate. Virtual equity's
+    balance-derived nature means a foreign position's balance impact
+    still reaches it (not solvable without a deeper per-trade balance
+    API Deriv doesn't expose here) -- but it can no longer happen
+    *silently*, which is what gap #8 actually asked for.
+  20 new tests (`tests/test_cfd_risk.py` +3, `tests/test_cfd_backtest.py`
+  +3, `tests/test_cfd_state.py` +3, `tests/test_cfd_scheduler.py` +7,
+  plus 4 covering related edge cases). Full suite: 326 tests passing.
+  Live-smoke-tested against the real Deriv demo account after the
+  previous entry (gap #1) and again planned after this one, per the
+  usual discipline for a scheduler.py change. **Not done in this pass,
+  still an open, disclosed item**: `backtest.py`/`paper_trading.py`
+  still simulate the pre-Revision-3 fixed-target exit model, not the
+  new trailing-stop/partial-close one from gap #1 -- their validated
+  numbers reflect realistic costs now, but not the new exit mechanism
+  itself. Remaining Revision 3 work, in the user's stated order: #4-5
+  (automatic drawdown de-risking + smoothed equity), #10 (consolidated
+  Qualification Gate), #11 (strategy pool diversity), #3 (decision
+  cadence -- still deliberately last).
 
 ## Executive summary
 

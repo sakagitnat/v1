@@ -52,6 +52,21 @@ class CfdRiskManager:
     initially_halted: bool = False
     """Whether today's daily-loss threshold was already breached in an
     earlier run today -- persisted the same way as daily_start_equity."""
+    stake_safety_margin: float = 1.0
+    """Closes Revision 3 gap #7 (docs/ARCHITECTURE_AUDIT.md): "risk 1%"
+    means the estimated max loss of one position, with headroom left for
+    execution reality -- not a number that assumes a perfect fill. A
+    strategy's signal computes stop/target off a candle's CLOSE price,
+    but the actual Deriv proposal/buy executes at whatever price is
+    quoted a moment later -- usually close, never guaranteed identical.
+    1.0 (the default) applies no margin, matching every existing test
+    and backtest run unchanged; a caller can pass e.g. 0.95 to size to
+    95% of the theoretical risk-budgeted stake, leaving 5% headroom so a
+    small unfavorable difference between the signal's price and the
+    actual fill doesn't push the realized risk over what was budgeted.
+    Deriv's own stop-loss/take-profit fills themselves are a separate,
+    already-guaranteed-exact matter (see broker.py's docstring) -- this
+    margin is about the ENTRY fill, not those."""
 
     _open_positions: int = field(init=False, default=0, repr=False)
     _halted: bool = field(init=False, repr=False)
@@ -123,7 +138,7 @@ class CfdRiskManager:
         risk_per_trade = self.risk_per_trade
         if risk_per_trade_override is not None:
             risk_per_trade = max(0.0, min(risk_per_trade, risk_per_trade_override))
-        risk_amount = self.equity * risk_per_trade
+        risk_amount = self.equity * risk_per_trade * self.stake_safety_margin
         stake = min(risk_amount * entry_price / (self.multiplier * stop_distance), self.equity)
         if stake < self.min_stake:
             return 0.0, 0.0, 0.0

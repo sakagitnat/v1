@@ -11,6 +11,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "operating_mode": "normal", "operating_mode_reason": "",
         "paper_positions": {}, "paper_equity": {}, "paper_trade_counter": 0,
         "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
+        "pending_entries": {},
     }
 
 
@@ -134,3 +135,23 @@ def test_load_state_does_not_leak_defaults_across_instances(tmp_path, monkeypatc
 
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "b" / "cfd_bot_state.json")
     assert state.load_state()["excluded_instruments"] == {}
+
+
+def test_pending_entry_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_pending_entry("frxXAUUSD", {"legs": [{"side": "long", "leg": "runner"}]})
+    assert state.get_pending_entries() == {"frxXAUUSD": {"legs": [{"side": "long", "leg": "runner"}]}}
+
+
+def test_clear_pending_entry_removes_only_that_instrument(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_pending_entry("frxXAUUSD", {"legs": []})
+    state.set_pending_entry("frxEURUSD", {"legs": []})
+    state.clear_pending_entry("frxXAUUSD")
+    assert state.get_pending_entries() == {"frxEURUSD": {"legs": []}}
+
+
+def test_clear_pending_entry_on_missing_instrument_is_a_noop(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.clear_pending_entry("frxXAUUSD")  # never set -- must not raise
+    assert state.get_pending_entries() == {}

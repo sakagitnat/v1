@@ -1,4 +1,4 @@
-from trading.cfd.scheduler import _reconcile_closed_trades
+from trading.cfd.scheduler import _reconcile_closed_trades, _reconcile_unknown_positions
 
 
 def _meta(**overrides):
@@ -50,3 +50,71 @@ def test_reconciled_record_carries_over_the_regime_recorded_at_entry():
     tracked = {"1": _meta(regime="trending")}
     records = _reconcile_closed_trades(tracked, currently_open_ids=set(), equity_now=100.0)
     assert records[0].regime == "trending"
+
+
+def _leg(contract_id, instrument="frxXAUUSD", side="long"):
+    return {"contract_id": contract_id, "instrument": instrument, "side": side}
+
+
+def test_a_known_tracked_contract_is_neither_adopted_nor_foreign():
+    positions = {"frxXAUUSD": [_leg(1)]}
+    tracked_open = {"1": _meta()}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending_entries={})
+    assert adoptions == []
+    assert foreign == []
+
+
+def test_unknown_contract_with_no_pending_entry_is_foreign():
+    positions = {"frxXAUUSD": [_leg(1)]}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries={})
+    assert adoptions == []
+    assert len(foreign) == 1
+    assert foreign[0] == {"contract_id": 1, "instrument": "frxXAUUSD", "side": "long"}
+
+
+def test_unknown_contract_matching_a_pending_entry_is_adopted():
+    positions = {"frxXAUUSD": [_leg(1)]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert foreign == []
+    assert len(adoptions) == 1
+    assert adoptions[0][0] == 1
+    assert adoptions[0][1]["leg"] == "runner"
+
+
+def test_both_legs_of_a_split_entry_are_adopted_in_order():
+    positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="scalp"), _meta(leg="runner")]}}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert foreign == []
+    assert [a[1]["leg"] for a in adoptions] == ["scalp", "runner"]
+    assert [a[0] for a in adoptions] == [1, 2]
+
+
+def test_more_unknown_contracts_than_pending_legs_are_partly_foreign():
+    # e.g. the pending entry only describes one leg, but two contracts
+    # turned up -- the extra one is never assumed to be ours too.
+    positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert len(adoptions) == 1
+    assert len(foreign) == 1
+
+
+def test_pending_entry_for_a_different_instrument_does_not_cover_this_one():
+    positions = {"frxEURUSD": [_leg(1, instrument="frxEURUSD")]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert adoptions == []
+    assert len(foreign) == 1
+    assert foreign[0]["instrument"] == "frxEURUSD"
+
+
+def test_mixed_known_and_unknown_legs_on_the_same_instrument():
+    positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
+    tracked_open = {"1": _meta()}  # contract 1 already known
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
+    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending)
+    assert len(adoptions) == 1
+    assert adoptions[0][0] == 2
+    assert foreign == []

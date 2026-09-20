@@ -130,3 +130,36 @@ def test_initially_halted_blocks_entries_from_the_first_call():
     rm = CfdRiskManager(equity=1000, initially_halted=True)
     assert rm.halted is True
     assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
+
+
+def test_stake_safety_margin_defaults_to_no_change():
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    stake, risk_amount, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert risk_amount == 10.0  # unchanged from the pre-margin formula
+
+
+def test_stake_safety_margin_shrinks_stake_and_risk_amount_proportionally():
+    full = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    margined = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20, stake_safety_margin=0.95)
+    full_stake, full_risk, full_tp = full.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    margined_stake, margined_risk, margined_tp = margined.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0
+    )
+    assert margined_risk == round(full_risk * 0.95, 2)
+    assert margined_stake == round(full_stake * 0.95, 2)
+    assert margined_tp == round(full_tp * 0.95, 2)
+
+
+def test_stake_safety_margin_can_push_a_marginal_stake_below_min_stake():
+    # A stake that would just barely clear min_stake at full size (here,
+    # unmargined stake = 1.0417) can be pushed to SKIP TRADE once the
+    # safety margin shrinks it -- exactly the intended effect, not a
+    # bug: never round back up past the margined risk budget to force a
+    # trade through.
+    unmargined = CfdRiskManager(equity=100, risk_per_trade=0.01, multiplier=20, min_stake=1.0)
+    stake, _, _ = unmargined.stake_and_limits(entry_price=100.0, stop_price=95.2, take_profit_price=110.0)
+    assert stake > 1.0  # sanity check the fixture itself clears min_stake unmargined
+
+    margined = CfdRiskManager(equity=100, risk_per_trade=0.01, multiplier=20, min_stake=1.0, stake_safety_margin=0.9)
+    result = margined.stake_and_limits(entry_price=100.0, stop_price=95.2, take_profit_price=110.0)
+    assert result == (0.0, 0.0, 0.0)

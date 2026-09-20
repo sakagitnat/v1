@@ -19,6 +19,7 @@ _DEFAULTS = {
     "paper_equity": {},
     "paper_trade_counter": 0,
     "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
+    "pending_entries": {},
 }
 
 
@@ -118,6 +119,32 @@ def pop_open_trade(contract_id: int) -> Optional[dict]:
 
 def list_open_trades() -> dict:
     return load_state().get("open_trades", {})
+
+
+def set_pending_entry(instrument: str, meta: dict) -> None:
+    """Records intent to open a position on `instrument` BEFORE any order
+    is actually submitted -- see trading.cfd.scheduler's Idempotency /
+    Attribution recovery. If the process crashes between here and the
+    matching clear_pending_entry() call (e.g. before the end-of-job git
+    commit ever runs), the next run's reconciliation can tell a contract
+    that appeared without local metadata apart from a genuinely foreign
+    position: a stale pending entry names exactly what was about to be
+    opened, so the attribution (strategy, thesis, risk_amount, ...)
+    survives the crash instead of being lost. meta = {"legs": [per-leg
+    dict, one or two, same shape record_open_trade() stores]}."""
+    state = load_state()
+    state.setdefault("pending_entries", {})[instrument] = meta
+    _write_state(state)
+
+
+def get_pending_entries() -> dict:
+    return load_state().get("pending_entries", {})
+
+
+def clear_pending_entry(instrument: str) -> None:
+    state = load_state()
+    state.setdefault("pending_entries", {}).pop(instrument, None)
+    _write_state(state)
 
 
 def next_paper_contract_id() -> int:

@@ -26,13 +26,17 @@ from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
 from trading.cfd.state import (
+    clear_pending_entry,
+    exclude_instrument,
     get_daily_risk_tracking,
+    get_pending_entries,
     list_open_trades,
     load_state,
     pop_open_trade,
     record_open_trade,
     set_broker_baseline,
     set_daily_risk_tracking,
+    set_pending_entry,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
 from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
@@ -103,6 +107,47 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
             )
         )
     return records
+
+
+def _reconcile_unknown_positions(
+    positions_by_instrument: dict[str, list[dict]], tracked_open: dict, pending_entries: dict
+) -> tuple[list[tuple[int, dict]], list[dict]]:
+    """Splits every currently-open contract with no local metadata
+    (`tracked_open`) into two buckets:
+
+    adoptions: (contract_id, leg_meta) pairs to record_open_trade() --
+    contracts matching a *pending* entry (trading.cfd.state.
+    set_pending_entry, written right before this bot's own
+    submit_multiplier_order calls) from a run that crashed between
+    submitting the order and its state-file commit ever landing (each
+    run's local state.json is only committed to git in a separate,
+    later workflow step -- see .github/workflows/cfd-trading.yml). This
+    recovers the strategy/thesis/risk_amount attribution that would
+    otherwise be lost, closing Revision 3 gap #9's attribution window.
+
+    foreign: contracts with NO matching pending entry either -- never
+    opened by this bot's own tracked intent at all (a manual trade, or
+    an unrelated script hitting the same account). Never silently
+    absorbed into this bot's own strategy/thesis attribution -- closes
+    Revision 3 gap #8. The caller logs these loudly and excludes the
+    instrument from new entries until a human investigates; their
+    balance impact still reaches virtual equity (which is derived from
+    the raw broker balance delta, not per-trade attribution -- see
+    docs/ARCHITECTURE_AUDIT.md for why that part isn't solvable without
+    a deeper per-trade balance API this project doesn't have)."""
+    adoptions: list[tuple[int, dict]] = []
+    foreign: list[dict] = []
+    for instrument, legs in positions_by_instrument.items():
+        unknown_legs = [leg for leg in legs if str(leg["contract_id"]) not in tracked_open]
+        if not unknown_legs:
+            continue
+        pending_legs = list(pending_entries.get(instrument, {}).get("legs", []))
+        for leg in unknown_legs:
+            if pending_legs:
+                adoptions.append((leg["contract_id"], pending_legs.pop(0)))
+            else:
+                foreign.append({"contract_id": leg["contract_id"], "instrument": instrument, "side": leg["side"]})
+    return adoptions, foreign
 
 
 def _resolve_exit_strategy_entry(meta: Optional[dict]):
@@ -217,6 +262,20 @@ async def run_once():
     behavior of a single leg with a small fixed take-profit. Both legs
     share the same thesis_key and both were already included as one
     combined unit in the Portfolio Risk Governor check above.
+
+    Before any new entry is submitted, its intent is recorded
+    (trading.cfd.state.set_pending_entry) and cleared again right after --
+    if this process crashes in between, or its state-file commit never
+    lands (a separate, later workflow step), the next run's
+    _reconcile_unknown_positions() recovers full attribution for
+    whichever leg(s) actually went through, rather than losing it.
+    Separately, ANY contract open on Deriv with no local tracked_open
+    metadata and no matching pending entry is treated as a genuinely
+    foreign position -- never silently absorbed into this bot's own
+    strategy/thesis attribution; its instrument is auto-excluded from
+    new entries (a risk-reducing action, no human approval needed) until
+    a human investigates. Both close docs/VISION.md's Revision 3
+    execution-realism requirements.
     """
     state = load_state()
     if state.get("paused"):
@@ -308,6 +367,7 @@ async def run_once():
             min_stake=settings.cfd_min_stake,
             daily_start_equity=daily_start_equity,
             initially_halted=initially_halted,
+            stake_safety_margin=settings.cfd_stake_safety_margin,
         )
         if risk.halted:
             logger.info("Daily loss limit already breached today (%.2f%% halt) -- no new entries this run.", settings.cfd_max_daily_loss_pct * 100)
@@ -329,13 +389,60 @@ async def run_once():
                 record.instrument, record.contract_id, record.pnl,
             )
 
+        # open_positions_list(), not open_positions() -- a partial-close
+        # split (below) can legitimately leave two simultaneous contracts
+        # ("scalp" and "runner") open on the SAME instrument, which
+        # open_positions()'s symbol-collapsed dict would silently hide
+        # one of. See broker.py's docstrings on both methods.
+        positions_by_instrument: dict[str, list[dict]] = {}
+        for p in await broker.open_positions_list():
+            positions_by_instrument.setdefault(p["instrument"], []).append(p)
+
+        # Idempotency / attribution recovery + foreign-position detection
+        # (docs/VISION.md's Revision 3 execution-realism requirements):
+        # any contract open on Deriv with no local tracked_open metadata
+        # either matches a pending entry from a run that crashed between
+        # submitting an order and its state-file commit ever landing
+        # (adopted -- attribution recovered, see _reconcile_unknown_
+        # positions' docstring) or it's genuinely foreign -- never opened
+        # by this bot's own tracked intent. A foreign contract is never
+        # silently absorbed into this bot's strategy/thesis attribution;
+        # its instrument is auto-excluded from new entries (the existing,
+        # already-audited excluded_instruments mechanism -- a
+        # risk-reducing action, no human approval needed) until a human
+        # investigates and runs `cfd_cli.py include-instrument` again.
+        pending_entries = get_pending_entries()
+        adoptions, foreign = _reconcile_unknown_positions(positions_by_instrument, tracked_open, pending_entries)
+        for contract_id, leg_meta in adoptions:
+            record_open_trade(contract_id, leg_meta)
+            tracked_open[str(contract_id)] = leg_meta
+            logger.warning(
+                "%s: recovered attribution for contract %d from a pending entry interrupted last run.",
+                leg_meta.get("instrument", ""), contract_id,
+            )
+        for pending_instrument in pending_entries:
+            clear_pending_entry(pending_instrument)
+        excluded = dict(state.get("excluded_instruments") or {})
+        for f in foreign:
+            reason = f"foreign position detected: contract {f['contract_id']} was never opened by this bot -- investigate, then `include-instrument` to resume"
+            exclude_instrument(f["instrument"], reason)
+            excluded[f["instrument"]] = reason
+            logger.warning(
+                "FOREIGN POSITION: %s contract %d is open on Deriv but was never opened by this bot's tracked "
+                "intent -- not attributed to any strategy/thesis, instrument auto-excluded from new entries. "
+                "Virtual equity still reflects its balance impact (derived from the raw broker balance delta, "
+                "not per-trade attribution). Investigate manually.",
+                f["instrument"], f["contract_id"],
+            )
+
         # Portfolio Risk Governor snapshot: every position this system
         # currently has open, across every run so far (not just ones
         # opened this run) -- rebuilt fresh each run from the same
         # persisted state.list_open_trades() _resolve_exit_strategy_entry
-        # already trusts, minus anything just reconciled away above.
-        # Mutated in place below as positions open/close within this
-        # run's own loop, so later instruments see the up-to-date total.
+        # already trusts, minus anything just reconciled away above, plus
+        # anything just adopted above. Mutated in place below as
+        # positions open/close within this run's own loop, so later
+        # instruments see the up-to-date total.
         open_risk_positions = [
             OpenRiskPosition(
                 contract_id=int(cid),
@@ -353,16 +460,6 @@ async def run_once():
             max_portfolio_risk_pct=settings.cfd_max_portfolio_risk_pct,
             max_exposure_multiple=settings.cfd_max_exposure_multiple,
         )
-
-        excluded = state.get("excluded_instruments") or {}
-        # open_positions_list(), not open_positions() -- a partial-close
-        # split (below) can legitimately leave two simultaneous contracts
-        # ("scalp" and "runner") open on the SAME instrument, which
-        # open_positions()'s symbol-collapsed dict would silently hide
-        # one of. See broker.py's docstrings on both methods.
-        positions_by_instrument: dict[str, list[dict]] = {}
-        for p in await broker.open_positions_list():
-            positions_by_instrument.setdefault(p["instrument"], []).append(p)
 
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
@@ -558,8 +655,40 @@ async def run_once():
                 ]
 
             entry_thesis_key = compute_thesis_key(instrument, side)
-            opened_legs = []
+            entry_time = _now_iso()
+            leg_metas = []
             for leg_tag, leg_terms in legs_to_open:
+                leg_meta = {
+                    "instrument": instrument,
+                    "strategy": strategy_tag,
+                    "side": side,
+                    "entry_time": entry_time,
+                    "entry_price": signal.price,
+                    "stake": leg_terms["stake"],
+                    "risk_amount": leg_terms["risk_amount"],
+                    "multiplier": risk.multiplier,
+                    "thesis_key": entry_thesis_key,
+                    "equity_before": risk.equity,
+                    "regime": regime,
+                    "leg": leg_tag,
+                }
+                if leg_tag == "runner":
+                    leg_meta["trailing_stop"] = TrailingStopState(
+                        entry_price=signal.price, initial_stop_price=signal.stop_price, side=side,
+                    ).as_dict()
+                leg_metas.append((leg_tag, leg_terms, leg_meta))
+
+            # Record intent BEFORE submitting any order -- if this
+            # process crashes partway through, or its state-file commit
+            # never lands (a separate, later workflow step -- see
+            # .github/workflows/cfd-trading.yml), the next run's
+            # _reconcile_unknown_positions() recovers full attribution
+            # for whichever leg(s) actually went through instead of
+            # losing it or misflagging them as foreign.
+            set_pending_entry(instrument, {"legs": [lm for _, _, lm in leg_metas]})
+
+            opened_legs = []
+            for leg_tag, leg_terms, leg_meta in leg_metas:
                 leg_stake, leg_risk, leg_tp = leg_terms["stake"], leg_terms["risk_amount"], leg_terms["take_profit_amount"]
                 logger.info(
                     "%s %s leg=%s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
@@ -571,24 +700,6 @@ async def run_once():
                     logger.warning("%s: leg=%s order submitted but no contract_id returned -- not tracked.", instrument, leg_tag)
                     continue
 
-                leg_meta = {
-                    "instrument": instrument,
-                    "strategy": strategy_tag,
-                    "side": side,
-                    "entry_time": _now_iso(),
-                    "entry_price": signal.price,
-                    "stake": leg_stake,
-                    "risk_amount": leg_risk,
-                    "multiplier": risk.multiplier,
-                    "thesis_key": entry_thesis_key,
-                    "equity_before": risk.equity,
-                    "regime": regime,
-                    "leg": leg_tag,
-                }
-                if leg_tag == "runner":
-                    leg_meta["trailing_stop"] = TrailingStopState(
-                        entry_price=signal.price, initial_stop_price=signal.stop_price, side=side,
-                    ).as_dict()
                 record_open_trade(contract_id, leg_meta)
                 open_risk_positions.append(
                     OpenRiskPosition(
@@ -598,6 +709,12 @@ async def run_once():
                 )
                 opened_legs.append({"contract_id": contract_id, "side": side})
 
+            # Every leg either succeeded (tracked_open now has it, via
+            # record_open_trade above) or failed outright (nothing to
+            # adopt) -- either way this run's intent is resolved, so the
+            # pending marker is cleared now rather than left for next
+            # run's reconciliation to puzzle back out.
+            clear_pending_entry(instrument)
             if opened_legs:
                 risk.register_open()
                 positions_by_instrument[instrument] = opened_legs

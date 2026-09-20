@@ -98,6 +98,30 @@ class Settings:
     Used by CfdRiskManager to SKIP a trade rather than round its
     risk-budgeted stake up past this floor, which would silently risk more
     than risk_per_trade of equity on a small account."""
+    cfd_stake_safety_margin: float = field(
+        default_factory=lambda: float(os.getenv("CFD_STAKE_SAFETY_MARGIN", "0.97"))
+    )
+    """See risk.py's CfdRiskManager.stake_safety_margin -- 3% headroom by
+    default so a small unfavorable gap between a signal's computed price
+    and the actual Deriv fill price doesn't push realized risk over the
+    configured budget. A reasonable, stated default, not yet empirically
+    tuned against live fill data -- same status as the regime/ADX
+    thresholds elsewhere in this file."""
+    cfd_backtest_spread_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_BACKTEST_SPREAD_PCT", "0.0005"))
+    )
+    """See backtest.py's CfdBacktestEngine -- round-trip spread cost as a
+    fraction of notional exposure, charged once per closed trade. Not
+    confirmed against Deriv's actual live spread for any instrument; a
+    stated, reasonable placeholder."""
+    cfd_backtest_daily_financing_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_BACKTEST_DAILY_FINANCING_PCT", "0.00005"))
+    )
+    """See backtest.py's CfdBacktestEngine -- overnight financing cost as
+    a fraction of notional exposure, charged per full UTC calendar day a
+    position stays open. Not confirmed against Deriv's actual published
+    rate; a stated, reasonable placeholder -- matters more now that
+    Revision 3's exit philosophy explicitly allows multi-day holds."""
 
     # Market Regime Engine (CFD) -- see trading.cfd.regime. ADX's
     # conventional textbook cutoff for "trending" (Wilder's original

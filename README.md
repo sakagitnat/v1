@@ -685,8 +685,57 @@ contracts. `TradeRecord` tags each trade with its `leg`.
 **Known limitation, not yet fixed:** `backtest.py` and `paper_trading.py`
 still simulate the OLD single-fixed-target exit model -- their
 validation/forward-simulation numbers don't yet reflect this new exit
-behavior. Queued for the execution-realism pass next (see
-`docs/ARCHITECTURE_AUDIT.md`).
+behavior (still true after the execution-realism pass below -- see that
+section's own "known limitation" note).
+
+**Execution Realism, Sizing Buffer, and Attribution Integrity.** Closes
+Revision 3 gaps #6-9.
+- **Sizing buffer** (`CFD_STAKE_SAFETY_MARGIN`, default 0.97):
+  `CfdRiskManager.stake_safety_margin` shrinks the risk budget itself (not
+  just the derived stake) by 3% before sizing, so a small unfavorable gap
+  between a signal's computed price and the actual Deriv fill price never
+  pushes realized risk over what was configured. Live trading only --
+  `backtest.py` leaves it at the default (no change), since a backtest's
+  fill price *is* the signal price by construction.
+- **Backtest cost realism** (`CFD_BACKTEST_SPREAD_PCT`=0.05%,
+  `CFD_BACKTEST_DAILY_FINANCING_PCT`=0.005%/day): Deriv Multipliers
+  guarantee exact stop-loss/take-profit execution (see `broker.py`), so
+  "no slippage" on those fills was already correct, not an optimistic
+  simplification -- spread and overnight financing were the two real,
+  unmodeled costs. `CfdBacktestEngine` now deducts a spread cost once per
+  closed trade (from that trade's own `pnl`) and accrues financing
+  directly against equity at every UTC day boundary a position stays
+  open -- matters far more now that positions can run for days, not just
+  hours. Both default to 0.0 on the engine itself (every existing unit
+  test's exact-fill assertions stay unchanged), but every real script
+  (`research_cfd_strategy.py`, `optimize_cfd_strategy.py`, the
+  `sweep_cfd_risk*.py`/`optimize_cfd_breakout.py` family) now passes the
+  configured non-zero values, so real validation runs include these costs
+  by default. Neither number is confirmed against Deriv's actual live
+  rates -- stated, reasonable placeholders, same status as the ADX/regime
+  thresholds elsewhere in this project. No commission line is modeled: no
+  confirmed commission structure exists for this product beyond spread
+  and financing.
+- **Idempotency + foreign-position detection**, closed together with one
+  mechanism (`trading/cfd/state.py`'s `set_pending_entry`/
+  `get_pending_entries`/`clear_pending_entry`, `scheduler.py`'s
+  `_reconcile_unknown_positions`): before submitting any order,
+  `scheduler.py` now records exactly what it's about to open; it clears
+  that record right after, whether every leg succeeded or not. If the
+  process crashes in between -- or its state-file commit never lands (a
+  separate, later workflow step) -- the next run finds a contract open on
+  Deriv with no local metadata and checks it against that stale pending
+  record: a match is **adopted** (full strategy/thesis/risk_amount
+  attribution recovered, nothing lost), no match makes it **foreign**
+  (never opened by this bot's own tracked intent at all). A foreign
+  position is never silently absorbed into this bot's own attribution --
+  its instrument is auto-excluded from new entries (the existing
+  `excluded_instruments` mechanism, a risk-reducing action needing no
+  human approval) and logged loudly for a human to investigate. Virtual
+  equity is still balance-derived, so a foreign position's P&L impact
+  still reaches it (not solvable without a per-trade balance API Deriv
+  doesn't expose here) -- but it can no longer happen *silently*, which is
+  what this gap actually asked for.
 
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every

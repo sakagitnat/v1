@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from trading.cfd.backtest import CfdBacktestEngine
 from trading.cfd.portfolio_risk import PortfolioRiskCeilings
@@ -167,6 +168,54 @@ def test_portfolio_risk_governor_allows_uncorrelated_entries_up_to_max_open_posi
     engine = CfdBacktestEngine(_DualStrategy(), starting_equity=1000.0, max_open_positions=5, ceilings=ceilings)
     result = engine.run(bars)
     assert engine.risk.open_positions == 2  # both got through -- opposite-signed factor, not correlated
+
+
+def test_spread_cost_defaults_to_zero_and_does_not_affect_pnl():
+    closes = [100, 100, 100]
+    highs = [100, 100, 110]
+    lows = [100, 100, 100]
+    bars = {"XAU": _bars(closes, highs, lows)}
+    actions = {0: Signal("XAU", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=105.0)}
+    strategy = _ScriptedStrategy(actions)
+    engine = CfdBacktestEngine(strategy, starting_equity=1000.0, risk_per_trade=0.01, multiplier=20)
+    result = engine.run(bars)
+    assert result["trades"][0]["pnl"] == 10.0
+    assert result["trades"][0]["spread_cost"] == 0.0
+
+
+def test_spread_cost_is_deducted_from_pnl_once_per_round_trip():
+    closes = [100, 100, 100]
+    highs = [100, 100, 110]
+    lows = [100, 100, 100]
+    bars = {"XAU": _bars(closes, highs, lows)}
+    actions = {0: Signal("XAU", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=105.0)}
+    strategy = _ScriptedStrategy(actions)
+    engine = CfdBacktestEngine(strategy, starting_equity=1000.0, risk_per_trade=0.01, multiplier=20, spread_pct=0.001)
+    result = engine.run(bars)
+    trade = result["trades"][0]
+    # stake=10.0, multiplier=20 -> notional=200; spread_cost = 200*0.001 = 0.2
+    assert trade["spread_cost"] == 0.2
+    assert trade["pnl"] == 10.0 - 0.2
+
+
+def test_daily_financing_accrues_against_equity_for_each_full_day_held():
+    # A position opened and held across two UTC day boundaries before
+    # closing on the third day -- financing should be charged twice
+    # (once per boundary crossed while still open), not once per bar.
+    idx = pd.date_range("2024-01-01", periods=4, freq="1D", tz="UTC")
+    closes = [100, 100, 100, 100]
+    bars = {"XAU": pd.DataFrame({"open": closes, "high": closes, "low": closes, "close": closes}, index=idx)}
+    actions = {0: Signal("XAU", Action.BUY, price=100.0, stop_price=50.0, take_profit_price=200.0)}
+    strategy = _ScriptedStrategy(actions)
+    engine = CfdBacktestEngine(
+        strategy, starting_equity=1000.0, risk_per_trade=0.01, multiplier=20, daily_financing_pct=0.0001,
+    )
+    result = engine.run(bars)
+    # stake = 10*100/(20*50) = 1.0 -> notional = 20; financing per day = 20*0.0001 = 0.002
+    # position opens on bar index 1 (2024-01-02), stays open through bars 2 and 3 (two day
+    # boundaries crossed: Jan2->Jan3, Jan3->Jan4) before never closing (no exit signal/stop/target hit).
+    curve = result["equity_curve"]
+    assert curve.iloc[-1] == pytest.approx(1000.0 - 2 * 0.002, abs=1e-9)
 
 
 def test_equity_curve_reflects_unrealized_pnl_while_open():

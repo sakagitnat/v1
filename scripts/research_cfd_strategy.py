@@ -67,6 +67,8 @@ def run_backtest_full(params: dict, bars: dict) -> dict:
         risk_per_trade=settings.cfd_risk_per_trade,
         max_open_positions=settings.cfd_max_open_positions,
         max_daily_loss_pct=settings.cfd_max_daily_loss_pct,
+        spread_pct=settings.cfd_backtest_spread_pct,
+        daily_financing_pct=settings.cfd_backtest_daily_financing_pct,
     )
     return engine.run(bars)
 
