@@ -12,8 +12,8 @@
   "paper_equity": {},
   "paper_trade_counter": 0,
   "daily_risk_tracking": {
-    "date": null,
-    "start_equity": null,
+    "date": "2026-09-20",
+    "start_equity": 100.0,
     "halted": false
   }
 }
