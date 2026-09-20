@@ -641,27 +641,39 @@ forward-looking validation on data no backtest ever saw, between
 automated validation (Research Lab, which only ever lands a candidate at
 `VALIDATED`) and a human's decision to promote to `ACTIVE`.
 
+**Autonomous Demotion.** `trading/cfd/decay_supervisor.py`
+(`run_autonomous_demotion`, called by `scheduler.py` at the start of
+every run, before it even connects to Deriv) checks every `ACTIVE`
+strategy against Failure Analysis's degradation signal and demotes it
+(`ACTIVE -> PAUSED`) automatically, through the same audited
+`set_state()` path a human's `promote-strategy` command uses, with the
+same required reason -- **no human approval needed for this specific
+direction.** Per `docs/VISION.md`'s "Autonomy boundaries": the AI may act
+on its own for anything that only *reduces* risk or exposure (strategy
+selection, demotion, pausing, cutting allocation) -- a human is only
+required for the reverse (raising a hard risk ceiling, enabling real
+money, promoting a strategy past `PAPER`, changing the safety
+architecture itself). Demotion never promotes anything and never
+re-validates a strategy on its own -- a demoted strategy sits `PAUSED`
+until a human or a future scheduled run sends it back through
+`scripts/research_cfd_strategy.py` for re-validation.
+
 **AI Trading Manager: Management Report.** `trading/cfd/manager_report.py`
-(`cfd_cli.py manager-report`) is the layer that actually ties Phases 0-4
+(`cfd_cli.py manager-report`) is the layer that ties everything above
 together: it reads the Trade Database, the Paper Trading log, and the
 Strategy Registry, and produces a consolidated report -- overall
 performance, the loss breakdown, every strategy grouped by lifecycle
-state, and **concrete, copy-pasteable recommended commands** (e.g. "this
-`ACTIVE` strategy shows degradation, run `promote-strategy ... PAUSED`",
-"this `VALIDATED` candidate is ready to start paper trading, run
-`promote-strategy ... PAPER`", "this `PAPER` strategy has 25 trades and a
-positive expectancy, worth reviewing for `ACTIVE`"). **It never applies
-any of these itself.** Every lifecycle change still goes through the
-same deliberate, audited `promote-strategy` call as any other manual
-change -- handing an AI unrestricted authority to pause/promote
-strategies on its own would be exactly the AI-overrides-the-Risk-Governor
-/ hot-edit-without-validation behavior docs/VISION.md forbids. What *is*
-already fully automated, per the vision, is the AI choosing BUY/SELL/NO
-TRADE and selecting among already-`ACTIVE` strategies each run (see
-"Market Regime Engine & Strategy Selector" above) -- the distinction
-this report is built to respect is between deciding *how to trade with
-what's already approved* (automatic) and deciding *what gets approved*
-(always a human).
+state, and **concrete, copy-pasteable commands** for whatever still needs
+a human (e.g. "this `VALIDATED` candidate is ready to start paper
+trading, run `promote-strategy ... PAPER`", "this `PAPER` strategy has 25
+trades and a positive expectancy, worth reviewing for `ACTIVE`"). A
+degraded `ACTIVE` strategy still shows up here too, but only as
+*informational* -- autonomous demotion above already handles it on the
+next scheduler run, so the report's command for that case is explicitly
+labeled optional, for a human who wants to act sooner than that. **This
+report itself never applies anything requiring approval** -- promoting
+past a boundary always goes through a human running the command
+themselves.
 
 **Trade Database & Performance Engine.** Every trade the live bot closes
 -- whether by its own signal-exit logic or by Deriv auto-closing a

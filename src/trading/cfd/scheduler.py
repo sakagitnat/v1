@@ -4,6 +4,7 @@ from typing import Optional
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.capital import equity_for_account
+from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
 from trading.cfd.paper_trading import run_paper_trading
 from trading.cfd.regime import classify_regime
@@ -19,7 +20,7 @@ from trading.cfd.state import (
     set_daily_risk_tracking,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
-from trading.cfd.trade_log import TradeRecord, record_trade
+from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -149,11 +150,27 @@ async def run_once():
     Paper trading stops whenever the bot is paused too, same as real
     trading -- simplest, safest default; nothing (real or simulated)
     opens a new position while a human has explicitly halted the bot.
+
+    Before any of the above: trading.cfd.decay_supervisor.
+    run_autonomous_demotion() checks every ACTIVE strategy against
+    Failure Analysis's degradation signal and pauses any that qualify,
+    with no human approval needed -- per docs/VISION.md's "Autonomy
+    boundaries," the AI may act on its own to reduce risk (demote,
+    pause, go flat), never to increase it or promote something.
     """
     state = load_state()
     if state.get("paused"):
         logger.info("CFD bot is paused (state/cfd_bot_state.json) -- skipping this run.")
         return
+
+    # Autonomous demotion (docs/VISION.md's "Autonomy boundaries"): any
+    # ACTIVE strategy Failure Analysis flags as decayed is paused right
+    # here, before this run even looks at which strategies are ACTIVE --
+    # no human approval needed for a risk-reducing action, only for the
+    # reverse. Cheap and local (no network), so it runs before the broker
+    # connection below.
+    for demotion in run_autonomous_demotion(load_trades()):
+        logger.warning("%s -- %s", demotion["strategy"], demotion["reason"])
 
     if not list_by_state(LifecycleState.ACTIVE):
         raise RuntimeError("No strategy is registered as ACTIVE -- nothing to trade. See `cfd_cli.py list-strategies`.")

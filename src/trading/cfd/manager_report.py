@@ -1,25 +1,25 @@
 """AI Trading Manager -- Management Report -- src/trading/cfd/manager_report.py
 
-Ties together everything Phases 0-4 built (Trade Database, Performance
+Ties together everything built so far (Trade Database, Performance
 Engine, Failure Analysis, Strategy Registry, Research Lab, Paper Trading)
 into one consolidated report: what's actually happening across every
-registered strategy, and what a human should consider doing about it.
+registered strategy, and what still needs a human's attention.
 
-This module NEVER takes action on its own -- it only recommends, in the
-form of the exact `cfd_cli.py` command that would carry out each
-suggestion. Every lifecycle change it surfaces still goes through that
-command, with the same audited-reason requirement as any other manual
-change (trading.cfd.strategy_registry.set_state()). Handing an AI
-unrestricted authority to pause/promote/resize strategies on its own
-would be exactly the kind of AI-overrides-the-Risk-Governor /
-hot-edit-without-validation behavior docs/VISION.md forbids: the AI
-decides BUY/SELL/NO TRADE and selects among already-ACTIVE strategies
-(both already automated -- see trading.cfd.selector), but strategy
-lifecycle changes stay a deliberate, audited human action, same as every
-phase before this one.
+This module itself NEVER takes action -- it only reports, in the form of
+the exact `cfd_cli.py` command that would carry out each suggestion (or,
+for degradation, what trading.cfd.decay_supervisor already did
+automatically on the live scheduler's last run -- see below). Every
+recommendation this module surfaces that would RAISE risk or cross a
+boundary (promoting VALIDATED->PAPER, PAPER->ACTIVE) still needs a human
+to run the command themselves, per docs/VISION.md's "Autonomy
+boundaries": those directions always need explicit approval. Actions
+that only ever LOWER risk (demoting a decaying ACTIVE strategy) don't
+wait for this report at all -- trading.cfd.decay_supervisor.
+run_autonomous_demotion() already does those automatically, on the
+regular scheduler run, before a human ever reads this report.
 
-Recommendations are deterministic and fully explained -- no black box:
-every one names the specific number(s) that triggered it.
+Non-degradation recommendations are deterministic and fully explained --
+no black box: every one names the specific number(s) that triggered it.
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -39,6 +39,14 @@ class Recommendation:
 
 
 def _degradation_recommendations(trades: list[dict], registry_entries: list) -> list[Recommendation]:
+    """Surfaces any ACTIVE strategy that's currently degraded -- almost
+    always informational, not an action request: trading.cfd.
+    decay_supervisor.run_autonomous_demotion() already demotes these on
+    the scheduler's very next run, no human required (docs/VISION.md's
+    "Autonomy boundaries"). Seeing one listed here usually just means
+    that run hasn't happened yet since the degradation appeared. The
+    command is still given for a human who wants to act sooner than the
+    next scheduled run, not because it's required."""
     recs = []
     for entry in registry_entries:
         if entry.state != LifecycleState.ACTIVE.value:
@@ -48,10 +56,10 @@ def _degradation_recommendations(trades: list[dict], registry_entries: list) -> 
         if result and result["degraded"]:
             recs.append(
                 Recommendation(
-                    type="pause_degraded_strategy",
+                    type="degrading_strategy_pending_autonomous_demotion",
                     strategy=tag,
-                    reason=result["reason"],
-                    command=f"cfd_cli.py promote-strategy {entry.name} {entry.version} PAUSED --reason \"degradation: {result['reason']}\"",
+                    reason=f"{result['reason']} -- will be auto-demoted to PAUSED on the next scheduler run if not already.",
+                    command=f"cfd_cli.py promote-strategy {entry.name} {entry.version} PAUSED --reason \"degradation: {result['reason']}\" (optional -- happens automatically otherwise)",
                 )
             )
     return recs

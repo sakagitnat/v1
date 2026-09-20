@@ -31,15 +31,11 @@ revised vision:
    strategies, no weighting by conviction or recent performance. This is
    the biggest structural gap against the revised pipeline's explicit
    "Portfolio / Allocation Decision" stage.
-2. **No autonomous demotion.** `trading.cfd.failure_analysis.
-   detect_degradation()` only *reports* a degraded strategy;
-   `trading.cfd.manager_report` only *recommends* the
-   `promote-strategy ... PAUSED` command. Nothing in the codebase ever
-   calls `strategy_registry.set_state()` itself. Per the revised
-   "Autonomy boundaries" section, demotion/pause/allocation-reduction on
-   detected decay should happen automatically (logged, explained, never
-   silent) -- promotion past PAPER is the only lifecycle direction that
-   should still require a human.
+2. ~~**No autonomous demotion.**~~ **Closed 2026-09-20** -- see Progress
+   log below. `trading.cfd.decay_supervisor.run_autonomous_demotion()`
+   now calls `strategy_registry.set_state()` itself on every scheduler
+   run for any `ACTIVE` strategy `detect_degradation()` flags, with no
+   human in the loop for this (risk-reducing) direction.
 3. **Regime taxonomy is narrower than the target.**
    `trading.cfd.regime.classify_regime()` only returns
    trending/ranging/unknown from a single ADX reading. The revised
@@ -271,6 +267,36 @@ capital model. These all still match the revised vision as-is.
   actual state files, not just the code going forward.
 
   Everything else below is still an accurate account of what's missing.
+
+- **2026-09-20 — Revised gap #2 ("no autonomous demotion") closed.**
+  The user chose this as the first of the three revised-gap-analysis
+  items above to fix. New module `trading/cfd/decay_supervisor.py`
+  (`run_autonomous_demotion(trades)`) iterates every `ACTIVE` strategy,
+  runs `failure_analysis.detect_degradation()` against it, and for any
+  that comes back degraded, calls `strategy_registry.set_state(...,
+  PAUSED, reason="autonomous demotion: ...")` itself -- the same audited
+  lifecycle path (history entry, required reason) a human's
+  `promote-strategy` command uses, just triggered automatically instead
+  of by hand. `scheduler.py`'s `run_once()` now calls it at the very
+  start of every run, before the Deriv connection is even opened (cheap,
+  local, no network) and before the "no ACTIVE strategy" fail-fast check,
+  so a strategy demoted this run is correctly excluded from selection the
+  same run. `manager_report.py`'s degradation recommendation is now
+  explicitly informational (`type` renamed
+  `pause_degraded_strategy` -> `degrading_strategy_pending_autonomous_demotion`):
+  it's surfacing something `decay_supervisor` already acted on or is
+  about to on the next scheduler run, not something waiting on a human.
+  This directly implements `docs/VISION.md`'s "Autonomy boundaries" --
+  demotion only ever *lowers* risk/exposure, so it needs no human
+  approval; promotion past `PAPER` still does and is untouched by this
+  change. 6 new tests in `tests/test_cfd_decay_supervisor.py` (no-active
+  → no demotions; degraded ACTIVE → demoted with correct audit trail;
+  healthy ACTIVE → left alone; too little trade history → left alone;
+  non-ACTIVE strategies never touched regardless of their trade history;
+  only the actually-degraded one among several ACTIVE strategies gets
+  demoted). Full suite: 251 tests passing. Gaps #1 (multi-strategy
+  portfolio allocation) and #3 (richer regime taxonomy) from the revised
+  gap analysis above are still open, not yet started.
 
 ## Executive summary
 

@@ -35,7 +35,10 @@ def test_registry_summary_groups_by_state(tmp_path, monkeypatch):
     assert report["registry_summary"]["CANDIDATE"] == ["b@v1"]
 
 
-def test_recommends_pausing_a_degraded_active_strategy(tmp_path, monkeypatch):
+def test_flags_a_degraded_active_strategy_pending_autonomous_demotion(tmp_path, monkeypatch):
+    # decay_supervisor.run_autonomous_demotion() (called by the live
+    # scheduler, not build_report) is what actually demotes it -- this
+    # report just surfaces it as informational until that next run happens.
     _use_tmp_registry(tmp_path, monkeypatch)
     reg.register("ema_crossover", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
 
@@ -43,7 +46,7 @@ def test_recommends_pausing_a_degraded_active_strategy(tmp_path, monkeypatch):
     recent = [_trade(pnl=-1.0, contract_id=100 + i, exit_time=f"2026-01-02T{i:02d}:00:00+00:00") for i in range(10)]
 
     report = build_report(prior + recent, [])
-    pause_recs = [r for r in report["recommendations"] if r["type"] == "pause_degraded_strategy"]
+    pause_recs = [r for r in report["recommendations"] if r["type"] == "degrading_strategy_pending_autonomous_demotion"]
     assert len(pause_recs) == 1
     assert pause_recs[0]["strategy"] == "ema_crossover@v1"
     assert "promote-strategy ema_crossover v1 PAUSED" in pause_recs[0]["command"]
