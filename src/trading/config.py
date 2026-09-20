@@ -109,6 +109,19 @@ class Settings:
     cfd_regime_trend_threshold: float = field(
         default_factory=lambda: float(os.getenv("CFD_REGIME_TREND_THRESHOLD", "25.0"))
     )
+    # Volatility dimension + the explicit UNSTABLE "don't trade" condition
+    # (docs/VISION.md's revised regime taxonomy) -- see trading.cfd.regime
+    # for how these combine with the ADX reading above. Same status as the
+    # ADX defaults: reasonable, sourced, not yet TRAIN/TEST-validated.
+    cfd_regime_atr_window: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_ATR_WINDOW", "14"))
+    )
+    cfd_regime_volatility_lookback: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_VOLATILITY_LOOKBACK", "100"))
+    )
+    cfd_regime_unstable_volatility_ratio: float = field(
+        default_factory=lambda: float(os.getenv("CFD_REGIME_UNSTABLE_VOLATILITY_RATIO", "2.5"))
+    )
 
     # Operating Modes (see trading.cfd.operating_mode) -- an ABSOLUTE
     # ceiling on effective risk_per_trade no mode's multiplier may ever

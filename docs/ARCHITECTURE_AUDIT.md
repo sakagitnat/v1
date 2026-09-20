@@ -11,9 +11,7 @@ been exercised against the real Deriv demo account** -- but see
 "Revised gap analysis (2026-09-20)" below: `docs/VISION.md` was revised
 the same day to correct a too-narrow reading of the original brief, and
 three structural gaps against the *revised* vision were opened, tracked
-there. Two of three (autonomous demotion, multi-strategy Portfolio/
-Allocation) are now closed -- see Progress log. Only the regime-taxonomy
-gap remains.
+there. **All three are now closed** -- see Progress log.
 
 ## Revised gap analysis (2026-09-20)
 
@@ -36,12 +34,11 @@ revised vision:
    now calls `strategy_registry.set_state()` itself on every scheduler
    run for any `ACTIVE` strategy `detect_degradation()` flags, with no
    human in the loop for this (risk-reducing) direction.
-3. **Regime taxonomy is narrower than the target.**
-   `trading.cfd.regime.classify_regime()` only returns
-   trending/ranging/unknown from a single ADX reading. The revised
-   vision wants a volatility dimension (high/low) alongside trend
-   strength, and an explicit "unstable, don't trade" condition distinct
-   from "ranging" -- not built yet.
+3. ~~**Regime taxonomy is narrower than the target.**~~ **Closed
+   2026-09-20** -- see Progress log below. `trading.cfd.regime` now adds
+   a volatility dimension (`classify_volatility()`, ATR% vs. its own
+   recent median) and an explicit `UNSTABLE` condition (`classify_regime()`)
+   distinct from `RANGING`.
 
 Not gaps, already correctly built and unaffected by the revision: the
 Risk Governor boundary (AI never raises risk or crosses a hard limit --
@@ -341,6 +338,44 @@ capital model. These all still match the revised vision as-is.
   match the relaxed invariant and the new weighting/override behavior.
   Full suite: 265 tests passing. Only gap #3 (richer regime taxonomy)
   from the revised gap analysis remains open.
+
+- **2026-09-20 — Revised gap #3 ("regime taxonomy narrower than the
+  target") closed -- all three revised-gap-analysis items now done.**
+  `trading/cfd/regime.py` gains a volatility dimension alongside the
+  existing ADX-based trend read:
+  - `classify_volatility(bars, atr_window, lookback, low_ratio,
+    high_ratio)` reads the latest bar's ATR as a fraction of price
+    against the *median* of its own trailing history (a ratio, not a
+    fixed cutoff, so a low-volatility forex pair and a high-volatility
+    Deriv synthetic index both get judged against their own normal) --
+    returns `low`/`normal`/`high`/`unknown` (the last when there isn't
+    yet `MIN_VOLATILITY_HISTORY`=10 valid readings to compare against).
+  - `classify_regime()` keeps its existing signature and string return
+    (every caller -- `scheduler.py`, `selector.py`, `paper_trading.py`,
+    `TradeRecord.regime`, already-registered strategies'
+    `suited_regimes` -- needed zero changes) but can now also return the
+    new `UNSTABLE` label: a volatility spike (ratio >=
+    `unstable_volatility_ratio`, 2.5x by default, deliberately a higher
+    bar than `classify_volatility()`'s own "high") landing without a
+    strong enough ADX trend to justify the risk. `UNSTABLE` only ever
+    overrides what would otherwise be `RANGING` -- a strong trend
+    (`TRENDING`) is never downgraded by volatility alone, since
+    ATR-based stops already size for it. No registered strategy declares
+    `suited_regimes=["unstable"]`, so today this is another explicit NO
+    TRADE gate, same status `RANGING` had before any range-trading
+    strategy existed.
+  - Three new `Settings` fields (`CFD_REGIME_ATR_WINDOW`,
+    `CFD_REGIME_VOLATILITY_LOOKBACK`, `CFD_REGIME_UNSTABLE_VOLATILITY_RATIO`
+    -- same reasonable-but-unvalidated-default status as the existing ADX
+    settings) wired into `scheduler.py`'s `classify_regime()` call.
+  7 new tests in `tests/test_cfd_regime.py` (steady/low/high volatility
+  reads, too-little-history → unknown, a genuine volatility-spike-without-
+  trend fixture classified `UNSTABLE`, a volatile-but-trending fixture
+  staying `TRENDING`, the unstable ratio threshold's configurability) --
+  the 4 pre-existing regime tests pass unchanged. Full suite: 272 tests
+  passing. All three revised-gap-analysis items are now closed; the
+  system matches the revised `docs/VISION.md` architecture on every point
+  that audit identified.
 
 ## Executive summary
 

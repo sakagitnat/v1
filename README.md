@@ -537,11 +537,27 @@ gate; see `docs/ARCHITECTURE_AUDIT.md`'s later phases for that.
 own current candles (not a single reference symbol the way the stock
 system's `trading/regime.py` uses SPY -- there's no equivalent single
 "the market" reference across forex pairs, gold, and Deriv's synthetic
-indices) are classified as `trending`, `ranging`, or `unknown`
+indices) are classified as `trending`, `ranging`, `unstable`, or `unknown`
 (`trading/cfd/regime.py`, via ADX -- the same trend-strength indicator
-`EmaCrossoverStrategy`'s own optional chop filter already uses).
-`trading/cfd/selector.py` matches that regime against every `ACTIVE`
-registered strategy's `suited_regimes` -- **no match is an explicit NO
+`EmaCrossoverStrategy`'s own optional chop filter already uses -- plus a
+volatility dimension). `unstable` is a genuine volatility spike (the
+latest bar's ATR as a fraction of price at least
+`CFD_REGIME_UNSTABLE_VOLATILITY_RATIO` -- 2.5x by default -- above its
+own recent median, compared as a *ratio* rather than a fixed number so a
+low-price-volatility forex pair and a high-volatility synthetic index
+both get judged against their own normal) landing without a strong
+enough trend (ADX below `CFD_REGIME_TREND_THRESHOLD`) to justify the
+risk -- distinct from ordinary `ranging` (calm, unremarkable volatility,
+just no clear direction). Whipsaw/choppy conditions like that are unsafe
+for the current trend-following pool the same way a directionless
+market is, so it's another explicit NO TRADE, not folded silently into
+`ranging`. `classify_volatility()` also exposes a standalone
+`low`/`normal`/`high` read (a gentler 1.5x/0.6x ratio band) purely for
+visibility -- not yet consulted by strategy selection, since no
+registered strategy declares a volatility preference; same status
+`ranging` had before any range-trading strategy existed.
+`trading/cfd/selector.py` matches the primary regime label against every
+`ACTIVE` registered strategy's `suited_regimes` -- **no match is an explicit NO
 TRADE, logged and skipped, not a fallback guess.** Both registered
 strategies (`ema_crossover`, `donchian_breakout`) are trend-following and
 tagged `suited_regimes=["trending"]`, so today this mostly acts as a gate

@@ -29,7 +29,8 @@ from trading.strategy.base import Action
 logger = get_logger(__name__)
 
 GRANULARITY_SECONDS = 3600  # 1 hour -- see EmaCrossoverStrategy's docstring for why H1, not M15
-CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
+CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup,
+# and more than regime.py's default volatility_lookback=100 + atr_window=14
 
 
 def _now_iso() -> str:
@@ -291,7 +292,14 @@ async def run_once():
                 logger.debug("%s: not enough candles yet", instrument)
                 continue
 
-            regime = classify_regime(bars, settings.cfd_regime_adx_window, settings.cfd_regime_trend_threshold)
+            regime = classify_regime(
+                bars,
+                settings.cfd_regime_adx_window,
+                settings.cfd_regime_trend_threshold,
+                atr_window=settings.cfd_regime_atr_window,
+                volatility_lookback=settings.cfd_regime_volatility_lookback,
+                unstable_volatility_ratio=settings.cfd_regime_unstable_volatility_ratio,
+            )
 
             # Paper Trading runs independently of the real position below
             # -- every PAPER-state strategy gets evaluated on this same
