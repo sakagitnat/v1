@@ -1,0 +1,71 @@
+name: CFD Research Lab (Deriv)
+
+# Runs scripts/research_cfd_strategies.py unattended, weekly -- the
+# self-improvement loop the user asked for: no one has to remember to
+# trigger a grid search by hand. Every registered strategy class
+# (ema_crossover, donchian_breakout, mean_reversion) gets a fresh
+# TRAIN/TEST/walk-forward/Monte Carlo search against current market
+# history; anything that clears every gate is auto-registered as a new
+# VALIDATED version, exactly as far as trading.cfd.research_lab is ever
+# allowed to take a candidate on its own.
+#
+# Hard boundary, unchanged from every other workflow in this project:
+# this can only ever REGISTER a candidate at VALIDATED. It never
+# promotes to PAPER or ACTIVE, never touches CFD_ALLOW_LIVE_TRADING, and
+# never changes a risk ceiling -- promotion stays a deliberate, reasoned
+# `cfd_cli.py promote-strategy` command a human types, per
+# docs/VISION.md's "What the AI Trading Manager chooses vs. what it may
+# never touch." A run that finds nothing registers nothing -- an honest
+# negative result (see mean_reversion@v1's own retirement) is a valid,
+# expected outcome, not a failure to fix.
+#
+# Weekly, not daily: a grid search re-run against nearly-identical data
+# every day would mostly re-fit the same short-term noise, and each
+# strategy's own grid search already takes several minutes -- weekly
+# keeps the compute reasonable and gives enough new data between runs to
+# matter. Runs Sunday, before Monday's trading week starts, so any new
+# VALIDATED candidate is sitting in the registry ready for review by the
+# time markets reopen.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 0"
+
+permissions:
+  contents: write
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45  # three strategies' grid searches, sequentially, sharing one data fetch
+    steps:
+      # Pinned explicitly -- see cfd-trading.yml's own checkout step for
+      # why: a `schedule` trigger only ever fires the workflow file as it
+      # exists on the repo's default branch, and without this an
+      # unpinned checkout would run whatever (possibly stale) code sits
+      # on that default branch instead of this actively-developed one.
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/ai-trading-manager-deriv-pmay2v
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python scripts/research_cfd_strategies.py --granularity 3600 --source yfinance
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+      - name: Commit state changes (if any)
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_strategy_registry.json state/cfd_paper_trades.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD strategy registry from weekly Research Lab run"
+            git push
+          else
+            echo "No state changes to commit."
+          fi

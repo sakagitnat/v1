@@ -16,15 +16,39 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, pause, resume, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, burn-demo-balance, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout]
+        options: [status, performance, paper-performance, failures, manager-report, qualify-strategy, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy, optimize-mean-reversion, research-strategies]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
         type: string
       reason:
-        description: "Why (optional, for pause/exclude-instrument)"
+        description: "Why (optional, for pause/exclude-instrument/set-mode; REQUIRED for promote-strategy)"
         required: false
         type: string
+      operating_mode:
+        description: "For set-mode only: target operating mode"
+        required: false
+        type: choice
+        options: [defensive, normal, aggressive, recovery]
+        default: normal
+      amount:
+        description: "For set-floor only: capital floor in virtual-equity dollars, e.g. 80 (below current virtual equity -- see cfd_cli.py set-floor's help)"
+        required: false
+        type: string
+      strategy_name:
+        description: "For promote-strategy/qualify-strategy: registered strategy name, e.g. ema_crossover"
+        required: false
+        type: string
+      strategy_version:
+        description: "For promote-strategy/qualify-strategy: registered version, e.g. v1"
+        required: false
+        type: string
+      strategy_state:
+        description: "For promote-strategy only: target lifecycle state"
+        required: false
+        type: choice
+        options: [RESEARCH, CANDIDATE, VALIDATED, PAPER, ACTIVE, PAUSED, RETIRED]
+        default: RESEARCH
       side:
         description: "For test-order only: long or short"
         required: false
@@ -43,9 +67,17 @@ permissions:
 jobs:
   run-command:
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # burn-demo-balance can need several reconnect cycles (Deriv's WebSocket seems to drop around ~30min) across up to 30 rounds -- everything else finishes in well under a minute
+    timeout-minutes: 20  # optimize-strategy/sweep-risk grid searches can take a few minutes; everything else finishes in well under one
     steps:
+      # Pinned explicitly so a dispatch launched from the GitHub UI
+      # without switching the branch dropdown off the default still
+      # operates on this actively-developed branch's code and state,
+      # not a stale default-branch copy -- see cfd-trading.yml's own
+      # checkout step for the same reasoning applied to its schedule
+      # trigger.
       - uses: actions/checkout@v4
+        with:
+          ref: claude/ai-trading-manager-deriv-pmay2v
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -60,14 +92,31 @@ jobs:
           REASON: ${{ inputs.reason }}
           SIDE: ${{ inputs.side }}
           MULTIPLIER: ${{ inputs.multiplier }}
+          STRATEGY_NAME: ${{ inputs.strategy_name }}
+          STRATEGY_VERSION: ${{ inputs.strategy_version }}
+          STRATEGY_STATE: ${{ inputs.strategy_state }}
+          OPERATING_MODE: ${{ inputs.operating_mode }}
+          AMOUNT: ${{ inputs.amount }}
         run: |
           set -e
           case "$CMD" in
-            status|resume)
+            status|resume|performance|paper-performance|failures|manager-report|list-strategies|clear-floor)
               python scripts/cfd_cli.py "$CMD"
+              ;;
+            promote-strategy)
+              python scripts/cfd_cli.py promote-strategy "$STRATEGY_NAME" "$STRATEGY_VERSION" "$STRATEGY_STATE" --reason "$REASON"
+              ;;
+            qualify-strategy)
+              python scripts/cfd_cli.py qualify-strategy "$STRATEGY_NAME" "$STRATEGY_VERSION"
               ;;
             pause)
               python scripts/cfd_cli.py pause --reason "$REASON"
+              ;;
+            set-mode)
+              python scripts/cfd_cli.py set-mode "$OPERATING_MODE" --reason "$REASON"
+              ;;
+            set-floor)
+              python scripts/cfd_cli.py set-floor "$AMOUNT"
               ;;
             exclude-instrument)
               python scripts/cfd_cli.py exclude-instrument "$INSTRUMENT" --reason "$REASON"
@@ -95,14 +144,20 @@ jobs:
             backtest-crypto)
               python scripts/backtest_crypto.py --granularity "${MULTIPLIER:-3600}"
               ;;
-            burn-demo-balance)
-              python scripts/burn_demo_balance.py --target 100 --tolerance 30
-              ;;
             sweep-risk-synthetic)
               python scripts/sweep_cfd_risk_synthetic.py --granularity "${MULTIPLIER:-3600}"
               ;;
             optimize-breakout)
               python scripts/optimize_cfd_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            optimize-mean-reversion)
+              python scripts/optimize_cfd_mean_reversion.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            research-strategy)
+              python scripts/research_cfd_strategy.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            research-strategies)
+              python scripts/research_cfd_strategies.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
               ;;
             sweep-risk-breakout)
               python scripts/sweep_cfd_risk_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
@@ -116,14 +171,12 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          if [ -f state/cfd_bot_state.json ]; then
-            git add state/cfd_bot_state.json
-            if ! git diff --cached --quiet; then
-              git commit -m "Update CFD bot state via manual command: ${{ inputs.command }}"
-              git push
-            else
-              echo "No state changes to commit."
-            fi
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_strategy_registry.json state/cfd_paper_trades.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update CFD bot state via manual command: ${{ inputs.command }}"
+            git push
           else
-            echo "No state file yet (read-only command, or first run never persisted one)."
+            echo "No state changes to commit."
           fi
