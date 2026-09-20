@@ -848,8 +848,28 @@ negative result: `mean_reversion@v1` is `RETIRED` with the full numbers
 recorded in its registry history, not left as a misleadingly-still-live
 `CANDIDATE`. This rules out one specific formulation on this data, not
 mean-reversion generally -- a different indicator, instrument subset, or
-timeframe is still untried. The "ranging" regime gap in gap #11 is still
-open.
+timeframe is still untried.
+
+A second attempt, `trading/cfd/rsi_reversion.py`
+(`RsiReversionStrategy`), was built by GPT to a spec from this session
+(the user asked for a second AI's independent input; with no direct
+Claude<->GPT integration available, the collaboration ran through a
+GitHub issue for discussion and a PR for the actual build) and reviewed
+before merge -- diff read in full, branch tested in an isolated
+worktree, full suite run there before and after merging. It fades RSI
+momentum exhaustion behind a strict ADX flat-market gate, structurally
+distinct from `mean_reversion`'s Bollinger-band price-deviation fade
+(different indicator, plus an explicit trend-strength gate baked into
+the entry itself). `scripts/optimize_cfd_rsi_reversion.py`'s TRAIN/TEST
+grid search (243 combinations) found only 1 candidate that cleared even
+the cheap TRAIN gate, and it failed out-of-sample (`TEST cagr=-6.8%`,
+`[OVERFIT]`) -- another honest negative result, so `rsi_reversion@v1` is
+`RETIRED` too, same treatment as `mean_reversion@v1`.
+
+Two structurally distinct approaches are now ruled out on this data,
+not just one guess. The "ranging" regime gap in gap #11 is still open --
+a session/time-of-day approach, a different timeframe, or a different
+data source are still untried.
 
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every

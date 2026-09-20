@@ -126,15 +126,21 @@
       "atr_stop_mult": 2.0,
       "atr_target_mult": 1.5
     },
-    "state": "CANDIDATE",
+    "state": "RETIRED",
     "created_at": "2026-09-20T11:57:15.025025+00:00",
-    "updated_at": "2026-09-20T11:57:15.025043+00:00",
+    "updated_at": "2026-09-20T12:13:21.236508+00:00",
     "history": [
       {
         "from": null,
         "to": "CANDIDATE",
         "reason": "Implemented (via a GitHub PR built to a spec from this session, reviewed and merged), not yet run through optimize_cfd_rsi_reversion.py's TRAIN/TEST validation -- same starting point every other CFD strategy had before its own grid search. A second, structurally distinct attempt at the 'ranging' regime after mean_reversion@v1's honest negative result: fades RSI momentum exhaustion behind an ADX flat-market gate, not Bollinger-band price deviation. Params are reasonable, sourced placeholders (see rsi_reversion.py's docstring), not validated numbers.",
         "at": "2026-09-20T11:57:15.025045+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "optimize_cfd_rsi_reversion.py's TRAIN/TEST grid search (243 combinations) found only 1/108 TRAIN-qualifying candidates, and that one candidate (rsi_oversold=30, rsi_overbought=75, adx_flat_threshold=15, atr_stop_mult=1.5, atr_target_mult=2.5; TRAIN cagr=1.4% maxdd=-3.2%) failed out-of-sample: TEST cagr=-6.8% maxdd=-6.8% win_rate=14.3% (7 trades) -- OVERFIT, not robust. Baseline (default params) was mild rather than catastrophic (TRAIN cagr=-1.1%, TEST cagr=+1.9% on only 11/3 trades -- too few to mean anything). No combination held up out-of-sample -- retiring rather than leaving it as a misleadingly-still-viable CANDIDATE, same honest-negative-result treatment mean_reversion@v1 got. The ranging regime is still without a suited ACTIVE or CANDIDATE strategy; two structurally distinct approaches (Bollinger-band fade, RSI+ADX fade) have now been ruled out on this data, not just one.",
+        "at": "2026-09-20T12:13:21.236480+00:00"
       }
     ],
     "suited_regimes": [

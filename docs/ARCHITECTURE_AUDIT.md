@@ -20,11 +20,13 @@ realism/attribution), #4-5 (drawdown de-risking/smoothed equity), #10
 hold independent positions from more than one ACTIVE strategy, and the
 scheduler runs every 15 minutes instead of hourly) are now closed, in
 the user's chosen order -- see Progress log. Gap #11 (strategy pool
-diversity) was attempted (`mean_reversion`, a Bollinger-Band
-mean-reversion strategy) but its TRAIN/TEST grid search found no
-profitable parameterization, so it's `RETIRED` rather than promoted --
-an honest negative result, not a gap this session could close. It
-remains the one open item.
+diversity) was attempted twice -- `mean_reversion` (Bollinger-Band
+fade) and `rsi_reversion` (RSI+ADX fade, built by GPT to a spec from
+this session and reviewed before merge) -- and both TRAIN/TEST grid
+searches found no robust profitable parameterization, so both are
+`RETIRED` rather than promoted. Two honest negative results, not a gap
+this session could close by trying harder; it remains the one open
+item.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -67,23 +69,27 @@ anything" pass -- every item below is verified against the actual code
 10. ~~**Qualification Gate is not consolidated into one measurable
     report.**~~ **Closed 2026-09-20** -- see Progress log below.
 11. **Strategy pool is still 2 members, both trend-following, both on a
-    single timeframe (H1).** Attempted 2026-09-20, still open -- see
-    Progress log below. A third strategy (`mean_reversion`, structurally
-    a mean-reversion/fade rather than trend-following) was built and run
-    through `optimize_cfd_mean_reversion.py`'s TRAIN/TEST grid search
-    (81 combinations, ~2 years of H1 forex/gold data): it found **zero**
-    combinations with positive CAGR and drawdown within the -25% cap --
-    an honest negative result, not a bug, so `mean_reversion@v1` is
-    `RETIRED`, not left as a misleadingly-still-viable `CANDIDATE`. The
-    "ranging" regime is back to having zero suited `ACTIVE` or
-    `CANDIDATE` strategy -- this specific Bollinger-Band formulation
-    doesn't show a usable edge on this data, but that's evidence against
-    one implementation, not proof no mean-reversion edge exists here; a
-    different formulation (different indicator, different instrument
-    subset, different timeframe) is still open territory. The pool is
-    also still single-timeframe (H1). 4 configured instruments and
-    `CFD_MAX_OPEN_POSITIONS` (now counting distinct (instrument,
-    strategy) slots, not instruments -- see gap #3) mean the *machinery*
+    single timeframe (H1).** Attempted twice, 2026-09-20, still open --
+    see Progress log below. Two third-strategy candidates, both
+    structurally a mean-reversion/fade rather than trend-following, were
+    built and run through their own TRAIN/TEST grid searches (~2 years
+    of H1 forex/gold data): `mean_reversion` (Bollinger-Band fade, 81
+    combinations, **zero** cleared CAGR>0 with drawdown within the -25%
+    cap) and `rsi_reversion` (RSI+ADX fade, built by GPT to a spec from
+    this session and reviewed before merge, 243 combinations, only 1
+    cleared the cheap TRAIN gate and it failed out-of-sample as
+    `[OVERFIT]`). Both honest negative results, not bugs, so both
+    `mean_reversion@v1` and `rsi_reversion@v1` are `RETIRED`, not left
+    as misleadingly-still-viable `CANDIDATE`s. The "ranging" regime is
+    back to having zero suited `ACTIVE` or `CANDIDATE` strategy --
+    neither Bollinger-Band nor RSI+ADX fading shows a usable edge on
+    this data, but that's evidence against two implementations, not
+    proof no ranging-regime edge exists here; a session/time-of-day
+    approach, a different timeframe, or a different data source are all
+    still open territory. The pool is also still single-timeframe (H1).
+    4 configured instruments and `CFD_MAX_OPEN_POSITIONS` (now counting
+    distinct (instrument, strategy) slots, not instruments -- see gap
+    #3) mean the *machinery*
     for holding several concurrent independent positions already exists
     and isn't itself a gap.
 
@@ -1033,6 +1039,53 @@ capital model. These all still match the revised vision as-is.
     surfaced here as a data point for a human reviewing
     `donchian_breakout@v2` before ever promoting it, not acted on
     automatically.
+- **2026-09-20 — Third attempt at gap #11: `rsi_reversion` (built by
+  GPT, reviewed and merged, then honestly ruled out too).** The user
+  asked for a second AI to weigh in on the codebase; with no direct
+  Claude<->GPT integration available, the collaboration ran through two
+  GitHub artifacts instead: issue #2 (open questions for independent
+  review -- promoting `donchian_breakout@v2` given its fresh negative
+  signal, what structural approach to try next for "ranging," and a
+  general "anything look off now that's built, not just designed"
+  check) and PR #3 (a concrete build, to a spec this session wrote:
+  `RsiReversionStrategy` -- fades RSI momentum exhaustion behind a
+  strict ADX flat-market gate, structurally distinct from
+  `mean_reversion@v1`'s Bollinger-band price-deviation fade, reusing
+  only already-existing `rsi()`/`adx()`/`atr()` indicators).
+  - PR #3 reviewed before merge, not merged on trust: diff read in
+    full, branch checked out into an isolated worktree, full suite run
+    there (383 passing, 372 existing + 11 new) before merge, and again
+    on the merged result after. Code matched the spec and every
+    existing convention (`Signal`/`Action` interface,
+    `STRATEGY_CLASSES` registration, `optimize_cfd_*.py` TRAIN/TEST
+    harness reuse, `STRATEGY_SPECS` integration for the autonomous
+    weekly loop) -- merged via `merge_pull_request`, then this session
+    added the two pieces outside the original spec:
+    `rsi_reversion@v1` seeded as `CANDIDATE` (`suited_regimes=
+    ["ranging"]`) via `seed_strategy_registry.py`, and
+    `optimize-rsi-reversion` wired into the "CFD Manual Command"
+    workflow, matching `optimize-mean-reversion`'s existing pattern.
+  - Ran `optimize_cfd_rsi_reversion.py`'s real TRAIN/TEST grid search
+    (243 combinations) via GitHub Actions. Result: only 1/108
+    TRAIN-qualifying candidate, and that one (`rsi_oversold=30,
+    rsi_overbought=75, adx_flat_threshold=15, atr_stop_mult=1.5,
+    atr_target_mult=2.5`; TRAIN cagr=1.4% maxdd=-3.2%) failed
+    out-of-sample: TEST cagr=-6.8% maxdd=-6.8% win_rate=14.3% (7
+    trades) -- `[OVERFIT]`. Baseline itself was mild rather than
+    catastrophic this time (TRAIN cagr=-1.1%, TEST cagr=+1.9% on only
+    11/3 trades -- too thin to mean anything), unlike
+    `mean_reversion@v1`'s wipeout, but still no combination held up
+    out-of-sample. `rsi_reversion@v1` moved `CANDIDATE -> RETIRED`
+    with the full numbers in its registry history, same honest-
+    negative-result treatment as `mean_reversion@v1` -- not left as a
+    misleadingly-still-viable `CANDIDATE`.
+  - Gap #11 stays open: two structurally distinct approaches
+    (Bollinger-band fade, RSI+ADX fade) are now ruled out on this
+    data, not just one guess. Still untried: session/time-of-day-based
+    approaches, a different timeframe entirely (every attempt so far
+    is H1), or a genuinely different data source/instrument subset.
+    Full suite: 383 tests passing throughout (the retirement itself is
+    a registry state change, not a code change).
 
 ## Executive summary
 
