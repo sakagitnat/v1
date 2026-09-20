@@ -16,5 +16,7 @@
     "start_equity": 100.0,
     "halted": false
   },
-  "pending_entries": {}
+  "pending_entries": {},
+  "smoothed_equity": 100.0,
+  "high_water_mark": 100.0
 }
