@@ -92,15 +92,21 @@
       "atr_stop_mult": 2.0,
       "atr_target_mult": 1.5
     },
-    "state": "CANDIDATE",
+    "state": "RETIRED",
     "created_at": "2026-09-20T07:19:38.805898+00:00",
-    "updated_at": "2026-09-20T07:19:38.805943+00:00",
+    "updated_at": "2026-09-20T07:44:48.226537+00:00",
     "history": [
       {
         "from": null,
         "to": "CANDIDATE",
         "reason": "Implemented, not yet run through optimize_cfd_mean_reversion.py's TRAIN/TEST validation -- same starting point donchian_breakout@v1 had before its own grid search found v2. Params are reasonable, sourced placeholders (see mean_reversion.py's docstring), not validated numbers.",
         "at": "2026-09-20T07:19:38.805948+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "optimize_cfd_mean_reversion.py's TRAIN/TEST grid search (81 combinations across band_window/band_std/atr_stop_mult/atr_target_mult) found zero combinations with positive CAGR and drawdown within the -25% cap on ~2 years of H1 forex/gold data (yfinance proxy feed). Baseline (default params) alone: TRAIN cagr=-83.8% maxdd=-97.8% sharpe=-6.37, TEST cagr=-81.2% maxdd=-76.8% sharpe=-6.03. This specific Bollinger-Band mean-reversion formulation shows no usable edge on this data -- retiring rather than leaving it as a misleadingly-still-viable CANDIDATE nobody is going to test further. The ranging regime is back to having zero suited ACTIVE or CANDIDATE strategy; a genuine open gap, not a solved one -- see docs/ARCHITECTURE_AUDIT.md gap #11.",
+        "at": "2026-09-20T07:44:48.226508+00:00"
       }
     ],
     "suited_regimes": [

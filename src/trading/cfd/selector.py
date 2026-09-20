@@ -18,15 +18,26 @@ position gets closed out.
 Per docs/VISION.md's revised "Portfolio / Allocation Decision" stage,
 more than one ACTIVE strategy may be suited to the same regime at once
 (trading.cfd.strategy_registry no longer enforces "at most one ACTIVE
-per regime" -- see its docstring). When several match, this picks the
-one trading.cfd.portfolio_allocator currently weights highest (recent
+per regime" -- see its docstring), and per Revision 3 gap #3
+(docs/ARCHITECTURE_AUDIT.md), an instrument is no longer limited to one
+open position at a time: `exclude_tags` (scheduler.py passes every
+strategy tag that already has a leg open on THIS instrument) removes
+those from consideration first, so a genuinely different strategy can
+still open its own independent position on an instrument another
+strategy already holds one on -- two different structural bets on the
+same instrument are two theses, not one, and
+trading.cfd.portfolio_risk's thesis/correlated/portfolio ceilings (keyed
+on instrument+side, never on strategy) already aggregate their risk
+correctly regardless of which strategy opened them, so nothing else
+needs to change to make this safe. Among whatever regime-suited
+strategies remain after that exclusion, this picks the one
+trading.cfd.portfolio_allocator currently weights highest (recent
 performance -- ties broken deterministically by name/version, never by
-insertion order or randomness) for THIS instrument's single position
-slot this run. That doesn't make the others idle: a different instrument
-with the same regime this same run can land on a different one of them,
-so the portfolio as a whole still runs multiple strategies concurrently
-even though any one instrument only ever holds one open position at a
-time.
+insertion order or randomness) for THIS instrument's next new position
+this run -- still only one NEW entry decision per instrument per run
+(scheduler.py's set_pending_entry/clear_pending-entry idempotency
+tracking stays one record per instrument per run), not a burst of
+several at once.
 """
 from typing import Optional
 
@@ -38,17 +49,30 @@ def _tag(entry: StrategyEntry) -> str:
     return f"{entry.name}@{entry.version}"
 
 
-def select_for_entry(regime: str, allocations: Optional[dict[str, float]] = None) -> Optional[StrategyEntry]:
+def select_for_entry(
+    regime: str,
+    allocations: Optional[dict[str, float]] = None,
+    exclude_tags: Optional[set[str]] = None,
+) -> Optional[StrategyEntry]:
     """allocations: trading.cfd.portfolio_allocator.compute_allocations()'s
     output ({"name@version": weight}, summed to 1.0 across every ACTIVE
     strategy) -- used only to break a tie among multiple regime-suited
     matches. Missing entirely, or missing a specific match's tag, is
     treated as weight 0.0 for that match (never crashes, never favors an
-    unweighted strategy over a weighted one)."""
+    unweighted strategy over a weighted one).
+
+    exclude_tags: strategy tags ("name@version") to skip even if
+    otherwise regime-suited -- scheduler.py passes the strategies that
+    already have a position open on this instrument, so this never
+    doubles up the SAME strategy's thesis on one instrument (that would
+    be exactly the disguised-risk-split docs/VISION.md forbids), while
+    still allowing a genuinely different ACTIVE strategy to open its own
+    independent position there."""
     if regime == UNKNOWN:
         return None
     active = list_by_state(LifecycleState.ACTIVE)
-    matches = [e for e in active if regime in (e.suited_regimes or [])]
+    exclude_tags = exclude_tags or set()
+    matches = [e for e in active if regime in (e.suited_regimes or []) and _tag(e) not in exclude_tags]
     if not matches:
         return None
     if len(matches) == 1:

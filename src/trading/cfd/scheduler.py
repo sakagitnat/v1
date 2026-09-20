@@ -159,6 +159,25 @@ def _reconcile_unknown_positions(
     return adoptions, foreign
 
 
+def _legs_by_strategy(legs: list[dict], tracked_open: dict) -> dict[str, list[dict]]:
+    """Splits one instrument's open legs into groups sharing the same
+    strategy tag ("name@version") -- Revision 3 gap #3 (docs/
+    ARCHITECTURE_AUDIT.md): an instrument can now hold independent
+    positions from more than one ACTIVE strategy at once (each its own
+    thesis), not just the "scalp"/"runner" legs of a single entry, so
+    exit management and new-entry eligibility both need to operate per
+    strategy-group, not per instrument as a whole. A leg with no tracked
+    metadata (predates per-trade strategy tagging) groups under "" --
+    _resolve_exit_strategy_entry's own fallback (sole ACTIVE strategy)
+    still applies to that group unchanged."""
+    groups: dict[str, list[dict]] = {}
+    for leg in legs:
+        meta = tracked_open.get(str(leg["contract_id"]))
+        tag = (meta or {}).get("strategy") or ""
+        groups.setdefault(tag, []).append(leg)
+    return groups
+
+
 def _resolve_exit_strategy_entry(meta: Optional[dict]):
     """Which registered strategy version should evaluate an existing open
     position's exit signal -- always the exact one that opened it (tagged
@@ -210,18 +229,21 @@ async def run_once():
     Operating Mode (trading.cfd.operating_mode, set via
     `cfd_cli.py set-mode`) before CfdRiskManager ever sees them -- still
     bounded by CFD_MAX_RISK_PER_TRADE_CEILING, an absolute ceiling no
-    mode may cross. max_open_positions counts distinct INSTRUMENTS with
-    at least one leg open, not raw contracts -- a partial-close split
-    (see below) never silently doubles this count.
+    mode may cross. max_open_positions counts distinct (instrument,
+    strategy) position slots, not raw contracts -- a partial-close split
+    (see below) never silently doubles this count, and (per Revision 3
+    gap #3, further down) two different strategies independently
+    positioned on the same instrument count as two slots, not one.
 
     Which strategy opens a NEW position is decided per instrument, per
     run, by the Strategy Selector (trading.cfd.selector.select_for_entry)
     matching the instrument's current regime (trading.cfd.regime) against
     the Strategy Registry's ACTIVE entries -- not a single hardcoded or
     globally-fixed strategy. No ACTIVE strategy suited to the current
-    regime is an explicit NO TRADE, not a guess. An already-open position
-    is always managed by the exact strategy version that opened it (see
-    _resolve_exit_strategy_entry), regardless of what's ACTIVE now.
+    regime is an explicit NO TRADE, not a guess. Each already-open
+    position is always managed by the exact strategy version that opened
+    it (see _resolve_exit_strategy_entry), regardless of what's ACTIVE
+    now.
 
     More than one ACTIVE strategy can be suited to the same regime --
     trading.cfd.portfolio_allocator.compute_allocations() weights each by
@@ -232,6 +254,28 @@ async def run_once():
     only ever redistributes the existing budget, never raises it). This
     is docs/VISION.md's revised "Portfolio / Allocation Decision" stage,
     not a single-winner selector.
+
+    An instrument is no longer capped at one open position at a time
+    either (Revision 3 gap #3, docs/ARCHITECTURE_AUDIT.md):
+    _legs_by_strategy splits an instrument's open legs into groups by
+    which strategy opened them, each group is managed to its own exit
+    independently, and a NEW entry is still considered afterward as long
+    as at least one ACTIVE strategy suited to the current regime does
+    NOT already have a position open here (select_for_entry's
+    exclude_tags) -- still only one new entry decision per instrument
+    per run. Two different strategies holding independent positions on
+    the same instrument is two theses, not one; trading.cfd.portfolio_risk's
+    ceilings are keyed on instrument+side, never on strategy, so they
+    already aggregate this correctly with no change needed there. What's
+    still forbidden, and still enforced (select_for_entry's exclude_tags
+    always includes every strategy already positioned here): the SAME
+    strategy opening a second position on an instrument it's already in
+    -- that would be exactly the disguised-risk-split docs/VISION.md
+    forbids, not a second opportunity. max_open_positions now counts
+    distinct (instrument, strategy) position slots across the whole
+    portfolio, not distinct instruments -- the closest available
+    approximation of "how many genuinely independent opportunities" the
+    system is holding at once.
 
     Every PAPER-state strategy also gets evaluated on the same candles
     (trading.cfd.paper_trading.run_paper_trading), simulating fills
@@ -515,6 +559,16 @@ async def run_once():
             max_exposure_multiple=settings.cfd_max_exposure_multiple,
         )
 
+        # Revision 3 gap #3 (docs/ARCHITECTURE_AUDIT.md): counts distinct
+        # (instrument, strategy) position slots, not distinct instruments
+        # -- mutated in place below as groups close or a new entry opens
+        # within this run's own loop, same pattern open_risk_positions
+        # already uses, so later instruments always see the up-to-date
+        # total.
+        total_open_slots = sum(
+            len(_legs_by_strategy(legs, tracked_open)) for legs in positions_by_instrument.values()
+        )
+
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
                 logger.debug("%s: excluded (%s)", instrument, excluded[instrument] or "no reason given")
@@ -541,13 +595,11 @@ async def run_once():
             run_paper_trading(instrument, bars, regime)
 
             legs = positions_by_instrument.get(instrument, [])
-            if legs:
-                # Every leg still open for one instrument always shares
-                # the same side and strategy tag -- they can only ever
-                # come from ONE entry decision, since a new entry is
-                # never opened for an instrument that already has a leg
-                # open (see the "continue" at the end of this branch).
-                first_meta = tracked_open.get(str(legs[0]["contract_id"]))
+            strategy_groups = _legs_by_strategy(legs, tracked_open)
+            occupied_tags: set[str] = set()
+
+            for strategy_tag, group_legs in strategy_groups.items():
+                first_meta = tracked_open.get(str(group_legs[0]["contract_id"]))
                 exit_entry = _resolve_exit_strategy_entry(first_meta)
                 if exit_entry is None:
                     logger.warning(
@@ -556,9 +608,10 @@ async def run_once():
                         "take-profit and reconciliation next run.",
                         instrument,
                     )
+                    occupied_tags.add(strategy_tag)  # still open, still occupies its slot -- just unmanaged
                     continue
 
-                in_position = legs[0]["side"]
+                in_position = group_legs[0]["side"]
                 exit_strategy = exit_entry.build()
                 prepared = exit_strategy.prepare(bars)
                 row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
@@ -569,7 +622,8 @@ async def run_once():
                 current_atr = row.get("atr") if hasattr(row, "get") else None
                 current_atr = 0.0 if current_atr is None or pd.isna(current_atr) else float(current_atr)
 
-                for leg in legs:
+                group_still_open = False
+                for leg in group_legs:
                     contract_id = leg["contract_id"]
                     meta = tracked_open.get(str(contract_id))
                     leg_tag = (meta or {}).get("leg")
@@ -595,6 +649,7 @@ async def run_once():
                             record_open_trade(contract_id, meta)  # persist the ratcheted stop for next run
 
                     if close_reason is None:
+                        group_still_open = True
                         continue
 
                     logger.info(
@@ -641,19 +696,22 @@ async def run_once():
                             instrument, contract_id,
                         )
 
-                # At least one leg was open for this instrument -- never
-                # also evaluate a new entry the same run, regardless of
-                # how many of its legs just closed above.
-                continue
+                if group_still_open:
+                    occupied_tags.add(strategy_tag)
+                else:
+                    total_open_slots -= 1  # this strategy's whole position on this instrument just closed
 
-            # Flat -- decide whether to open a new position, per the
-            # Strategy Selector: current regime matched against whichever
-            # strategy (if any) is ACTIVE for it. No match is NO TRADE.
-            # Several ACTIVE strategies may match; the allocator's weights
-            # (computed above) break the tie.
-            entry_candidate = select_for_entry(regime, allocations)
+            # Consider a NEW entry regardless of whether one or more other
+            # strategies already hold their own independent position(s)
+            # here (Revision 3 gap #3) -- select_for_entry excludes every
+            # tag in occupied_tags, so this can only ever add a genuinely
+            # different strategy's thesis, never double up the same one.
+            entry_candidate = select_for_entry(regime, allocations, exclude_tags=occupied_tags)
             if entry_candidate is None:
-                logger.debug("%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it)", instrument, regime)
+                logger.debug(
+                    "%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it with an available slot)",
+                    instrument, regime,
+                )
                 continue
 
             strategy = entry_candidate.build()
@@ -664,7 +722,7 @@ async def run_once():
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
                 continue
-            if len(positions_by_instrument) >= effective_max_positions:
+            if total_open_slots >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
                 continue
 
@@ -772,6 +830,7 @@ async def run_once():
             if opened_legs:
                 risk.register_open()
                 positions_by_instrument[instrument] = opened_legs
+                total_open_slots += 1
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
     finally:

@@ -1,11 +1,24 @@
 name: CFD Trading (Deriv)
 
-# Runs the CFD/forex strategy roughly hourly on weekdays, matching
-# EmaCrossoverStrategy's H1 granularity (see its docstring for why H1,
-# not the originally-intended M15). Forex/Deriv Multipliers trade ~24
-# hours a day Sunday evening through Friday evening UTC, so this misses
-# a few hours at each end of that window (Mon-Fri only) -- a known
-# simplification, not a full 24/5 schedule.
+# Runs the CFD/forex strategy every 15 minutes on weekdays -- the
+# candles it evaluates are still H1 (matching EmaCrossoverStrategy's
+# granularity, see its docstring for why H1, not the originally-intended
+# M15), so most runs inside the same still-open hour see an unchanged
+# candle and act as a no-op re-check, not a new decision. What running
+# more often than the candle itself actually buys (Revision 3 gap #3,
+# docs/ARCHITECTURE_AUDIT.md's "decision cadence" half): a signal exit
+# or a ratcheting trailing stop is caught within ~15 minutes of firing
+# instead of waiting up to the rest of the hour, and a new entry into a
+# slot freed up (or newly available -- see scheduler.py's per-strategy
+# position slots) mid-hour doesn't sit idle until the next hourly mark.
+# Never causes a duplicate decision on the same closed candle: nothing
+# here re-evaluates a still-open position's own entry logic, and a flat
+# instrument's entry decision is driven by the latest *completed* H1
+# candle, unchanged however many times this workflow re-reads it before
+# a new one closes. Forex/Deriv Multipliers trade ~24 hours a day Sunday
+# evening through Friday evening UTC, so this misses a few hours at each
+# end of that window (Mon-Fri only) -- a known simplification, not a
+# full 24/5 schedule.
 #
 # Safety: unlike Alpaca/OANDA, Deriv doesn't have a separate practice/live
 # base URL to force via an env var -- an API token is already scoped to
@@ -31,10 +44,23 @@ name: CFD Trading (Deriv)
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "5 * * * 1-5"
+    - cron: "*/15 * * * 1-5"
 
 permissions:
   contents: write
+
+# Serializes runs -- at 15-minute intervals, a run that's still going
+# when the next one is due (a slow Deriv API response, a big candle
+# fetch) would otherwise start a second scheduler.py process concurrently
+# with the first. Idempotency (scheduler.py's set_pending_entry/
+# _reconcile_unknown_positions) recovers attribution after ONE process
+# crashing mid-run; it was never meant to arbitrate two processes racing
+# to open the same order at once. queue (not cancel-in-progress) so a
+# run already submitting orders is never killed mid-flight -- the next
+# scheduled run just waits and starts once it's done.
+concurrency:
+  group: cfd-trading
+  cancel-in-progress: false
 
 jobs:
   trade:

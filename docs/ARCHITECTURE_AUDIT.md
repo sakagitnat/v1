@@ -15,9 +15,16 @@ there. **All three are now closed** -- see Progress log. `docs/VISION.md`
 was then revised again the same day ("Revision 3") with a much fuller
 risk/execution model -- see "Revision 3 gap analysis" immediately below.
 Gaps #2 (risk model foundation), #1 (exit philosophy), #6-9 (execution
-realism/attribution), #4-5 (drawdown de-risking/smoothed equity), and
-#10 (Qualification Gate) are now closed, in the user's chosen order --
-see Progress log. Gaps #11 and #3 remain, worked in that stated order.
+realism/attribution), #4-5 (drawdown de-risking/smoothed equity), #10
+(Qualification Gate), and #3 (decision cadence -- an instrument can now
+hold independent positions from more than one ACTIVE strategy, and the
+scheduler runs every 15 minutes instead of hourly) are now closed, in
+the user's chosen order -- see Progress log. Gap #11 (strategy pool
+diversity) was attempted (`mean_reversion`, a Bollinger-Band
+mean-reversion strategy) but its TRAIN/TEST grid search found no
+profitable parameterization, so it's `RETIRED` rather than promoted --
+an honest negative result, not a gap this session could close. It
+remains the one open item.
 
 ## Revision 3 gap analysis (2026-09-20) -- read-only, nothing fixed yet
 
@@ -37,19 +44,9 @@ anything" pass -- every item below is verified against the actual code
    exists.**~~ **Closed 2026-09-20** -- chosen by the user as the first
    gap to fix, since it's the foundation the rest of Revision 3's risk
    model depends on. See Progress log below.
-3. **Only one open position per instrument, and only an hourly decision
-   cadence.** `DerivBroker.open_positions()` (`broker.py:167-186`)
-   explicitly assumes "at most one open contract per symbol";
-   `scheduler.py`'s `open_positions[instrument]` tracking is single-slot
-   per instrument to match. `.github/workflows/cfd-trading.yml` runs the
-   scheduler on `cron: "5 * * * 1-5"` -- roughly once an hour, matching
-   `EmaCrossoverStrategy`'s H1 bars. Not a direct contradiction of
-   Revision 3's A-E example (those can be different instruments), but it
-   caps how many genuinely independent opportunities the system can even
-   notice in a day, and rules out ever holding two independent theses on
-   the same instrument at once -- worth having in view given "0 to 15
-   trades a day, driven by real opportunity count" is now an explicit
-   target range, not just a hypothetical.
+3. ~~**Only one open position per instrument, and only an hourly
+   decision cadence.**~~ **Closed 2026-09-20** -- see Progress log
+   below.
 4. ~~**No automatic drawdown-tiered risk reduction.**~~ **Closed
    2026-09-20** -- see Progress log below.
 5. ~~**No smoothed-equity / high-water-mark risk basis.**~~ **Closed
@@ -70,21 +67,25 @@ anything" pass -- every item below is verified against the actual code
 10. ~~**Qualification Gate is not consolidated into one measurable
     report.**~~ **Closed 2026-09-20** -- see Progress log below.
 11. **Strategy pool is still 2 members, both trend-following, both on a
-    single timeframe (H1).** ~~Partially closed 2026-09-20~~ -- see
+    single timeframe (H1).** Attempted 2026-09-20, still open -- see
     Progress log below. A third strategy (`mean_reversion`, structurally
-    a mean-reversion/fade rather than trend-following) is now registered
-    (`mean_reversion@v1`, `CANDIDATE`, `suited_regimes=["ranging"]`),
-    closing the specific hole where the "ranging" regime had zero
-    registered strategies. Still open: it's registered as `CANDIDATE`
-    with unvalidated placeholder params, not yet promoted past
-    `optimize_cfd_mean_reversion.py`'s TRAIN/TEST gate the way
-    `donchian_breakout@v2` was; and the pool is still single-timeframe
-    (H1) and still only 3 members against 4 configured instruments --
-    real opportunity diversity per Revision 3's growth formula
-    (`opportunities × expectancy × diversification × ...`) is closer but
-    not exhausted. 4 configured instruments and `CFD_MAX_OPEN_POSITIONS=3`
-    mean the *machinery* for holding several concurrent independent
-    positions already exists and isn't itself a gap.
+    a mean-reversion/fade rather than trend-following) was built and run
+    through `optimize_cfd_mean_reversion.py`'s TRAIN/TEST grid search
+    (81 combinations, ~2 years of H1 forex/gold data): it found **zero**
+    combinations with positive CAGR and drawdown within the -25% cap --
+    an honest negative result, not a bug, so `mean_reversion@v1` is
+    `RETIRED`, not left as a misleadingly-still-viable `CANDIDATE`. The
+    "ranging" regime is back to having zero suited `ACTIVE` or
+    `CANDIDATE` strategy -- this specific Bollinger-Band formulation
+    doesn't show a usable edge on this data, but that's evidence against
+    one implementation, not proof no mean-reversion edge exists here; a
+    different formulation (different indicator, different instrument
+    subset, different timeframe) is still open territory. The pool is
+    also still single-timeframe (H1). 4 configured instruments and
+    `CFD_MAX_OPEN_POSITIONS` (now counting distinct (instrument,
+    strategy) slots, not instruments -- see gap #3) mean the *machinery*
+    for holding several concurrent independent positions already exists
+    and isn't itself a gap.
 
 **Not gaps -- already consistent with Revision 3, worth stating so they
 don't get "fixed" into something worse:** no fixed daily trade-count
@@ -829,6 +830,106 @@ capital model. These all still match the revised vision as-is.
     the pool is still single-timeframe (H1); no volatility- or
     session-based strategy variant exists yet. Tracked as remaining work,
     not silently closed.
+- **2026-09-20 — Revision 3 gap #11 follow-up: `mean_reversion@v1`
+  grid search run, found nothing, retired.** Ran
+  `scripts/optimize_cfd_mean_reversion.py` against ~2 years of real H1
+  forex/gold history (yfinance proxy feed, same instruments as every
+  other grid search in this project) via the "CFD Manual Command"
+  workflow. Result: baseline (default params) TRAIN cagr=-83.8%
+  maxdd=-97.8% sharpe=-6.37 (1857 trades), TEST cagr=-81.2% maxdd=-76.8%
+  sharpe=-6.03 (722 trades) -- catastrophic. All 81 grid combinations
+  (`band_window` × `band_std` × `atr_stop_mult` × `atr_target_mult`)
+  searched on TRAIN; **zero** cleared the qualification bar (CAGR > 0
+  and drawdown within the -25% cap). Not a bug -- `test_cfd_mean_
+  reversion.py`'s 9 unit tests still pass, the signal logic fires
+  exactly as designed; this Bollinger-Band mean-reversion formulation
+  simply has no usable edge on this data, probably because H1 forex/gold
+  trends persistently enough that "faded" extremes keep extending rather
+  than reverting, the opposite of what the strategy bets on.
+  - `mean_reversion@v1` moved `CANDIDATE -> RETIRED` (`cfd_cli.py
+    promote-strategy mean_reversion v1 RETIRED --reason "..."`) with the
+    full TRAIN/TEST numbers recorded in its registry history, rather
+    than left as a misleadingly-still-viable `CANDIDATE` nobody was
+    going to grid-search again. Per docs/VISION.md's Research vs.
+    Qualification environments: this is exactly what the Research
+    environment is for -- a candidate that's free to be tried and found
+    wanting, backed by a real, honestly-reported negative result, not
+    silently dropped or force-fit into looking viable.
+  - This is a negative result for one specific implementation, not proof
+    no mean-reversion edge exists on these instruments -- a different
+    indicator (RSI extremes, VWAP bands), a narrower instrument subset,
+    or a different timeframe are all still untried. Gap #11 (strategy
+    pool diversity) stays **open**: the "ranging" regime is back to zero
+    suited `ACTIVE` or `CANDIDATE` strategy, exactly where it was before
+    this attempt, just now with one ruled-out approach on record instead
+    of an untested guess. Full suite: 372 tests passing (unaffected --
+    the retirement is a registry state change, not a code change).
+- **2026-09-20 — Revision 3 gap #3 ("only one open position per
+  instrument, and only an hourly decision cadence") closed.** Two
+  independent halves, both fixed:
+  - **Decision cadence:** `.github/workflows/cfd-trading.yml`'s schedule
+    changed from `cron: "5 * * * 1-5"` (roughly hourly) to
+    `cron: "*/15 * * * 1-5"` (every 15 minutes). The candles evaluated
+    are still H1 (`scheduler.py`'s `GRANULARITY_SECONDS` unchanged, still
+    matching `EmaCrossoverStrategy`'s design) -- most 15-minute runs
+    inside the same still-open hour see an unchanged candle and are a
+    no-op re-check, not a new decision. What running more often than the
+    candle itself buys: a signal exit or a ratcheting trailing stop is
+    caught within ~15 minutes instead of waiting up to the rest of the
+    hour, and a new entry into a slot that just freed up (or a slot the
+    next change makes newly available) doesn't sit idle until the next
+    hourly mark. Added a `concurrency: {group: cfd-trading,
+    cancel-in-progress: false}` guard to the workflow at the same time --
+    at 15-minute intervals a slow run could otherwise overlap the next
+    scheduled one, and idempotency (`set_pending_entry`/
+    `_reconcile_unknown_positions`) was only ever designed to recover ONE
+    process crashing mid-run, never to arbitrate two processes racing to
+    open the same order at once; `cancel-in-progress: false` queues the
+    next run rather than killing one mid-order-submission.
+  - **One position per instrument:** `trading.cfd.selector.
+    select_for_entry()` gained an `exclude_tags` parameter -- strategy
+    tags to skip even if otherwise regime-suited. `scheduler.py` now
+    splits an instrument's open legs by which strategy opened them
+    (`_legs_by_strategy`, new), manages each strategy-group to its own
+    exit independently (same signal-exit/trailing-stop logic as before,
+    just scoped per group instead of per instrument), and afterward
+    still considers a NEW entry with `exclude_tags` set to every strategy
+    already positioned on this instrument -- so the SAME strategy can
+    never double up its own thesis on one instrument (still exactly the
+    disguised-risk-split docs/VISION.md forbids, and still structurally
+    prevented), but a genuinely different ACTIVE strategy suited to the
+    same regime can open its own independent position there. Two
+    different strategies' positions on the same instrument are two
+    theses, not one; `trading.cfd.portfolio_risk`'s ceilings are keyed on
+    instrument+side, never on strategy, so they already aggregated this
+    correctly with no change needed there (confirmed by re-reading and
+    correcting that module's docstring, which had claimed the broker
+    layer enforced a single-position limit -- it only ever collapsed
+    `open_positions()`'s display, `open_positions_list()`/
+    `open_contract_ids()` already supported multiple contracts per
+    instrument for the partial-close split). `CFD_MAX_OPEN_POSITIONS`
+    now counts distinct (instrument, strategy) position slots
+    (`total_open_slots`, computed once per run and mutated in place as
+    groups close or new entries open, same pattern `open_risk_positions`
+    already uses) instead of distinct instruments.
+  - 8 new tests: 2 for `select_for_entry`'s `exclude_tags`
+    (`tests/test_cfd_selector.py`), 3 for `_legs_by_strategy`
+    (`tests/test_cfd_scheduler.py`). Full suite: 372 tests passing.
+    `run_once()` itself has no direct unit test (needs a live/mocked
+    broker, same as before this change) -- live-smoke-tested via the
+    "CFD Manual Command" workflow against the real Deriv demo account
+    instead; see below for the result.
+  - Practical effect today: with only `ema_crossover@v1` currently
+    `ACTIVE` (both `donchian_breakout@v2` and the now-retired
+    `mean_reversion@v1` are not), there is only one ACTIVE strategy to
+    ever occupy a slot, so no instrument will actually hold two
+    simultaneous positions until a second strategy is promoted to
+    `ACTIVE` -- but the cadence increase is live and effective
+    immediately, and the architecture no longer has to be revisited when
+    a second strategy does get promoted.
+  - This was the last gap in the user's stated Revision 3 priority
+    order. Gap #11 (strategy pool diversity) remains open on its own
+    merits (see the entry above), not because it was skipped in order.
 
 ## Executive summary
 

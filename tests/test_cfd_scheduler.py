@@ -1,4 +1,4 @@
-from trading.cfd.scheduler import _reconcile_closed_trades, _reconcile_unknown_positions
+from trading.cfd.scheduler import _legs_by_strategy, _reconcile_closed_trades, _reconcile_unknown_positions
 
 
 def _meta(**overrides):
@@ -118,3 +118,35 @@ def test_mixed_known_and_unknown_legs_on_the_same_instrument():
     assert len(adoptions) == 1
     assert adoptions[0][0] == 2
     assert foreign == []
+
+
+# Revision 3 gap #3 (docs/ARCHITECTURE_AUDIT.md): an instrument can now
+# hold independent positions from more than one ACTIVE strategy at once,
+# so exit management and new-entry eligibility operate per strategy
+# group, not per instrument as a whole -- _legs_by_strategy is the split.
+
+def test_legs_by_strategy_groups_two_legs_of_one_entry_together():
+    legs = [_leg(1), _leg(2)]
+    tracked_open = {"1": _meta(strategy="ema_crossover@v1", leg="scalp"), "2": _meta(strategy="ema_crossover@v1", leg="runner")}
+    groups = _legs_by_strategy(legs, tracked_open)
+    assert set(groups.keys()) == {"ema_crossover@v1"}
+    assert len(groups["ema_crossover@v1"]) == 2
+
+
+def test_legs_by_strategy_splits_two_different_strategies_on_one_instrument():
+    legs = [_leg(1), _leg(2)]
+    tracked_open = {
+        "1": _meta(strategy="ema_crossover@v1", leg="runner"),
+        "2": _meta(strategy="mean_reversion@v1", leg="runner", side="short"),
+    }
+    groups = _legs_by_strategy(legs, tracked_open)
+    assert set(groups.keys()) == {"ema_crossover@v1", "mean_reversion@v1"}
+    assert groups["ema_crossover@v1"][0]["contract_id"] == 1
+    assert groups["mean_reversion@v1"][0]["contract_id"] == 2
+
+
+def test_legs_by_strategy_groups_untracked_legs_under_empty_tag():
+    legs = [_leg(1)]
+    groups = _legs_by_strategy(legs, tracked_open={})
+    assert set(groups.keys()) == {""}
+    assert groups[""][0]["contract_id"] == 1

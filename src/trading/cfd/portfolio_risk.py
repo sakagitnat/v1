@@ -23,12 +23,13 @@ explained, never silent.
 Thesis: two positions are "the same underlying bet" if they're the same
 instrument and the same side (long/short) -- e.g. five long orders on
 frxXAUUSD is one thesis, not five independent opportunities, exactly the
-disguised-risk-split docs/VISION.md forbids. (The broker layer already
-allows at most one open position per instrument -- see broker.py's
-open_positions() docstring -- so today a same-instrument thesis can
-never literally stack more than one live position; this ceiling is the
-explicit, audited version of that constraint, and stays correct if that
-broker-side limitation is ever lifted.)
+disguised-risk-split docs/VISION.md forbids. This check is keyed purely
+on instrument+side, never on which strategy opened a position -- so it
+already aggregates correctly now that scheduler.py allows more than one
+ACTIVE strategy to hold an independent position on the same instrument
+at once (Revision 3 gap #3, docs/ARCHITECTURE_AUDIT.md): two different
+strategies both long frxXAUUSD still share one thesis bucket here, the
+same as if one strategy alone had opened both.
 
 Correlation: a STATIC, CONFIGURED factor map (CORRELATION_FACTORS below),
 not a computed rolling correlation -- this project has no market-data

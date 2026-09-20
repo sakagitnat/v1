@@ -51,3 +51,21 @@ def test_multiple_active_matches_with_no_allocations_is_still_deterministic(tmp_
     first = select_for_entry(TRENDING)
     second = select_for_entry(TRENDING)
     assert first.name == second.name
+
+
+def test_exclude_tags_skips_a_strategy_already_positioned_on_this_instrument(tmp_path, monkeypatch):
+    # Revision 3 gap #3: an instrument is no longer capped at one open
+    # position -- a strategy that already has a leg open here is excluded,
+    # but a genuinely different ACTIVE strategy suited to the same regime
+    # is still selectable for its own independent position.
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    entry = select_for_entry(TRENDING, exclude_tags={"a@v1"})
+    assert entry.name == "b"
+
+
+def test_exclude_tags_covering_every_match_is_no_trade(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    assert select_for_entry(TRENDING, exclude_tags={"a@v1"}) is None

@@ -436,9 +436,19 @@ dollar P&L *amounts*, not price levels the way Alpaca/OANDA do, so
 distance into a (stake, stop_loss_amount, take_profit_amount) triple
 sized so a stop-out loses about `CFD_RISK_PER_TRADE` of equity,
 regardless of the instrument's price scale. `.github/workflows/
-cfd-trading.yml` triggers a run roughly hourly on weekdays via
+cfd-trading.yml` triggers a run every 15 minutes on weekdays via
 `scripts/run_cfd_trading.py`, without needing an always-on server
-(GitHub Actions minutes are free for periodic runs like this).
+(GitHub Actions minutes are free for periodic runs like this). The
+candles evaluated are still H1 -- most 15-minute runs inside the same
+still-open hour see an unchanged candle and are a no-op re-check, not a
+new decision; what the faster schedule buys (Revision 3 gap #3,
+docs/ARCHITECTURE_AUDIT.md) is catching a signal exit or a ratcheting
+trailing stop within ~15 minutes instead of waiting up to the rest of
+the hour, and not leaving a newly-freed (or newly-available) position
+slot idle until the next hourly mark. A `concurrency` guard on the
+workflow queues a run rather than letting it overlap a still-running
+one, since idempotency alone was never meant to arbitrate two processes
+racing to open the same order.
 
 Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
 `frxUSDJPY` -- change via `CFD_INSTRUMENTS` (Deriv's own mixed-case,
@@ -558,22 +568,37 @@ registered strategy declares a volatility preference; same status
 `ranging` had before any range-trading strategy existed.
 `trading/cfd/selector.py` matches the primary regime label against every
 `ACTIVE` registered strategy's `suited_regimes` -- **no match is an explicit NO
-TRADE, logged and skipped, not a fallback guess.** Both registered
-strategies (`ema_crossover`, `donchian_breakout`) are trend-following and
-tagged `suited_regimes=["trending"]`, so today this mostly acts as a gate
-that skips new entries during a `ranging` market -- there's no
-mean-reversion/range strategy registered yet to trade that regime
-instead (see `docs/ARCHITECTURE_AUDIT.md`). More than one `ACTIVE`
-strategy can now share a regime (`strategy_registry.set_state()`/
-`register()` no longer enforce "at most one `ACTIVE` per regime" --
-see **Portfolio Allocation** below): when several match, the selector
-picks the one `trading/cfd/portfolio_allocator.py` currently weights
-highest for that instrument's single position slot, not an arbitrary or
-first-found one. An already-open position is always managed to its exit
-by the *exact* strategy version that opened it (tagged in its trade
-metadata), never whatever happens to be `ACTIVE` by the time it closes --
-so promoting or pausing a strategy can never retroactively change how an
-existing position gets closed out.
+TRADE, logged and skipped, not a fallback guess.** The two trend-following
+strategies (`ema_crossover`, `donchian_breakout`) are tagged
+`suited_regimes=["trending"]`; `mean_reversion` is tagged
+`suited_regimes=["ranging"]` but is still `CANDIDATE`, not yet `ACTIVE`
+(see `docs/ARCHITECTURE_AUDIT.md`), so a `ranging` market is still a NO
+TRADE gate today in practice, just no longer for lack of any registered
+strategy suited to it. More than one `ACTIVE` strategy can share a
+regime (`strategy_registry.set_state()`/`register()` no longer enforce
+"at most one `ACTIVE` per regime" -- see **Portfolio Allocation**
+below), and (closing Revision 3 gap #3) an instrument is no longer
+capped at one open position at a time either: `scheduler.py` groups an
+instrument's open legs by which strategy opened them
+(`_legs_by_strategy`), manages each group to its own exit independently,
+and still considers a NEW entry afterward as long as at least one
+`ACTIVE` strategy suited to the current regime doesn't already have a
+position open here (`select_for_entry`'s `exclude_tags` -- always
+includes every strategy already positioned on this instrument, so the
+SAME strategy can never double up its own thesis here, only a genuinely
+different one can open its own independent position). Among whichever
+strategies remain eligible, the selector still picks the one
+`trading/cfd/portfolio_allocator.py` currently weights highest.
+`CFD_MAX_OPEN_POSITIONS` now counts distinct (instrument, strategy)
+position slots across the whole portfolio, not distinct instruments.
+Two different strategies' positions on the same instrument are two
+theses, not one -- `trading/cfd/portfolio_risk.py`'s ceilings are keyed
+on instrument+side, never on strategy, so they already aggregate the
+risk correctly with no change needed there. Each already-open position
+is always managed to its exit by the *exact* strategy version that
+opened it (tagged in its trade metadata), never whatever happens to be
+`ACTIVE` by the time it closes -- so promoting or pausing a strategy can
+never retroactively change how an existing position gets closed out.
 
 **Portfolio Allocation.** `trading/cfd/portfolio_allocator.py`
 (`compute_allocations`, called by `scheduler.py` once per run, right
@@ -805,24 +830,26 @@ verdict is `ready_for_human_review` only once every checkable criterion
 passes; anything less reads `not_yet`.
 
 **Strategy Pool Diversity.** `trading/cfd/mean_reversion.py`
-(`MeanReversionStrategy`) starts closing Revision 3 gap #11: both
-previously registered strategies (`ema_crossover`, `donchian_breakout`)
-are trend-following, so `trading.cfd.regime`'s `"ranging"` classification
-had zero registered strategies suited to it since the Strategy Selector
-was built -- every ranging period was a `NO TRADE` by omission, not
-design. Mean reversion fades price extremes back toward a Bollinger Band
-mean instead of following a breakout or crossover -- a genuinely
-different structural bet, real diversification against the existing
-pool rather than another correlated trend-following variant. Entry: a
-close outside the bands (long below the lower band, short above the
-upper); exit: reversion to the middle band, or an ATR-based stop/target
-backstop, same protective shape the other two strategies already use.
-Registered as `mean_reversion@v1` (`CANDIDATE`, `suited_regimes=
-["ranging"]`) with reasonable, sourced placeholder params -- not yet
-validated. `scripts/optimize_cfd_mean_reversion.py` (wired into the "CFD
-Manual Command" workflow as `optimize-mean-reversion`) runs the same
-TRAIN/TEST grid search `donchian_breakout@v2` was validated through
-before this strategy can be promoted past `CANDIDATE`.
+(`MeanReversionStrategy`) is an attempt at Revision 3 gap #11: both
+registered strategies (`ema_crossover`, `donchian_breakout`) are
+trend-following, so `trading.cfd.regime`'s `"ranging"` classification
+has zero registered strategies suited to it -- every ranging period is a
+`NO TRADE` by omission, not design. Mean reversion fades price extremes
+back toward a Bollinger Band mean instead of following a breakout or
+crossover -- a genuinely different structural bet, real diversification
+against the existing pool rather than another correlated trend-following
+variant, and it's structurally sound: 9 unit tests confirm the entry/
+exit signal logic fires exactly as designed. But `scripts/
+optimize_cfd_mean_reversion.py`'s TRAIN/TEST grid search (81 parameter
+combinations, ~2 years of H1 forex/gold history) found **zero**
+combinations with positive CAGR and drawdown within the -25% cap --
+baseline alone lost -83.8% CAGR on TRAIN, -81.2% on TEST. An honest
+negative result: `mean_reversion@v1` is `RETIRED` with the full numbers
+recorded in its registry history, not left as a misleadingly-still-live
+`CANDIDATE`. This rules out one specific formulation on this data, not
+mean-reversion generally -- a different indicator, instrument subset, or
+timeframe is still untried. The "ranging" regime gap in gap #11 is still
+open.
 
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
