@@ -15,5 +15,6 @@
     "date": "2026-09-20",
     "start_equity": 100.0,
     "halted": false
-  }
+  },
+  "pending_entries": {}
 }
