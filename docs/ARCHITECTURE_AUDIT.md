@@ -1227,10 +1227,53 @@ capital model. These all still match the revised vision as-is.
     percentage formatting, session-bucket boundaries). Wired into
     `cfd-manual-command.yml` as `diagnose-regime`. Full suite: 423
     passing.
-  - Not yet run live -- next step is triggering it via GitHub Actions
-    and reading the actual numbers, per GPT's proposed order
-    (diagnostics before another strategy attempt, timeframe change only
-    after confirming the H1 label itself isn't the main problem).
+  - Ran live (GitHub Actions run 35515244461) across all 4 instruments,
+    full available yfinance history (~13,700-17,240 H1 bars each).
+    Results, read together:
+    - **Composition**: `RANGING` is 44.6-55.3% of bars per instrument,
+      `TRENDING` 44.6-54.0%, `UNSTABLE` nearly absent (0-0.3%). Fairly
+      balanced, and **session doesn't meaningfully change it** --
+      Asian/London/NY/Late all read within a few points of each
+      instrument's overall ranging %, no session stands out as
+      structurally different.
+    - **Persistence**: `RANGING` episodes last a median 18-25 H1 bars
+      (18-25 hours), the same order of magnitude as `TRENDING`
+      episodes (18-21 bars median) -- not unusually short or long.
+    - **Transitions**: a `RANGING` episode ends into `TRENDING`
+      99.6-100% of the time across every instrument (`UNSTABLE` is too
+      rare to be a meaningful transition target) -- not informative on
+      its own given how rare `UNSTABLE` already is.
+    - **Forward behavior (the key result)**: forward return after a
+      `RANGING` episode starts is close to zero at every horizon
+      (5/10/20 bars) and every instrument -- mostly between -0.2% and
+      +0.25%, no consistent sign. MFE/MAE are roughly **symmetric**
+      (e.g. gold, `normal` bucket, 20 bars: MFE +0.80%/MAE -0.71%) --
+      consistent with genuine two-sided price action, not one-sided
+      breakout drift.
+    - **The volatility-bucket split didn't have enough data to be
+      conclusive**: 85-97% of `RANGING` episode starts read as
+      `normal` volatility under `classify_volatility_series()`'s
+      existing 0.6x/1.5x-of-median thresholds -- the `low` bucket had
+      only 1-3 episodes per instrument, `high` only 9-12. Far too thin
+      to confirm or rule out "quiet consolidation vs. pre-breakout
+      compression vs. noisy chop" at this bucketing resolution; a
+      finer-grained (e.g. percentile-based) volatility split or more
+      history would be needed to actually test that specific
+      hypothesis.
+    - **Reading**: no strong evidence the `RANGING` label is mixing
+      multiple incompatible structures -- it looks like one
+      reasonably coherent, near-zero-net-drift, symmetric-excursion
+      population at the current bucketing resolution. Combined with
+      MFE typically only a few tenths of a percent over 20 bars (H1,
+      so ~20 hours) -- thinner than this project's own modeled spread/
+      financing costs in most cases -- the more likely explanation for
+      all three retired fades' failure is **transaction costs eating a
+      real but thin edge**, not "wrong regime substructure." Posted in
+      full to GPT on issue #5 for the joint read, since this changes
+      what's worth building next (parameter/cost-model rework of the
+      existing fade shape, vs. a structurally new
+      volatility-expansion/breakout-transition candidate) more than
+      the diagnostic alone can settle.
 
 ## Executive summary
 

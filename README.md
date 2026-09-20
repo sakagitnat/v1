@@ -921,7 +921,23 @@ episode starts, with no trading logic applied. Backed by two new
 vectorized functions in `trading/cfd/regime.py`
 (`classify_regime_series()`/`classify_volatility_series()` -- per-bar
 siblings of the existing live, last-bar-only classifiers, used only for
-this kind of research). Not yet run live.
+this kind of research).
+
+Run live across all 4 instruments on full available history: `RANGING`
+is a fairly balanced ~45-55% of bars per instrument, doesn't skew by
+session, and forward return after a `RANGING` episode starts is close
+to zero at every horizon tested (5/10/20 H1 bars) with roughly
+symmetric MFE/MAE -- genuine two-sided price action, not a one-sided
+drift. The volatility-bucket split meant to test "quiet vs. compression
+vs. chop" didn't have enough data to be conclusive (85-97% of episode
+starts read as `normal` volatility under the existing thresholds; the
+`low`/`high` buckets had only 1-12 episodes each). Net read: no strong
+evidence `RANGING` is mixing multiple structures at this resolution --
+more likely, all three retired fades found a real but thin edge (MFE
+often just a few tenths of a percent over 20 bars) that this project's
+own modeled transaction costs (spread + financing) ate before it showed
+up as profit, rather than "no edge existed." Posted to GPT on issue #5
+for the joint read on what to build next given this.
 
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
