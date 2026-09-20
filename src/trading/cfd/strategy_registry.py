@@ -81,10 +81,13 @@ class StrategyEntry:
     strategy is meant to trade in -- trading.cfd.selector.select_for_entry
     matches the current regime against every ACTIVE entry's
     suited_regimes to decide what (if anything) trades an instrument this
-    run. Empty by default -- an entry with no regimes declared is never
-    selected for a new entry, rather than being treated as "suited to
-    everything," so a strategy registered without this set explicitly
-    can't accidentally start trading."""
+    run. More than one ACTIVE entry may declare the same regime (see
+    register()'s docstring); trading.cfd.portfolio_allocator weights risk
+    across all of them and the selector picks among matches by that
+    weight, not by "first one found." Empty by default -- an entry with
+    no regimes declared is never selected for a new entry, rather than
+    being treated as "suited to everything," so a strategy registered
+    without this set explicitly can't accidentally start trading."""
 
     def build(self):
         """Instantiates the actual strategy object (EmaCrossoverStrategy,
@@ -114,22 +117,6 @@ def _key(name: str, version: str) -> str:
     return f"{name}@{version}"
 
 
-def _conflicting_active_entry(data: dict, exclude_key: str, regimes: list[str]) -> Optional[StrategyEntry]:
-    """Finds an already-ACTIVE entry (other than exclude_key) whose
-    suited_regimes overlaps regimes -- used to keep "at most one ACTIVE
-    strategy per regime" true at every promotion, so
-    trading.cfd.selector.select_for_entry() can never find more than one
-    match and have to guess."""
-    if not regimes:
-        return None
-    for key, raw in data.items():
-        if key == exclude_key or raw.get("state") != LifecycleState.ACTIVE.value:
-            continue
-        if set(raw.get("suited_regimes") or []) & set(regimes):
-            return StrategyEntry(**raw)
-    return None
-
-
 def register(
     name: str,
     version: str,
@@ -152,23 +139,18 @@ def register(
     *later* transition goes through set_state(), which does enforce the
     pipeline order.
 
-    Seeding directly into ACTIVE still enforces "at most one ACTIVE
-    strategy per regime" (see _conflicting_active_entry) -- the same rule
-    set_state() enforces for every later promotion -- so this can't be
-    used to sneak in an ambiguous regime match either."""
+    Multiple ACTIVE entries may share overlapping suited_regimes -- per
+    docs/VISION.md's revised "Portfolio / Allocation Decision" stage, this
+    is a real portfolio manager, not a single-winner selector.
+    trading.cfd.portfolio_allocator weights the risk budget across every
+    ACTIVE strategy suited to a given regime, and trading.cfd.selector.
+    select_for_entry() picks among them by that weight -- no ambiguity to
+    guard against here."""
     data = _load_all()
     key = _key(name, version)
     if key in data:
         raise ValueError(f"{key} is already registered -- register a new version instead of overwriting one.")
     regimes = regimes or []
-    if initial_state == LifecycleState.ACTIVE:
-        conflict = _conflicting_active_entry(data, key, regimes)
-        if conflict:
-            overlap = set(conflict.suited_regimes) & set(regimes)
-            raise ValueError(
-                f"Can't seed {key} as ACTIVE: regime overlap {overlap} with already-ACTIVE "
-                f"{conflict.name}@{conflict.version}."
-            )
     entry = StrategyEntry(
         name=name,
         version=version,
@@ -220,10 +202,10 @@ def set_state(name: str, version: str, to_state: LifecycleState, reason: str) ->
     flip -- this is the "why" a future Failure Analysis or human review
     needs when asking "why was this strategy trading real money?".
 
-    Promoting to ACTIVE also enforces "at most one ACTIVE strategy per
-    regime" (see _conflicting_active_entry) -- trading.cfd.selector.
-    select_for_entry() relies on that to never find more than one ACTIVE
-    strategy suited to the same regime."""
+    Promoting to ACTIVE no longer requires an exclusive regime -- several
+    ACTIVE strategies may share suited_regimes at once (see register()'s
+    docstring); trading.cfd.portfolio_allocator and trading.cfd.selector
+    handle picking among them and weighting risk, not this registry."""
     if not reason:
         raise ValueError("set_state requires a non-empty reason -- every lifecycle change needs an audited justification.")
     data = _load_all()
@@ -235,14 +217,6 @@ def set_state(name: str, version: str, to_state: LifecycleState, reason: str) ->
     from_state = LifecycleState(entry.state)
     if not _valid_transition(from_state, to_state):
         raise ValueError(f"Invalid transition {from_state.value} -> {to_state.value} for {key}.")
-    if to_state == LifecycleState.ACTIVE:
-        conflict = _conflicting_active_entry(data, key, entry.suited_regimes)
-        if conflict:
-            overlap = set(conflict.suited_regimes) & set(entry.suited_regimes)
-            raise ValueError(
-                f"Can't promote {key} to ACTIVE: regime overlap {overlap} with already-ACTIVE "
-                f"{conflict.name}@{conflict.version}. Pause or retire it first."
-            )
     entry.history.append({"from": from_state.value, "to": to_state.value, "reason": reason, "at": _now_iso()})
     entry.state = to_state.value
     entry.updated_at = _now_iso()

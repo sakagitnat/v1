@@ -10,8 +10,10 @@ roadmap (Phase 0 through Phase 5) are complete, and the pipeline has now
 been exercised against the real Deriv demo account** -- but see
 "Revised gap analysis (2026-09-20)" below: `docs/VISION.md` was revised
 the same day to correct a too-narrow reading of the original brief, and
-three structural gaps against the *revised* vision are now open,
-tracked there.
+three structural gaps against the *revised* vision were opened, tracked
+there. Two of three (autonomous demotion, multi-strategy Portfolio/
+Allocation) are now closed -- see Progress log. Only the regime-taxonomy
+gap remains.
 
 ## Revised gap analysis (2026-09-20)
 
@@ -22,15 +24,13 @@ strategies at once and demote/pause on its own initiative** (never
 promote, never raise risk, on its own). Comparing what exists against the
 revised vision:
 
-1. **No multi-strategy Portfolio/Allocation stage.**
-   `trading.cfd.selector.select_for_entry()` picks exactly one ACTIVE
-   strategy per regime (and `strategy_registry.set_state()`/`register()`
-   actively *enforce* "at most one ACTIVE per regime" as an invariant --
-   the opposite of what's needed now). There's no concept of splitting
-   allocation/risk budget across several simultaneously-suited
-   strategies, no weighting by conviction or recent performance. This is
-   the biggest structural gap against the revised pipeline's explicit
-   "Portfolio / Allocation Decision" stage.
+1. ~~**No multi-strategy Portfolio/Allocation stage.**~~ **Closed
+   2026-09-20** -- see Progress log below. `strategy_registry.set_state()`
+   /`register()` no longer enforce "at most one ACTIVE per regime";
+   `trading.cfd.portfolio_allocator.compute_allocations()` weights every
+   ACTIVE strategy by recent performance, and `trading.cfd.selector.
+   select_for_entry()` picks among regime-suited matches by that weight
+   instead of raising.
 2. ~~**No autonomous demotion.**~~ **Closed 2026-09-20** -- see Progress
    log below. `trading.cfd.decay_supervisor.run_autonomous_demotion()`
    now calls `strategy_registry.set_state()` itself on every scheduler
@@ -297,6 +297,50 @@ capital model. These all still match the revised vision as-is.
   demoted). Full suite: 251 tests passing. Gaps #1 (multi-strategy
   portfolio allocation) and #3 (richer regime taxonomy) from the revised
   gap analysis above are still open, not yet started.
+
+- **2026-09-20 — Revised gap #1 ("no multi-strategy Portfolio/Allocation
+  stage") closed.** The biggest of the three revised-gap-analysis items,
+  tackled right after autonomous demotion. Two changes:
+  1. `strategy_registry.register()`/`set_state()` no longer enforce "at
+     most one ACTIVE strategy per regime" -- `_conflicting_active_entry()`
+     and its call sites are gone. Several ACTIVE strategies can now share
+     `suited_regimes` at once, which is the entire point of a portfolio
+     manager rather than a single-winner selector.
+  2. New module `trading/cfd/portfolio_allocator.py`
+     (`compute_allocations(trades, active_entries)`) gives every ACTIVE
+     strategy a weight (summing to 1.0) from its own recent trade
+     history: `WEIGHT_FLOOR` (0.05) + `max(0, expectancy)` once it has
+     `MIN_TRADES_FOR_WEIGHTING` (10) trades of its own, or just the floor
+     below that -- so a fresh promotion or a losing strategy is never
+     starved to zero by this stage alone (that's `decay_supervisor`'s
+     job, via an explicit, audited demotion, never an incidental side
+     effect of allocation math). `risk_scale_factor(weight, n_active)`
+     turns a weight into a per-trade risk multiplier relative to the
+     equal-weight baseline, capped at 1.0 -- allocation can only ever
+     redistribute the existing risk budget toward the stronger performer,
+     never raise any one strategy's risk past what `risk_per_trade`
+     already allows. `risk.py`'s `stake_and_limits()` gained an optional
+     `risk_per_trade_override` param (clamped to never exceed the
+     configured `risk_per_trade`, enforced in the risk manager itself,
+     not just trusted of the caller) to actually apply it.
+     `selector.py`'s `select_for_entry()` now takes the allocation
+     weights and picks the highest-weighted regime-suited match instead
+     of raising `RuntimeError` on more than one. `scheduler.py` computes
+     allocations once per run (on the roster left standing after
+     autonomous demotion) and uses them both to pick which strategy gets
+     a given instrument's entry and to scale that entry's risk. Per
+     `docs/VISION.md`'s "Autonomy boundaries": shifting the existing
+     budget between ACTIVE strategies only ever lowers or holds any one
+     strategy's risk, never raises it -- so, like demotion, it needs no
+     human approval. `manager_report.py`'s `build_report()` now also
+     returns `allocation_summary` (the current weights) purely for
+     visibility, and `cfd_cli.py manager-report` prints it.
+  13 new tests (`tests/test_cfd_portfolio_allocator.py`) plus updates to
+  `tests/test_cfd_strategy_registry.py`, `tests/test_cfd_selector.py`,
+  `tests/test_cfd_risk.py`, and `tests/test_cfd_manager_report.py` to
+  match the relaxed invariant and the new weighting/override behavior.
+  Full suite: 265 tests passing. Only gap #3 (richer regime taxonomy)
+  from the revised gap analysis remains open.
 
 ## Executive summary
 

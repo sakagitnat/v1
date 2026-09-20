@@ -120,11 +120,16 @@ def test_register_defaults_to_no_suited_regimes(tmp_path, monkeypatch):
     assert reg.get("a", "v1").suited_regimes == []
 
 
-def test_register_active_refuses_regime_overlap_with_existing_active(tmp_path, monkeypatch):
+def test_register_active_allows_regime_overlap_with_existing_active(tmp_path, monkeypatch):
+    # Per docs/VISION.md's revised "Portfolio / Allocation Decision" stage:
+    # multiple ACTIVE strategies suited to the same regime is the whole
+    # point now (trading.cfd.portfolio_allocator weights risk across
+    # them), not an error to prevent.
     _use_tmp_registry(tmp_path, monkeypatch)
     reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
-    with pytest.raises(ValueError):
-        reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    assert reg.get("a", "v1").state == "ACTIVE"
+    assert reg.get("b", "v1").state == "ACTIVE"
 
 
 def test_register_active_allows_disjoint_regimes(tmp_path, monkeypatch):
@@ -143,21 +148,15 @@ def test_register_active_ignores_entries_with_no_regimes_declared(tmp_path, monk
     reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE)
 
 
-def test_set_state_to_active_refuses_regime_overlap(tmp_path, monkeypatch):
+def test_set_state_to_active_allows_regime_overlap(tmp_path, monkeypatch):
+    # Same relaxation as test_register_active_allows_regime_overlap_with_
+    # existing_active, via the promotion path instead of register().
     _use_tmp_registry(tmp_path, monkeypatch)
     reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
     reg.register("b", "v1", {}, initial_state=LifecycleState.PAUSED, regimes=["trending"])
-    with pytest.raises(ValueError):
-        reg.set_state("b", "v1", LifecycleState.ACTIVE, reason="try to double up on trending")
-
-
-def test_set_state_to_active_allows_disjoint_regime_after_others_paused(tmp_path, monkeypatch):
-    _use_tmp_registry(tmp_path, monkeypatch)
-    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
-    reg.register("b", "v1", {}, initial_state=LifecycleState.PAUSED, regimes=["trending"])
-    reg.set_state("a", "v1", LifecycleState.PAUSED, reason="stepping aside")
-    resumed = reg.set_state("b", "v1", LifecycleState.ACTIVE, reason="taking over trending")
+    resumed = reg.set_state("b", "v1", LifecycleState.ACTIVE, reason="joining trending alongside a@v1")
     assert resumed.state == "ACTIVE"
+    assert reg.get("a", "v1").state == "ACTIVE"
 
 
 def test_list_by_state_filters_correctly(tmp_path, monkeypatch):

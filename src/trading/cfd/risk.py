@@ -68,13 +68,29 @@ class CfdRiskManager:
         return not (self._halted or self._open_positions >= self.max_open_positions or self.below_floor())
 
     def stake_and_limits(
-        self, entry_price: float, stop_price: float, take_profit_price: float
+        self,
+        entry_price: float,
+        stop_price: float,
+        take_profit_price: float,
+        risk_per_trade_override: Optional[float] = None,
     ) -> tuple[float, float, float]:
         """Returns (stake, stop_loss_amount, take_profit_amount), all in
         account currency, sized so a stop-out loses about risk_per_trade of
         equity. Returns (0.0, 0.0, 0.0) if a new position can't open right
         now (floor breached, daily loss halt, or max positions reached) or
         the inputs are degenerate (zero stop distance).
+
+        risk_per_trade_override, if given, is used instead of the
+        constructor's risk_per_trade for this one call -- how
+        trading.cfd.portfolio_allocator's per-strategy weighting actually
+        takes effect (a lower-conviction ACTIVE strategy sharing a regime
+        with others gets a smaller slice of the configured risk budget).
+        Clamped to never exceed risk_per_trade regardless of what's passed
+        in: allocation can only ever shrink a trade's risk relative to what
+        a human already configured, never raise it above that ceiling --
+        docs/VISION.md's "Autonomy boundaries" forbids the AI increasing
+        risk on its own initiative, so that boundary is enforced right
+        here, not just trusted of the caller.
 
         Note: when stop_distance exceeds entry_price / multiplier, stake
         comes out smaller than stop_loss_amount (risk_amount) -- Deriv's
@@ -104,7 +120,10 @@ class CfdRiskManager:
             return 0.0, 0.0, 0.0
         target_distance = abs(take_profit_price - entry_price)
 
-        risk_amount = self.equity * self.risk_per_trade
+        risk_per_trade = self.risk_per_trade
+        if risk_per_trade_override is not None:
+            risk_per_trade = max(0.0, min(risk_per_trade, risk_per_trade_override))
+        risk_amount = self.equity * risk_per_trade
         stake = min(risk_amount * entry_price / (self.multiplier * stop_distance), self.equity)
         if stake < self.min_stake:
             return 0.0, 0.0, 0.0

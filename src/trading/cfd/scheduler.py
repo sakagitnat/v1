@@ -7,6 +7,7 @@ from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
 from trading.cfd.paper_trading import run_paper_trading
+from trading.cfd.portfolio_allocator import compute_allocations, risk_scale_factor
 from trading.cfd.regime import classify_regime
 from trading.cfd.risk import CfdRiskManager
 from trading.cfd.selector import select_for_entry
@@ -144,6 +145,16 @@ async def run_once():
     is always managed by the exact strategy version that opened it (see
     _resolve_exit_strategy_entry), regardless of what's ACTIVE now.
 
+    More than one ACTIVE strategy can be suited to the same regime --
+    trading.cfd.portfolio_allocator.compute_allocations() weights each by
+    recent performance once per run, the Selector picks among matches by
+    that weight, and the winning entry's stake is itself sized by its
+    weight relative to the others (capped so no strategy's risk ever
+    exceeds what risk_per_trade alone would already allow -- allocation
+    only ever redistributes the existing budget, never raises it). This
+    is docs/VISION.md's revised "Portfolio / Allocation Decision" stage,
+    not a single-winner selector.
+
     Every PAPER-state strategy also gets evaluated on the same candles
     (trading.cfd.paper_trading.run_paper_trading), simulating fills
     without ever placing a real order -- see that module's docstring.
@@ -163,17 +174,31 @@ async def run_once():
         logger.info("CFD bot is paused (state/cfd_bot_state.json) -- skipping this run.")
         return
 
+    trades = load_trades()
+
     # Autonomous demotion (docs/VISION.md's "Autonomy boundaries"): any
     # ACTIVE strategy Failure Analysis flags as decayed is paused right
     # here, before this run even looks at which strategies are ACTIVE --
     # no human approval needed for a risk-reducing action, only for the
     # reverse. Cheap and local (no network), so it runs before the broker
     # connection below.
-    for demotion in run_autonomous_demotion(load_trades()):
+    for demotion in run_autonomous_demotion(trades):
         logger.warning("%s -- %s", demotion["strategy"], demotion["reason"])
 
-    if not list_by_state(LifecycleState.ACTIVE):
+    active_entries = list_by_state(LifecycleState.ACTIVE)
+    if not active_entries:
         raise RuntimeError("No strategy is registered as ACTIVE -- nothing to trade. See `cfd_cli.py list-strategies`.")
+
+    # Portfolio / Allocation Decision (docs/VISION.md's revised pipeline):
+    # every ACTIVE strategy gets a weight (trading.cfd.portfolio_allocator)
+    # from its own recent performance -- used below both to pick among
+    # several regime-suited strategies for one instrument's entry, and to
+    # scale that entry's risk relative to the others. Computed once per
+    # run on the roster left standing after autonomous demotion above.
+    allocations = compute_allocations(trades, active_entries)
+    n_active = len(active_entries)
+    if n_active > 1:
+        logger.debug("Portfolio allocation this run: %s", allocations)
 
     broker = DerivBroker()
     try:
@@ -343,7 +368,9 @@ async def run_once():
             # Flat -- decide whether to open a new position, per the
             # Strategy Selector: current regime matched against whichever
             # strategy (if any) is ACTIVE for it. No match is NO TRADE.
-            entry_candidate = select_for_entry(regime)
+            # Several ACTIVE strategies may match; the allocator's weights
+            # (computed above) break the tie.
+            entry_candidate = select_for_entry(regime, allocations)
             if entry_candidate is None:
                 logger.debug("%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it)", instrument, regime)
                 continue
@@ -360,15 +387,19 @@ async def run_once():
                 logger.info("Skipping %s: max open positions reached", instrument)
                 continue
 
+            strategy_tag = f"{entry_candidate.name}@{entry_candidate.version}"
+            weight = allocations.get(strategy_tag, 1.0 / n_active if n_active else 1.0)
+            risk_per_trade_override = effective_risk * risk_scale_factor(weight, n_active)
+
             stake, stop_loss_amount, take_profit_amount = risk.stake_and_limits(
-                signal.price, signal.stop_price, signal.take_profit_price
+                signal.price, signal.stop_price, signal.take_profit_price,
+                risk_per_trade_override=risk_per_trade_override,
             )
             if stake <= 0:
                 logger.info("Skipping %s: stake computed as 0 (risk limit, halt, or below Deriv's minimum stake)", instrument)
                 continue
 
             side = "long" if signal.action == Action.BUY else "short"
-            strategy_tag = f"{entry_candidate.name}@{entry_candidate.version}"
             logger.info(
                 "%s %s stake=%.2f (stop-loss $%.2f, take-profit $%.2f) -- regime=%s, %s (%s)",
                 side.upper(), instrument, stake, stop_loss_amount, take_profit_amount, regime, signal.reason, strategy_tag,

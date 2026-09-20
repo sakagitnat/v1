@@ -541,20 +541,47 @@ indices) are classified as `trending`, `ranging`, or `unknown`
 (`trading/cfd/regime.py`, via ADX -- the same trend-strength indicator
 `EmaCrossoverStrategy`'s own optional chop filter already uses).
 `trading/cfd/selector.py` matches that regime against every `ACTIVE`
-registered strategy's `suited_regimes` and picks the one that fits --
-**no match is an explicit NO TRADE, logged and skipped, not a fallback
-guess.** Both registered strategies (`ema_crossover`, `donchian_breakout`)
-are trend-following and tagged `suited_regimes=["trending"]`, so today
-this mostly acts as a gate that skips new entries during a `ranging`
-market -- there's no mean-reversion/range strategy registered yet to
-trade that regime instead (see `docs/ARCHITECTURE_AUDIT.md`).
-`trading.cfd.strategy_registry.set_state()`/`register()` enforce **at
-most one `ACTIVE` strategy per regime** at promotion time, so the
-selector's match is never ambiguous. An already-open position is always
-managed to its exit by the *exact* strategy version that opened it
-(tagged in its trade metadata), never whatever happens to be `ACTIVE` by
-the time it closes -- so promoting or pausing a strategy can never
-retroactively change how an existing position gets closed out.
+registered strategy's `suited_regimes` -- **no match is an explicit NO
+TRADE, logged and skipped, not a fallback guess.** Both registered
+strategies (`ema_crossover`, `donchian_breakout`) are trend-following and
+tagged `suited_regimes=["trending"]`, so today this mostly acts as a gate
+that skips new entries during a `ranging` market -- there's no
+mean-reversion/range strategy registered yet to trade that regime
+instead (see `docs/ARCHITECTURE_AUDIT.md`). More than one `ACTIVE`
+strategy can now share a regime (`strategy_registry.set_state()`/
+`register()` no longer enforce "at most one `ACTIVE` per regime" --
+see **Portfolio Allocation** below): when several match, the selector
+picks the one `trading/cfd/portfolio_allocator.py` currently weights
+highest for that instrument's single position slot, not an arbitrary or
+first-found one. An already-open position is always managed to its exit
+by the *exact* strategy version that opened it (tagged in its trade
+metadata), never whatever happens to be `ACTIVE` by the time it closes --
+so promoting or pausing a strategy can never retroactively change how an
+existing position gets closed out.
+
+**Portfolio Allocation.** `trading/cfd/portfolio_allocator.py`
+(`compute_allocations`, called by `scheduler.py` once per run, right
+after Autonomous Demotion below) gives every `ACTIVE` strategy a risk
+weight, summing to 1.0 across all of them: a strategy with at least 10
+of its own closed trades scores a small floor (0.05) plus its own
+non-negative recent expectancy; one with less history, or a losing one,
+sits at just the floor -- never starved to zero by this stage alone,
+since deciding a strategy shouldn't trade at all is Autonomous
+Demotion's job, not this one's. `risk_scale_factor()` turns that weight
+into a per-trade risk multiplier relative to an equal split, **capped at
+1.0** -- so a strategy can only ever have its risk redistributed *down*
+relative to the others, never raised past what `CFD_RISK_PER_TRADE`
+(scaled by the current Operating Mode) already allows; `risk.py`'s
+`stake_and_limits()` enforces that same cap itself, not just trusting
+the caller. This is docs/VISION.md's revised "Portfolio / Allocation
+Decision" pipeline stage: several strategies suited to the same regime
+genuinely run at once across the instrument universe (a different
+instrument can land on a different one of them the same run), weighted
+by which is actually working right now -- not a single hardcoded winner.
+Per "Autonomy boundaries," shifting the existing budget between
+strategies only ever lowers or holds any one strategy's risk, so -- like
+demotion -- it needs no human approval. `cfd_cli.py manager-report`
+prints the current weights (`allocation_summary`) for visibility.
 
 **Failure Analysis.** `trading/cfd/failure_analysis.py`
 (`cfd_cli.py failures`) reads the Trade Database and classifies every
@@ -571,9 +598,8 @@ problem -- are **never guessed at**: this project doesn't capture the
 news, latency, or data-quality signals they'd need, so a trade that might
 be one of those is classified `normal_statistical_loss` rather than a
 fabricated specific cause (see `docs/ARCHITECTURE_AUDIT.md`). A
-degradation flag is a prompt to look, never an automatic pause -- acting
-on it still goes through `cfd_cli.py promote-strategy ... PAUSED` like
-every other lifecycle change.
+degradation flag on an `ACTIVE` strategy is acted on automatically, not
+just surfaced -- see **Autonomous Demotion** below.
 
 **Validation: Walk-Forward + Monte Carlo.** `trading/cfd/validation.py`
 adds the two checks docs/VISION.md's pipeline calls for beyond the

@@ -141,10 +141,13 @@ def cmd_paper_performance(_args):
 def cmd_manager_report(_args):
     """Prints the AI Trading Manager's consolidated report
     (trading.cfd.manager_report): overall performance, loss breakdown,
-    every registered strategy grouped by lifecycle state, and concrete
-    recommended cfd_cli.py commands -- never applied automatically. See
-    that module's docstring for why lifecycle changes always stay a
-    human's deliberate, audited decision."""
+    every registered strategy grouped by lifecycle state, the current
+    Portfolio Allocation weight per ACTIVE strategy (trading.cfd.
+    portfolio_allocator -- the live scheduler already applies these every
+    run, this just makes them visible), and concrete recommended
+    cfd_cli.py commands -- never applied automatically. See that module's
+    docstring for why lifecycle changes always stay a human's deliberate,
+    audited decision."""
     trades = load_trades()
     paper_trades = load_trades(PAPER_LOG_PATH)
     report = build_report(trades, paper_trades)
@@ -156,6 +159,12 @@ def cmd_manager_report(_args):
     for state_name, tags in report["registry_summary"].items():
         if tags:
             print(f"  {state_name}: {', '.join(tags)}")
+
+    print("\nPortfolio allocation (current risk weight per ACTIVE strategy):")
+    if not report["allocation_summary"]:
+        print("  (no ACTIVE strategies)")
+    for tag, weight in report["allocation_summary"].items():
+        print(f"  {tag}: {weight:.2%}")
 
     print("\nLoss breakdown:")
     if not report["loss_breakdown"]:

@@ -23,6 +23,7 @@ def test_report_with_no_data_is_empty_but_does_not_crash(tmp_path, monkeypatch):
     assert report["overall_performance"]["trade_count"] == 0
     assert report["loss_breakdown"] == {}
     assert report["recommendations"] == []
+    assert report["allocation_summary"] == {}
     assert all(v == [] for v in report["registry_summary"].values())
 
 
@@ -33,6 +34,16 @@ def test_registry_summary_groups_by_state(tmp_path, monkeypatch):
     report = build_report([], [])
     assert report["registry_summary"]["ACTIVE"] == ["a@v1"]
     assert report["registry_summary"]["CANDIDATE"] == ["b@v1"]
+
+
+def test_allocation_summary_weights_active_strategies(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["ranging"])
+    reg.register("c", "v1", {}, initial_state=LifecycleState.CANDIDATE)  # not ACTIVE -- excluded
+    report = build_report([], [])
+    assert set(report["allocation_summary"].keys()) == {"a@v1", "b@v1"}
+    assert abs(sum(report["allocation_summary"].values()) - 1.0) < 1e-9
 
 
 def test_flags_a_degraded_active_strategy_pending_autonomous_demotion(tmp_path, monkeypatch):

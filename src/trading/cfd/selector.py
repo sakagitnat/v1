@@ -15,15 +15,18 @@ strategy is ACTIVE by the time it closes -- so promoting a new strategy,
 or pausing/retiring one, can never retroactively change how an existing
 position gets closed out.
 
-trading.cfd.strategy_registry.set_state()/register() enforce "at most one
-ACTIVE strategy per regime" at promotion time, so a match here should
-never be ambiguous -- the RuntimeError below is a last-resort integrity
-check, not the normal way this gets decided.
-
-Today only one strategy is ever ACTIVE at all (ema_crossover, suited to
-"trending"), so in practice this mostly acts as a NO TRADE gate during a
-"ranging" regime -- no mean-reversion/range strategy is registered yet to
-fill that gap (see docs/ARCHITECTURE_AUDIT.md).
+Per docs/VISION.md's revised "Portfolio / Allocation Decision" stage,
+more than one ACTIVE strategy may be suited to the same regime at once
+(trading.cfd.strategy_registry no longer enforces "at most one ACTIVE
+per regime" -- see its docstring). When several match, this picks the
+one trading.cfd.portfolio_allocator currently weights highest (recent
+performance -- ties broken deterministically by name/version, never by
+insertion order or randomness) for THIS instrument's single position
+slot this run. That doesn't make the others idle: a different instrument
+with the same regime this same run can land on a different one of them,
+so the portfolio as a whole still runs multiple strategies concurrently
+even though any one instrument only ever holds one open position at a
+time.
 """
 from typing import Optional
 
@@ -31,17 +34,24 @@ from trading.cfd.regime import UNKNOWN
 from trading.cfd.strategy_registry import LifecycleState, StrategyEntry, list_by_state
 
 
-def select_for_entry(regime: str) -> Optional[StrategyEntry]:
+def _tag(entry: StrategyEntry) -> str:
+    return f"{entry.name}@{entry.version}"
+
+
+def select_for_entry(regime: str, allocations: Optional[dict[str, float]] = None) -> Optional[StrategyEntry]:
+    """allocations: trading.cfd.portfolio_allocator.compute_allocations()'s
+    output ({"name@version": weight}, summed to 1.0 across every ACTIVE
+    strategy) -- used only to break a tie among multiple regime-suited
+    matches. Missing entirely, or missing a specific match's tag, is
+    treated as weight 0.0 for that match (never crashes, never favors an
+    unweighted strategy over a weighted one)."""
     if regime == UNKNOWN:
         return None
     active = list_by_state(LifecycleState.ACTIVE)
     matches = [e for e in active if regime in (e.suited_regimes or [])]
     if not matches:
         return None
-    if len(matches) > 1:
-        names = ", ".join(f"{e.name}@{e.version}" for e in matches)
-        raise RuntimeError(
-            f"{len(matches)} ACTIVE strategies are suited to regime {regime!r} ({names}) -- this should be "
-            "impossible (strategy_registry.set_state() is supposed to prevent regime overlap). Pause all but one."
-        )
-    return matches[0]
+    if len(matches) == 1:
+        return matches[0]
+    allocations = allocations or {}
+    return max(matches, key=lambda e: (allocations.get(_tag(e), 0.0), e.name, e.version))

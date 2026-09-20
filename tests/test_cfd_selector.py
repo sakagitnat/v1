@@ -1,5 +1,3 @@
-import pytest
-
 from trading.cfd import strategy_registry as reg
 from trading.cfd.regime import RANGING, TRENDING, UNKNOWN
 from trading.cfd.selector import select_for_entry
@@ -35,19 +33,21 @@ def test_candidate_strategies_are_never_selected_even_if_regime_matches(tmp_path
     assert select_for_entry(TRENDING) is None
 
 
-def test_multiple_active_matches_for_same_regime_raises(tmp_path, monkeypatch):
-    # Should be unreachable via the normal registry API (set_state/register
-    # enforce this at promotion time), but the selector still guards
-    # against it directly rather than silently picking one.
+def test_multiple_active_matches_picks_the_higher_weighted_one(tmp_path, monkeypatch):
+    # Per docs/VISION.md's revised Portfolio/Allocation stage, several
+    # ACTIVE strategies can share a regime now -- the selector breaks the
+    # tie using trading.cfd.portfolio_allocator's weights, not by raising.
     _use_tmp_registry(tmp_path, monkeypatch)
     reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
-    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["ranging"])  # disjoint -- registers fine
-    # Simulate a corrupted/hand-edited state file bypassing the registry's
-    # own overlap guard (register()/set_state() would refuse this directly).
-    import json
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    entry = select_for_entry(TRENDING, allocations={"a@v1": 0.3, "b@v1": 0.7})
+    assert entry.name == "b"
 
-    raw = json.loads(reg._REGISTRY_PATH.read_text())
-    raw["b@v1"]["suited_regimes"] = ["trending"]
-    reg._REGISTRY_PATH.write_text(json.dumps(raw))
-    with pytest.raises(RuntimeError):
-        select_for_entry(TRENDING)
+
+def test_multiple_active_matches_with_no_allocations_is_still_deterministic(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    reg.register("a", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    reg.register("b", "v1", {}, initial_state=LifecycleState.ACTIVE, regimes=["trending"])
+    first = select_for_entry(TRENDING)
+    second = select_for_entry(TRENDING)
+    assert first.name == second.name

@@ -98,6 +98,31 @@ def test_daily_start_equity_can_be_carried_in_from_a_prior_run():
     assert rm.halted is True
 
 
+def test_risk_per_trade_override_scales_down_the_stake():
+    # trading.cfd.portfolio_allocator passes a smaller override for a
+    # lower-conviction ACTIVE strategy sharing a regime with others.
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    full_stake, full_risk, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    half_stake, half_risk, _ = rm.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0, risk_per_trade_override=0.005
+    )
+    assert half_risk == full_risk / 2
+    assert half_stake == full_stake / 2
+
+
+def test_risk_per_trade_override_can_never_exceed_the_configured_risk_per_trade():
+    # Autonomy boundaries: allocation can only ever shrink risk relative
+    # to what a human configured, never raise it -- enforced here, not
+    # just trusted of the caller.
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    capped_stake, capped_risk, _ = rm.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0, risk_per_trade_override=0.5
+    )
+    uncapped_stake, uncapped_risk, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert capped_risk == uncapped_risk
+    assert capped_stake == uncapped_stake
+
+
 def test_initially_halted_blocks_entries_from_the_first_call():
     # Simulates the scheduler passing in "already halted earlier today"
     # from persisted state -- must block immediately, not just after this

@@ -1,9 +1,13 @@
 """AI Trading Manager -- Management Report -- src/trading/cfd/manager_report.py
 
 Ties together everything built so far (Trade Database, Performance
-Engine, Failure Analysis, Strategy Registry, Research Lab, Paper Trading)
-into one consolidated report: what's actually happening across every
-registered strategy, and what still needs a human's attention.
+Engine, Failure Analysis, Strategy Registry, Portfolio Allocator,
+Research Lab, Paper Trading) into one consolidated report: what's
+actually happening across every registered strategy, and what still
+needs a human's attention. allocation_summary in the returned dict is
+trading.cfd.portfolio_allocator's current per-strategy risk weighting --
+purely informational here too, same as degradation: the live scheduler
+already applies these weights every run, this just makes them visible.
 
 This module itself NEVER takes action -- it only reports, in the form of
 the exact `cfd_cli.py` command that would carry out each suggestion (or,
@@ -26,6 +30,7 @@ from typing import Optional
 
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.performance import compute_performance
+from trading.cfd.portfolio_allocator import compute_allocations
 from trading.cfd.strategy_registry import LifecycleState, list_all
 from trading.config import settings
 
@@ -119,6 +124,8 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
 
     overall_performance = compute_performance(trades, starting_equity=starting_equity)
     loss_breakdown = summarize_losses(trades)
+    active_entries = [e for e in registry_entries if e.state == LifecycleState.ACTIVE.value]
+    allocation_summary = compute_allocations(trades, active_entries)
 
     recommendations = (
         _degradation_recommendations(trades, registry_entries)
@@ -129,6 +136,7 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
     return {
         "overall_performance": overall_performance,
         "loss_breakdown": loss_breakdown,
+        "allocation_summary": allocation_summary,
         "registry_summary": {
             state.value: [f"{e.name}@{e.version}" for e in registry_entries if e.state == state.value]
             for state in LifecycleState
