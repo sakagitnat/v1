@@ -1118,6 +1118,63 @@ capital model. These all still match the revised vision as-is.
     posted back to GPT on issue #4 as a research question fitting its
     stated "market/news analyst" role in the collaboration model
     (issue #5), rather than guessed at here.
+- **2026-09-20 — Fourth attempt at gap #11: `support_resistance` (proposed
+  by GPT on issue #5, built this session) -- found and fixed a genuine
+  strategy bug, not a validated result yet.** `trading/cfd/
+  support_resistance.py` (`SupportResistanceReversionStrategy`) is the
+  first "ranging" attempt with a structurally different data
+  representation, not just a different formula over closes: confirmed
+  swing-high/swing-low price structure (strict-inequality left/right
+  rolling windows, `shift()`-confirmed by `pivot_window` bars so a pivot
+  is never used before it could genuinely have been known -- caught and
+  fixed pre-commit by a test that initially failed against an earlier,
+  equality-based pivot check that false-triggered on flat/tied price
+  runs). 12 unit tests, `optimize_cfd_support_resistance.py` (81
+  combinations), `support_resistance@v1` seeded `CANDIDATE`
+  (`suited_regimes=["ranging"]`). Committed as f5ebcb2; full suite 407
+  passing.
+  - The first live grid search (GitHub Actions run 35511985083) came
+    back with impossible numbers: best "robust" candidate
+    `{pivot_window: 8, touch_threshold_pct: 0.0005, atr_stop_mult: 1.0,
+    atr_target_mult: 1.5}` showed `TRAIN cagr=76,253,302.1%` / `TEST
+    cagr=11,440,014.7%`, with 66/81 combinations "qualifying" and every
+    top-10 TRAIN candidate showing similarly astronomical TEST numbers
+    (5,000-6,400 trades on TRAIN alone, where every other CFD strategy
+    here produces dozens to low hundreds on the same data). No genuine
+    trading edge produces multi-million-percent CAGR -- treated as a
+    bug to find, never as a candidate to register, exactly the same
+    standard applied to `mean_reversion@v1`/`rsi_reversion@v1`'s honest
+    negative results, just on a number that was too good instead of too
+    bad.
+  - Root cause: `signal_for_row()`'s entry check had no lower bound --
+    `row["low"] <= support * (1 + touch_threshold_pct)` is equally true
+    for a low sitting exactly at a genuine touch AND for a low far
+    *below* an already-broken support (support only updates on a fresh
+    confirmed pivot, which can lag well behind a real breakdown in a
+    trending move). While flat, this fired a `BUY` signal on every
+    single bar price stayed below a stale level, not once on an actual
+    touch -- the pathological trade count above. Percentage-of-equity
+    position sizing (`CfdRiskManager.stake_and_limits`, sizing every
+    trade off current equity) then compounded that inflated trade count
+    into the impossible CAGR figures; the backtest engine and risk
+    sizing themselves are correct and were ruled out first by reading
+    `backtest.py`/`risk.py` directly -- the defect is entirely in the
+    strategy's own entry condition.
+  - Fix: both entry checks now require the low/high to land *inside* a
+    two-sided tolerance band around support/resistance
+    (`support * (1 - touch_threshold_pct) <= row["low"] <= support * (1
+    + touch_threshold_pct)`, symmetric for resistance), not merely
+    at-or-beyond one side of it. All 12 existing unit tests pass
+    unchanged (none exercised a "far below" case); two new regression
+    tests added (`test_flat_low_far_below_stale_support_does_not_
+    open_long`, `test_flat_high_far_above_stale_resistance_does_not_
+    open_short`) covering exactly the scenario that produced the bad
+    numbers. Full suite: 409 passing.
+  - `support_resistance@v1` stays `CANDIDATE` -- the live grid search
+    has not yet been re-run against the fixed logic, so whether this
+    approach actually works on real data is still genuinely unknown, not
+    quietly assumed positive because the bug is fixed. Gap #11 remains
+    open regardless of how that re-run turns out.
 
 ## Executive summary
 

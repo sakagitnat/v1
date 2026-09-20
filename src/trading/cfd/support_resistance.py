@@ -138,12 +138,28 @@ class SupportResistanceReversionStrategy:
                 return Signal(instrument, Action.BUY, price, reason="reverted to support/resistance midline (cover short)")
             return Signal(instrument, Action.HOLD, price, reason="holding short, midline not reached yet")
 
-        if row["low"] <= support * (1 + self.touch_threshold_pct):
+        # Both bounds matter, not just the upper/lower one facing the
+        # level: "touched" means the low/high landed IN the tolerance
+        # band around support/resistance, not merely "at or beyond" it.
+        # A one-sided check (only row["low"] <= support*(1+pct)) is also
+        # true for a low far BELOW a broken support -- e.g. support=100
+        # and low=50 satisfies "50 <= 100.1" just as much as a genuine
+        # 99.95 touch does. Once price is stuck below a stale support
+        # (support only updates via a new confirmed pivot, which can lag
+        # well behind a real breakdown), that one-sided check fires BUY
+        # on every single bar while flat, not once on the real touch --
+        # caught via a live grid-search run that came back with
+        # multi-million-percent CAGR from ~5x the trade count any other
+        # CFD strategy here produces on the same data (percentage-of-
+        # equity position sizing compounds that trade count into an
+        # impossible number, but the runaway trade count is the actual
+        # defect). The two-sided band below is the fix.
+        if support * (1 - self.touch_threshold_pct) <= row["low"] <= support * (1 + self.touch_threshold_pct):
             stop = support - self.atr_stop_mult * row["atr"]
             target = price + self.atr_target_mult * row["atr"]
             return Signal(instrument, Action.BUY, price, stop, target, "price touched confirmed support (long entry)")
 
-        if row["high"] >= resistance * (1 - self.touch_threshold_pct):
+        if resistance * (1 - self.touch_threshold_pct) <= row["high"] <= resistance * (1 + self.touch_threshold_pct):
             stop = resistance + self.atr_stop_mult * row["atr"]
             target = price - self.atr_target_mult * row["atr"]
             return Signal(instrument, Action.SELL, price, stop, target, "price touched confirmed resistance (short entry)")

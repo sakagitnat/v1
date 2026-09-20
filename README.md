@@ -866,10 +866,42 @@ the cheap TRAIN gate, and it failed out-of-sample (`TEST cagr=-6.8%`,
 `[OVERFIT]`) -- another honest negative result, so `rsi_reversion@v1` is
 `RETIRED` too, same treatment as `mean_reversion@v1`.
 
-Two structurally distinct approaches are now ruled out on this data,
-not just one guess. The "ranging" regime gap in gap #11 is still open --
-a session/time-of-day approach, a different timeframe, or a different
-data source are still untried.
+A third attempt, `trading/cfd/support_resistance.py`
+(`SupportResistanceReversionStrategy`), was proposed by GPT in issue #5's
+joint design discussion and built this session. It's the first genuinely
+different data representation, not just a different formula over the
+same close-price input: confirmed swing-high/swing-low price structure
+(strict-inequality "fractal" pivots, `shift()`-confirmed so a pivot never
+informs a decision before it could genuinely have been known), not a
+derived statistic over closes the way `mean_reversion`'s Bollinger band
+and `rsi_reversion`'s RSI oscillator both are. A first live grid search
+came back with multi-million-percent CAGR -- self-evidently not a real
+result -- traced to a genuine strategy bug, not a fabricated one: the
+entry check (`row["low"] <= support * (1 + touch_threshold_pct)`) had no
+lower bound, so it stayed true for a low far *below* a stale, already-
+broken support (support only updates on a fresh confirmed pivot, which
+can lag well behind a real breakdown), firing a BUY on every single bar
+while flat instead of once on a genuine touch -- roughly 5x the trade
+count any other CFD strategy here produces on the same data, which
+percentage-of-equity position sizing then compounded into an impossible
+number. Fixed to a two-sided tolerance band (the low/high must land *in*
+the band around support/resistance, not merely at-or-beyond it), with two
+new regression tests (`test_flat_low_far_below_stale_support_does_not_
+open_long`, `test_flat_high_far_above_stale_resistance_does_not_open_
+short`) covering the exact case that produced the bad numbers. The
+absurd first run was never registered as a result -- same evidence-based
+discipline as `mean_reversion@v1` and `rsi_reversion@v1`'s honest
+negatives, just applied to a number that was too good rather than too
+bad to be true.
+
+Two structurally distinct approaches (`mean_reversion`, `rsi_reversion`)
+are ruled out on this data so far; `support_resistance`'s real result is
+still pending a re-run of the grid search now that the bug above is
+fixed -- `support_resistance@v1` stays `CANDIDATE`, not `VALIDATED`,
+until that honestly-obtained number exists. The "ranging" regime gap in
+gap #11 is still open regardless of how that re-run comes back -- a
+session/time-of-day approach, a different timeframe, or a different data
+source are still untried either way.
 
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/

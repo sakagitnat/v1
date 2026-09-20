@@ -26,6 +26,28 @@ def test_flat_high_touches_resistance_opens_short_with_atr_stop_and_target():
     assert signal.take_profit_price == 109 - 2.5 * 2
 
 
+def test_flat_low_far_below_stale_support_does_not_open_long():
+    # Regression test: a one-sided check (low <= support*(1+pct)) is
+    # also true for a low far BELOW a broken support, not just a
+    # genuine touch -- this is what caused a live grid search to come
+    # back with multi-million-percent CAGR (pathological re-entry on
+    # every bar while price sat below a stale level). The fix requires
+    # the low to land IN the tolerance band around support, so a price
+    # that has clearly broken through and kept falling must HOLD, not
+    # BUY.
+    strategy = SupportResistanceReversionStrategy(touch_threshold_pct=0.001)
+    row = _row(support=100, resistance=110, atr_value=2, low=50, high=51, close=50.5)
+    signal = strategy.signal_for_row("EURUSD", row, row, in_position=None)
+    assert signal.action == Action.HOLD
+
+
+def test_flat_high_far_above_stale_resistance_does_not_open_short():
+    strategy = SupportResistanceReversionStrategy(touch_threshold_pct=0.001)
+    row = _row(support=90, resistance=110, atr_value=2, low=149, high=150, close=149.5)
+    signal = strategy.signal_for_row("EURUSD", row, row, in_position=None)
+    assert signal.action == Action.HOLD
+
+
 def test_flat_no_touch_holds():
     strategy = SupportResistanceReversionStrategy()
     row = _row(support=90, resistance=110, atr_value=2, low=99, high=101, close=100)
