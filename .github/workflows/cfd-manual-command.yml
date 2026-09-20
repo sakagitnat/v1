@@ -69,7 +69,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20  # optimize-strategy/sweep-risk grid searches can take a few minutes; everything else finishes in well under one
     steps:
+      # Pinned explicitly so a dispatch launched from the GitHub UI
+      # without switching the branch dropdown off the default still
+      # operates on this actively-developed branch's code and state,
+      # not a stale default-branch copy -- see cfd-trading.yml's own
+      # checkout step for the same reasoning applied to its schedule
+      # trigger.
       - uses: actions/checkout@v4
+        with:
+          ref: claude/ai-trading-manager-deriv-pmay2v
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

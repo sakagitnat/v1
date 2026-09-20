@@ -39,7 +39,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45  # three strategies' grid searches, sequentially, sharing one data fetch
     steps:
+      # Pinned explicitly -- see cfd-trading.yml's own checkout step for
+      # why: a `schedule` trigger only ever fires the workflow file as it
+      # exists on the repo's default branch, and without this an
+      # unpinned checkout would run whatever (possibly stale) code sits
+      # on that default branch instead of this actively-developed one.
       - uses: actions/checkout@v4
+        with:
+          ref: claude/ai-trading-manager-deriv-pmay2v
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

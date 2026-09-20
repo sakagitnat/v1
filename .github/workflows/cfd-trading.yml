@@ -66,7 +66,18 @@ jobs:
   trade:
     runs-on: ubuntu-latest
     steps:
+      # Pinned explicitly: a `schedule` trigger only ever fires the copy
+      # of THIS FILE that lives on the repo's default branch, and with no
+      # `ref` here `actions/checkout` would default to checking out that
+      # same default branch's CODE too -- silently running stale, possibly
+      # months-old application code on a real schedule, never this
+      # actively-developed branch. Pinning ref here is what makes a
+      # schedule-triggered run actually execute this project's current
+      # code regardless of which branch's copy of the workflow file GitHub
+      # used to fire it.
       - uses: actions/checkout@v4
+        with:
+          ref: claude/ai-trading-manager-deriv-pmay2v
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
