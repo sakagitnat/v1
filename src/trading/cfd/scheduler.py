@@ -73,6 +73,25 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _reserved_stake_for_open_ids(tracked_open: dict, open_ids: set[int]) -> float:
+    """Cash paid as stake for bot contracts that are still open.
+
+    Deriv deducts buy_price/stake from cash balance at entry. Adding only
+    the still-open bot stakes back produces a realized-equity ledger:
+    opening a position does not masquerade as a loss, while closing it
+    removes the reserve and lets only realized P&L change virtual equity.
+    """
+    total = 0.0
+    for contract_id, meta in tracked_open.items():
+        try:
+            cid = int(contract_id)
+        except (TypeError, ValueError):
+            continue
+        if cid in open_ids:
+            total += float(meta.get("stake", 0.0) or 0.0)
+    return round(total, 10)
+
+
 def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], equity_now: float) -> list[TradeRecord]:
     """Detects contracts this system was tracking as open that are no
     longer open on Deriv's side -- closed by Deriv's own stop-loss/
@@ -421,18 +440,26 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         account = await broker.connect()
         account_type = account.get("account_type")
         broker_balance = await broker.account_equity()
+        # Deriv deducts the contract stake from CASH at buy time. Cash alone
+        # therefore falls when a position opens even though no loss has been
+        # realized. Reconstruct realized account equity by adding back the
+        # cost basis of bot-owned contracts that are actually still open.
+        tracked_for_equity = list_open_trades()
+        currently_open_ids = await broker.open_contract_ids()
+        reserved_stake = _reserved_stake_for_open_ids(tracked_for_equity, currently_open_ids)
+        broker_equity = broker_balance + reserved_stake
 
         broker_baseline = state.get("broker_baseline")
         if account_type == "demo" and broker_baseline is None:
-            set_broker_baseline(broker_balance)
-            broker_baseline = broker_balance
+            set_broker_baseline(broker_equity)
+            broker_baseline = broker_equity
             logger.info(
                 "First run: broker baseline recorded at %.2f (raw demo balance) -- "
                 "virtual equity now tracks P&L from here, rebased onto %.2f, not the raw balance.",
                 broker_balance, settings.cfd_virtual_starting_capital,
             )
 
-        equity = equity_for_account(broker_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
+        equity = equity_for_account(broker_equity, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
 
         # Virtual sub-account lab: seed logical $100 ledgers and collect
         # genuine forward observations on M15/M5/M1. SHADOW accounts never
@@ -541,7 +568,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # own (stop-loss/take-profit, or a manual close) since the last
         # run, before this run does anything else.
         tracked_open = list_open_trades()
-        currently_open_ids = await broker.open_contract_ids()
+        # Reuse the broker-open set captured for equity reconstruction so
+        # reconciliation and the equity snapshot describe the same instant.
         reconciled_ids: set[int] = set()
         for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity):
             record_trade(record)
@@ -762,8 +790,14 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     equity_before = risk.equity
                     await broker.close_position(contract_id)
                     new_balance = await broker.account_equity()
+                    remaining_ids = await broker.open_contract_ids()
+                    remaining_tracked = list_open_trades()
+                    remaining_reserved = _reserved_stake_for_open_ids(remaining_tracked, remaining_ids)
                     new_equity = equity_for_account(
-                        new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
+                        new_balance + remaining_reserved,
+                        account_type,
+                        broker_baseline,
+                        settings.cfd_virtual_starting_capital,
                     )
                     pnl = round(new_equity - equity_before, 2)
                     risk.register_close(pnl)
