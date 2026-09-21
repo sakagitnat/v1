@@ -1,4 +1,4 @@
-from trading.cfd.scheduler import _legs_by_strategy, _reconcile_closed_trades, _reconcile_unknown_positions
+from trading.cfd.scheduler import _legs_by_strategy, _reconcile_closed_trades, _reconcile_unknown_positions, _reserved_stake_for_open_ids
 
 
 def _meta(**overrides):
@@ -150,3 +150,22 @@ def test_legs_by_strategy_groups_untracked_legs_under_empty_tag():
     groups = _legs_by_strategy(legs, tracked_open={})
     assert set(groups.keys()) == {""}
     assert groups[""][0]["contract_id"] == 1
+
+
+def test_reserved_stake_counts_only_contracts_still_open():
+    tracked = {
+        "1": _meta(stake=1.0),
+        "2": _meta(stake=2.5),
+        "3": _meta(stake=4.0),
+    }
+    assert _reserved_stake_for_open_ids(tracked, {1, 3}) == 5.0
+
+
+def test_reserved_stake_restores_cash_equity_after_entry():
+    # Deriv cash falls from 10000 to 9999 after paying a $1 stake.
+    # Adding the still-open cost basis back means account equity remains
+    # 10000, so the virtual $100 ledger remains $100 until P&L is realized.
+    tracked = {"123": _meta(stake=1.0)}
+    broker_cash = 9999.0
+    reconstructed = broker_cash + _reserved_stake_for_open_ids(tracked, {123})
+    assert reconstructed == 10000.0
