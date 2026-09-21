@@ -35,6 +35,8 @@ no black box: every one names the specific number(s) that triggered it.
 from dataclasses import dataclass
 from typing import Optional
 
+from trading.cfd.decision_log import load_decisions
+from trading.cfd.incident_log import load_incidents
 from trading.cfd.drawdown_monitor import DrawdownThresholds, classify_drawdown_tier, drawdown_risk_multiplier
 from trading.cfd.failure_analysis import detect_degradation, summarize_losses
 from trading.cfd.performance import compute_performance
@@ -214,12 +216,33 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
         + _paper_promotion_recommendations(paper_trades, registry_entries)
     )
 
+    decisions = load_decisions()
+    incidents = load_incidents()
+    decision_counts: dict[str, int] = {}
+    for row in decisions:
+        key = row.get("outcome") or "UNKNOWN"
+        decision_counts[key] = decision_counts.get(key, 0) + 1
+    incident_counts: dict[str, int] = {}
+    for row in incidents:
+        key = row.get("kind") or "unknown"
+        incident_counts[key] = incident_counts.get(key, 0) + 1
+
     return {
         "overall_performance": overall_performance,
         "loss_breakdown": loss_breakdown,
         "allocation_summary": allocation_summary,
         "portfolio_risk_summary": portfolio_risk_summary,
         "drawdown_summary": drawdown_summary,
+        "decision_summary": {
+            "total": len(decisions),
+            "by_outcome": decision_counts,
+            "recent": decisions[-20:],
+        },
+        "incident_summary": {
+            "total": len(incidents),
+            "by_kind": incident_counts,
+            "recent": incidents[-20:],
+        },
         "registry_summary": {
             state.value: [f"{e.name}@{e.version}" for e in registry_entries if e.state == state.value]
             for state in LifecycleState
