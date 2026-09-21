@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
+import json
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -20,6 +21,13 @@ from trading.indicators import ema
 
 INSTRUMENTS = ["frxXAUUSD","frxEURUSD","frxGBPUSD","frxUSDJPY"]
 MAX_TOTAL_RESEARCH_RISK = 1.50
+MICRO_LOG = Path(__file__).resolve().parents[1] / "state" / "cfd_micro_observations.jsonl"
+
+def _log(row):
+    MICRO_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with MICRO_LOG.open("a") as f:
+        f.write(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat(), **row}) + "\n")
+
 STAKE = 1.00
 STOP = 0.25
 TARGET = 0.50
@@ -84,8 +92,10 @@ async def main():
                     m5bias="long" if ema(m5["close"],9).iloc[-1] > ema(m5["close"],21).iloc[-1] else "short"
                     bonus=1 if side==m5bias else 0
                     candidates.append((bonus+strength,sym,side,float(m1["close"].iloc[-1])))
+            _log({"account":"scalp_m1","timeframe":"M1","candidate_count":len(candidates),"existing_risk":total_risk})
             if candidates:
                 _,sym,side,price=max(candidates)
+                _log({"account":"scalp_m1","timeframe":"M1","instrument":sym,"signal":side,"price":price,"selected":True})
                 await _open(broker,sym,side,"starter_m1@v0","scalp_m1","M1","M1 EMA9/21 + 3-bar momentum, ranked with M5 bias",price)
                 total_risk += STOP
 
@@ -98,8 +108,10 @@ async def main():
                     px=float(ticks["price"].iloc[-1])
                     impulse=abs(px-float(ticks["price"].iloc[-8]))/max(abs(px),1e-9)
                     candidates.append((impulse,sym,side,px))
+            _log({"account":"scalp_ticks","timeframe":"TICK","candidate_count":len(candidates),"existing_risk":total_risk})
             if candidates:
                 _,sym,side,price=max(candidates)
+                _log({"account":"scalp_ticks","timeframe":"TICK","instrument":sym,"signal":side,"price":price,"selected":True})
                 await _open(broker,sym,side,"starter_ticks@v0","scalp_ticks","TICK","8-tick vs 30-tick mean + 8-tick impulse",price)
     finally:
         await broker.close()
