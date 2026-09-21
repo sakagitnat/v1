@@ -36,14 +36,16 @@ jobs:
           ref: gpt/autonomous-demo-runner
           fetch-depth: 0
 
+      - name: Mark scheduler started
+        run: python3 scripts/cfd_scheduler_heartbeat.py started
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install -r requirements.txt
-
-      - name: Mark scheduler started
-        run: python scripts/cfd_scheduler_heartbeat.py started
+      - name: Install dependencies
+        id: deps
+        run: pip install -r requirements.txt
 
       - name: Run deterministic CFD scheduler
         id: trade
@@ -56,12 +58,13 @@ jobs:
       - name: Mark scheduler completion
         if: always()
         env:
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
           TRADE_OUTCOME: ${{ steps.trade.outcome }}
         run: |
-          if [ "$TRADE_OUTCOME" = "success" ]; then
-            python scripts/cfd_scheduler_heartbeat.py success
+          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ]; then
+            python3 scripts/cfd_scheduler_heartbeat.py success
           else
-            python scripts/cfd_scheduler_heartbeat.py failure
+            python3 scripts/cfd_scheduler_heartbeat.py failure
           fi
 
       # IMPORTANT: persist local state even when the Python scheduler fails.
