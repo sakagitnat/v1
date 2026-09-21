@@ -10,11 +10,11 @@ on:
     - cron: "15,30,45 22 * * 0"
     - cron: "*/15 23 * * 0"
     # Monday-Thursday, excluding the XAUUSD daily break around 20:59-22:05 GMT.
-    - cron: "*/15 0-20 * * 1-4"
+    - cron: "3,18,33,48 0-20 * * 1-4"
     - cron: "15,30,45 22 * * 1-4"
-    - cron: "*/15 23 * * 1-4"
+    - cron: "3,18,33,48 23 * * 1-4"
     # Friday through the published 20:45 GMT close.
-    - cron: "*/15 0-20 * * 5"
+    - cron: "3,18,33,48 0-20 * * 5"
 
 permissions:
   contents: write
