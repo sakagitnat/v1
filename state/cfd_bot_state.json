@@ -48,7 +48,7 @@
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 99.0,
+  "smoothed_equity": 100,
   "high_water_mark": 100,
   "virtual_accounts": {
     "core_h1": {
