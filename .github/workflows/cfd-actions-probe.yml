@@ -1,0 +1,50 @@
+name: CFD Actions Schedule Probe
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/10 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cfd-actions-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+
+      - name: Write schedule probe
+        env:
+          RUN_ID: ${{ github.run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          p = Path("state/cfd_actions_probe.json")
+          p.parent.mkdir(parents=True, exist_ok=True)
+          p.write_text(json.dumps({
+              "timestamp": datetime.now(timezone.utc).isoformat(),
+              "run_id": os.environ.get("RUN_ID"),
+              "event_name": os.environ.get("EVENT_NAME"),
+          }, indent=2) + "\n")
+          PY
+
+      - name: Persist probe
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/cfd_actions_probe.json
+          git commit -m "Update CFD Actions schedule probe"
+          git pull --rebase origin gpt/autonomous-demo-runner
+          git push origin HEAD:gpt/autonomous-demo-runner
