@@ -5,11 +5,6 @@ name: CFD Trading (Deriv)
 # The code/state source of truth for this handoff is pinned explicitly.
 on:
   workflow_dispatch: {}
-  push:
-    branches:
-      - gpt/autonomous-demo-runner
-    paths:
-      - state/cfd_kick.txt
   schedule:
     # Sunday open: XAUUSD published open is 22:10 GMT.
     - cron: "15,30,45 22 * * 0"
@@ -41,14 +36,16 @@ jobs:
           ref: gpt/autonomous-demo-runner
           fetch-depth: 0
 
+      - name: Mark scheduler started
+        run: python3 scripts/cfd_scheduler_heartbeat.py started
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - run: pip install -r requirements.txt
-
-      - name: Mark scheduler started
-        run: python scripts/cfd_scheduler_heartbeat.py started
+      - name: Install dependencies
+        id: deps
+        run: pip install -r requirements.txt
 
       - name: Run deterministic CFD scheduler
         id: trade
@@ -61,12 +58,13 @@ jobs:
       - name: Mark scheduler completion
         if: always()
         env:
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
           TRADE_OUTCOME: ${{ steps.trade.outcome }}
         run: |
-          if [ "$TRADE_OUTCOME" = "success" ]; then
-            python scripts/cfd_scheduler_heartbeat.py success
+          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ]; then
+            python3 scripts/cfd_scheduler_heartbeat.py success
           else
-            python scripts/cfd_scheduler_heartbeat.py failure
+            python3 scripts/cfd_scheduler_heartbeat.py failure
           fi
 
       # IMPORTANT: persist local state even when the Python scheduler fails.
@@ -77,7 +75,7 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_scheduler_heartbeat.json; do
+          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_decisions.jsonl             state/cfd_incidents.jsonl             state/cfd_scheduler_heartbeat.json; do
             [ -f "$f" ] && git add "$f"
           done
           if ! git diff --cached --quiet; then
