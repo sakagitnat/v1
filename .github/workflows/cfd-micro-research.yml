@@ -1,6 +1,9 @@
 name: CFD Micro Research Demo
 
 on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "7,22,37,52 * * * 0-5"
   push:
     branches:
       - gpt/autonomous-demo-runner
