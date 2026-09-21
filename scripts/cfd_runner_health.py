@@ -14,7 +14,7 @@ import json
 from datetime import datetime, time, timezone
 from pathlib import Path
 
-from scripts.cfd_scheduler_heartbeat import HEARTBEAT_PATH, load_heartbeat
+from cfd_scheduler_heartbeat import HEARTBEAT_PATH, load_heartbeat
 
 
 def expected_market_window(now: datetime) -> bool:
