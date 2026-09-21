@@ -675,6 +675,15 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             for strategy_tag, group_legs in strategy_groups.items():
                 first_meta = tracked_open.get(str(group_legs[0]["contract_id"]))
+                # Short-horizon/manual demo probes can be explicitly marked
+                # broker_managed_only. Their timeframe-specific entry logic is
+                # not represented by an ACTIVE H1 strategy, so applying the
+                # H1 strategy's signal-exit here would mix incompatible
+                # timeframes. Deriv's own stop-loss/take-profit remains live;
+                # reconciliation records the realized result on a later run.
+                if first_meta and first_meta.get("broker_managed_only"):
+                    occupied_tags.add(strategy_tag)
+                    continue
                 exit_entry = _resolve_exit_strategy_entry(first_meta)
                 if exit_entry is None:
                     logger.warning(
