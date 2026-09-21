@@ -939,6 +939,41 @@ own modeled transaction costs (spread + financing) ate before it showed
 up as profit, rather than "no edge existed." Posted to GPT on issue #5
 for the joint read on what to build next given this.
 
+**CFD AI Demo Bridge (ChatGPT <-> Deriv mutual-failover coverage).** PR #6
+implements a narrow, DEMO-only bridge letting a specific GitHub issue #5
+comment (`AI_EXECUTE_DEMO command_id=<uuid> intent=evaluate`, exact
+grammar, repo-owner actor only) trigger one evaluation of the same
+deterministic scheduler `cfd-trading.yml` already runs hourly -- built at
+the user's explicit request as continuity coverage for when either AI
+(Claude or ChatGPT) is out of tokens/context, not as a human-approval
+gate (both post issue comments under the same account, so comment-author
+identity can't actually distinguish a human from either AI -- the real
+safety boundaries are `CFD_ALLOW_LIVE_TRADING=false` hardcoded twice,
+the narrow command grammar with no side/stake/leverage override,
+UUID replay protection reserved before any evaluation, and the existing
+deterministic risk pipeline itself). Developed on `gpt/deriv-demo-bridge`
+(GitHub only activates `issue_comment` workflows from the default
+branch, so this can't fire from a stray comment until deliberately
+synced to `main`) with review split between GPT (who designed and built
+the initial parser/workflow) and Claude, who found and closed two real
+activation blockers before any `main` sync: the bridge workflow's
+`concurrency.group` didn't match `cfd-trading.yml`'s (a bridge run and
+the real scheduled run could otherwise execute simultaneously against
+the same state files), and there was no way to see whether a triggered
+command actually did anything without reading Actions logs by hand.
+`trading/cfd/scheduler.run_once()` now optionally threads a
+`bridge_command_id` through and returns a per-instrument
+`TRADE`/`NO_TRADE`/`REJECTED`/`ERROR` summary (additive only -- the real
+hourly schedule discards the return value, unchanged behavior there);
+`scripts/run_cfd_trading.py` posts that summary back to issue #5 as a
+structured comment, reporting only an exception's class name on error,
+never its message text, since that could otherwise echo broker/library
+internals into a public comment. See `docs/ARCHITECTURE_AUDIT.md`'s
+progress log (2026-09-21) for the full before/after. Still not synced to
+`main`, no live trading enabled, and not yet live-smoke-tested (that
+needs the user's own explicit go-ahead, same as any real-execution-
+adjacent step in this project).
+
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
 news context (the user asked for a second AI's independent input on

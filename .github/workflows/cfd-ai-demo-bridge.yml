@@ -11,9 +11,15 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
-  group: cfd-ai-demo-bridge
+  # Literal same group cfd-trading.yml uses -- MUST match so GitHub Actions
+  # serializes a bridge evaluation against the real scheduled run_once();
+  # a separate group here would let both read/write cfd_bot_state.json etc
+  # at once (lost updates, or worse, both independently opening a position
+  # off stale state).
+  group: cfd-trading
   cancel-in-progress: false
 
 jobs:
@@ -48,12 +54,15 @@ jobs:
         run: python scripts/cfd_ai_bridge.py validate
 
       - name: Reserve command id before any trading evaluation
+        id: reserve
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_ACTOR: ${{ github.event.comment.user.login }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CFD_ALLOW_LIVE_TRADING: "false"
-        run: python scripts/cfd_ai_bridge.py reserve
+        run: |
+          python scripts/cfd_ai_bridge.py reserve | tee /tmp/reserve.json
+          echo "command_id=$(python -c 'import json; print(json.load(open("/tmp/reserve.json"))["command_id"])')" >> "$GITHUB_OUTPUT"
 
       - name: Persist reservation before scheduler run
         run: |
@@ -68,7 +77,10 @@ jobs:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
-        run: python scripts/run_cfd_trading.py
+          BRIDGE_COMMAND_ID: ${{ steps.reserve.outputs.command_id }}
+        run: |
+          python scripts/run_cfd_trading.py | tee /tmp/evaluate.log
+          grep '^BRIDGE_RESULT_JSON=' /tmp/evaluate.log | tail -n1 | sed 's/^BRIDGE_RESULT_JSON=//' > /tmp/bridge_result.json || true
 
       - name: Persist scheduler state changes
         if: always()
@@ -82,3 +94,15 @@ jobs:
             git commit -m "Update CFD state from AI demo bridge"
             git push origin HEAD:gpt/deriv-demo-bridge
           fi
+
+      - name: Post audit result to issue #5
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s /tmp/bridge_result.json ]; then
+            BODY="$(python scripts/cfd_ai_bridge.py report --result-file /tmp/bridge_result.json)"
+          else
+            BODY="$(printf 'AI demo bridge result — command_id=%s\nstatus: ERROR\nerror: evaluate step produced no result (crashed before writing output)\nrun: %s' "${{ steps.reserve.outputs.command_id }}" "${{ github.run_id }}")"
+          fi
+          gh issue comment 5 --repo "${{ github.repository }}" --body "$BODY"

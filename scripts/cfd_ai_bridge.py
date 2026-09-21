@@ -66,9 +66,29 @@ def reserve(command_id: str, actor: str, intent: str, path: Path = STATE_PATH) -
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
 
 
+def format_audit_comment(result: dict) -> str:
+    """Renders run_cfd_trading.py's BRIDGE_RESULT_JSON dict as the comment
+    posted back to issue #5. Every field here is our own generated string
+    (instrument names, the fixed outcome taxonomy, reasons drawn from the
+    scheduler's own log messages) -- never anything from the broker
+    response or an exception message, so there's nothing secret-bearing to
+    redact."""
+    lines = [f"AI demo bridge result — command_id={result.get('command_id')}", f"status: {result.get('status')}"]
+    if result.get("run_id"):
+        lines.append(f"run: {result['run_id']}")
+    if result.get("error"):
+        lines.append(f"error: {result['error']}")
+    instruments = result.get("instruments") or []
+    for entry in instruments:
+        lines.append(f"- {entry.get('instrument')}: {entry.get('outcome')} — {entry.get('reason')}")
+    if not instruments and not result.get("error"):
+        lines.append("(no instruments evaluated)")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["validate", "reserve"])
+    parser.add_argument("action", choices=["validate", "reserve", "report"])
     parser.add_argument("--body", default=os.environ.get("COMMENT_BODY", ""))
     parser.add_argument("--actor", default=os.environ.get("COMMENT_ACTOR", ""))
     parser.add_argument(
@@ -76,7 +96,15 @@ def main() -> None:
         type=int,
         default=int(os.environ.get("ISSUE_NUMBER", "0")),
     )
+    parser.add_argument("--result-file", default=None, help="report only: path to the bridge run's BRIDGE_RESULT_JSON")
     args = parser.parse_args()
+
+    if args.action == "report":
+        if not args.result_file:
+            raise BridgeCommandError("report requires --result-file")
+        result = json.loads(Path(args.result_file).read_text())
+        print(format_audit_comment(result))
+        return
 
     command_id, intent = parse_command(args.body, args.actor, args.issue_number)
 
