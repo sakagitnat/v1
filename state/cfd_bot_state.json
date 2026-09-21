@@ -2,9 +2,9 @@
   "paused": false,
   "pause_reason": "",
   "capital_floor": null,
-  "initial_floor": 100.0,
+  "initial_floor": 100,
   "excluded_instruments": {},
-  "broker_baseline": 10000.0,
+  "broker_baseline": 10000,
   "open_trades": {
     "13803503519": {
       "instrument": "frxUSDJPY",
@@ -12,11 +12,11 @@
       "side": "long",
       "entry_time": "2026-09-21T05:55:45.568492+00:00",
       "entry_price": 157.053,
-      "stake": 1.0,
+      "stake": 1,
       "risk_amount": 0.5,
       "multiplier": 100,
       "thesis_key": "frxUSDJPY:long:starter_intraday",
-      "equity_before": 100.0,
+      "equity_before": 100,
       "regime": "short_horizon_probe",
       "leg": "scalp",
       "broker_managed_only": true,
@@ -26,7 +26,15 @@
         "M15",
         "M5"
       ],
-      "experimental": true
+      "experimental": true,
+      "virtual_account_id": "starter_m5_probe",
+      "horizon": "intraday",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5"
+      ]
     }
   },
   "operating_mode": "normal",
@@ -36,10 +44,130 @@
   "paper_trade_counter": 0,
   "daily_risk_tracking": {
     "date": "2026-09-21",
-    "start_equity": 100.0,
+    "start_equity": 100,
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 100.0,
-  "high_water_mark": 100.0
+  "smoothed_equity": 100,
+  "high_water_mark": 100,
+  "virtual_accounts": {
+    "core_h1": {
+      "account_id": "core_h1",
+      "label": "Core H1 trend",
+      "starting_equity": 100,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "core",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ],
+      "strategy_tag": "ema_crossover@v1",
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "breakout_h1": {
+      "account_id": "breakout_h1",
+      "label": "H1 breakout forward lab",
+      "starting_equity": 100,
+      "execution_tier": "PAPER",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ],
+      "strategy_tag": "donchian_breakout@v2",
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "intraday_m15": {
+      "account_id": "intraday_m15",
+      "label": "M15 intraday research",
+      "starting_equity": 100,
+      "execution_tier": "SHADOW",
+      "horizon": "intraday",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H4",
+        "H1",
+        "M15"
+      ],
+      "strategy_tag": null,
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "intraday_m5": {
+      "account_id": "intraday_m5",
+      "label": "M5 intraday research",
+      "starting_equity": 100,
+      "execution_tier": "SHADOW",
+      "horizon": "intraday",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": null,
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "starter_m5_probe": {
+      "account_id": "starter_m5_probe",
+      "label": "M5 starter demo probe",
+      "starting_equity": 100,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "intraday",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": "starter_intraday@v0",
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "scalp_m1": {
+      "account_id": "scalp_m1",
+      "label": "M1 execution research",
+      "starting_equity": 100,
+      "execution_tier": "SHADOW",
+      "horizon": "scalp",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": null,
+      "equity": 100,
+      "high_water_mark": 100,
+      "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    }
+  }
 }
