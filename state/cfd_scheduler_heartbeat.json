@@ -1,12 +1,12 @@
 {
   "event_name": "push",
-  "last_completed_at": "2026-09-21T02:02:47.182184+00:00",
-  "last_started_at": "2026-09-21T02:02:32.975201+00:00",
-  "last_success_at": "2026-09-21T02:02:47.182184+00:00",
-  "last_update_at": "2026-09-21T02:02:47.182184+00:00",
+  "last_completed_at": "2026-09-21T04:20:38.432288+00:00",
+  "last_started_at": "2026-09-21T04:20:21.367304+00:00",
+  "last_success_at": "2026-09-21T04:20:38.432288+00:00",
+  "last_update_at": "2026-09-21T04:20:38.432288+00:00",
   "run_attempt": "1",
-  "run_id": "35552826605",
-  "runtime_ref": null,
+  "run_id": "35560547723",
+  "runtime_ref": "gpt/autonomous-demo-runner",
   "status": "success",
-  "workflow": "GPT Handoff CI"
+  "workflow": "CFD Trading (Deriv)"
 }
