@@ -50,6 +50,7 @@ from trading.cfd.state import (
 )
 from trading.cfd.strategy_registry import LifecycleState, list_by_state
 from trading.cfd.trade_log import TradeRecord, record_trade
+from trading.cfd.virtual_accounts import account_for_strategy, ensure_virtual_accounts, record_virtual_close
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -102,8 +103,11 @@ def run_paper_trading(instrument: str, bars: pd.DataFrame, regime: str) -> None:
     if len(bars) < 2:
         return
 
+    virtual_accounts = ensure_virtual_accounts()
     for entry in list_by_state(LifecycleState.PAPER):
         strategy_tag = f"{entry.name}@{entry.version}"
+        virtual_account_id = account_for_strategy(strategy_tag)
+        virtual_account = virtual_accounts.get(virtual_account_id, {}) if virtual_account_id else {}
         strategy = entry.build()
         prepared = strategy.prepare(bars)
         row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
@@ -146,9 +150,15 @@ def run_paper_trading(instrument: str, bars: pd.DataFrame, regime: str) -> None:
                     equity_after=equity_after,
                     exit_reason=f"paper: {exit_reason}",
                     regime=position.get("regime"),
+                    virtual_account_id=position.get("virtual_account_id"),
+                    horizon=position.get("horizon"),
+                    entry_timeframe=position.get("entry_timeframe"),
+                    context_timeframes=position.get("context_timeframes"),
                 ),
                 path=PAPER_LOG_PATH,
             )
+            if position.get("virtual_account_id"):
+                record_virtual_close(position["virtual_account_id"], pnl)
             logger.info("PAPER %s: closed %s %s (pnl=%.2f, %s)", strategy_tag, instrument, in_position, pnl, exit_reason)
             continue
 
@@ -182,6 +192,10 @@ def run_paper_trading(instrument: str, bars: pd.DataFrame, regime: str) -> None:
                 "risk_amount": stop_loss_amount,
                 "entry_time": _now_iso(),
                 "regime": regime,
+                "virtual_account_id": virtual_account_id,
+                "horizon": virtual_account.get("horizon", "swing"),
+                "entry_timeframe": virtual_account.get("entry_timeframe", "H1"),
+                "context_timeframes": virtual_account.get("context_timeframes", ["H4", "H1"]),
             },
         )
         logger.info("PAPER %s: opened %s %s stake=%.2f (regime=%s)", strategy_tag, side.upper(), instrument, stake, regime)
