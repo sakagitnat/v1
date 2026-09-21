@@ -120,6 +120,10 @@ async def main():
             "equity_before": settings.cfd_virtual_starting_capital,
             "regime": "short_horizon_probe", "leg": "scalp", "broker_managed_only": True,
             "entry_reason": reason, "timeframes": ["H1", "M15", "M5"],
+            "virtual_account_id": "starter_m5_probe",
+            "horizon": "intraday",
+            "entry_timeframe": "M5",
+            "context_timeframes": ["H1", "M15", "M5"],
             "experimental": True
         })
         print(f"TRADE_OPENED contract_id={contract_id} {symbol} {side}")
