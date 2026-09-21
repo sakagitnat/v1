@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, time, timezone
 from pathlib import Path
 
-from cfd_scheduler_heartbeat import HEARTBEAT_PATH, load_heartbeat
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.cfd_scheduler_heartbeat import HEARTBEAT_PATH, load_heartbeat
 
 
 def expected_market_window(now: datetime) -> bool:
