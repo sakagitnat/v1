@@ -14,6 +14,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "pending_entries": {},
         "smoothed_equity": None,
         "high_water_mark": None,
+        "virtual_accounts": {},
     }
 
 
@@ -168,3 +169,9 @@ def test_equity_tracking_roundtrips(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
     state.set_equity_tracking(smoothed_equity=105.0, high_water_mark=110.0)
     assert state.get_equity_tracking() == {"smoothed_equity": 105.0, "high_water_mark": 110.0}
+
+
+def test_virtual_accounts_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_virtual_accounts({"core_h1": {"equity": 100.0}})
+    assert state.get_virtual_accounts() == {"core_h1": {"equity": 100.0}}
