@@ -246,6 +246,27 @@ class DerivBroker:
             return pd.DataFrame(columns=["open", "high", "low", "close"])
         return pd.DataFrame(rows).set_index("time").sort_index()
 
+    async def get_ticks(self, symbol: str, count: int = 500, end: str | int = "latest") -> pd.DataFrame:
+        """Return raw tick history for sub-minute/seconds research.
+
+        Deriv candles bottom out at 60 seconds, so seconds-level research
+        must use tick data rather than inventing unsupported 5s/10s candles.
+        The returned frame has UTC time index and one price column.
+        """
+        resp = await self._request(
+            {"ticks_history": symbol, "style": "ticks", "count": count, "end": end}
+        )
+        history = resp.get("history") or {}
+        times = history.get("times") or []
+        prices = history.get("prices") or []
+        rows = [
+            {"time": pd.Timestamp(int(t), unit="s", tz="UTC"), "price": float(p)}
+            for t, p in zip(times, prices)
+        ]
+        if not rows:
+            return pd.DataFrame(columns=["price"])
+        return pd.DataFrame(rows).set_index("time").sort_index()
+
     async def submit_multiplier_order(
         self, symbol: str, side: str, stake: float, multiplier: int, stop_loss_amount: float, take_profit_amount: float
     ) -> dict:
