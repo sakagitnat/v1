@@ -219,9 +219,18 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
     decisions = load_decisions()
     incidents = load_incidents()
     decision_counts: dict[str, int] = {}
+    regime_counts: dict[str, int] = {}
+    reason_counts: dict[str, int] = {}
+    strategy_decision_counts: dict[str, int] = {}
     for row in decisions:
         key = row.get("outcome") or "UNKNOWN"
         decision_counts[key] = decision_counts.get(key, 0) + 1
+        regime = row.get("regime") or "unknown"
+        regime_counts[regime] = regime_counts.get(regime, 0) + 1
+        reason = row.get("reason") or "unknown"
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        strategy = row.get("strategy") or "none"
+        strategy_decision_counts[strategy] = strategy_decision_counts.get(strategy, 0) + 1
     incident_counts: dict[str, int] = {}
     for row in incidents:
         key = row.get("kind") or "unknown"
@@ -236,7 +245,21 @@ def build_report(trades: list[dict], paper_trades: list[dict], starting_equity: 
         "decision_summary": {
             "total": len(decisions),
             "by_outcome": decision_counts,
+            "by_regime": regime_counts,
+            "by_reason": reason_counts,
+            "by_strategy": strategy_decision_counts,
             "recent": decisions[-20:],
+        },
+        "opportunity_summary": {
+            "market_evaluations": len(decisions),
+            "trade_candidates": decision_counts.get("TRADE", 0),
+            "no_trade": decision_counts.get("NO_TRADE", 0),
+            "rejected": decision_counts.get("REJECTED", 0),
+            "errors": decision_counts.get("ERROR", 0),
+            "real_closed_trades": overall_performance.get("trade_count", 0),
+            "paper_closed_trades": len([t for t in paper_trades if t.get("pnl") is not None]),
+            "regime_mix": regime_counts,
+            "top_blockers": sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))[:10],
         },
         "incident_summary": {
             "total": len(incidents),
