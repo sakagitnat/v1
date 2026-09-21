@@ -21,7 +21,7 @@ from trading.strategy.base import Action
 LAB_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_lab_observations.jsonl"
 
 _TIMEFRAMES = {
-    "intraday_m15": (900, 220),
+    "intraday_m15": (900, 160),
     "intraday_m5": (300, 260),
     "scalp_m1": (60, 300),
 }
