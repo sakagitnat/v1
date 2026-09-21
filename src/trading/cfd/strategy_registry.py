@@ -28,6 +28,7 @@ from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.support_resistance import SupportResistanceReversionStrategy
+from trading.cfd.volatility_expansion import VolatilityExpansionBreakoutStrategy
 
 _REGISTRY_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_strategy_registry.json"
 
@@ -66,6 +67,7 @@ STRATEGY_CLASSES = {
     "mean_reversion": MeanReversionStrategy,
     "rsi_reversion": RsiReversionStrategy,
     "support_resistance": SupportResistanceReversionStrategy,
+    "volatility_expansion": VolatilityExpansionBreakoutStrategy,
 }
 
 
