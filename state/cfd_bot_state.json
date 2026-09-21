@@ -35,6 +35,56 @@
         "M15",
         "M5"
       ]
+    },
+    "13805186419": {
+      "instrument": "frxXAUUSD",
+      "strategy": "starter_m1@v0",
+      "side": "short",
+      "entry_time": "2026-09-21T06:17:45.640437+00:00",
+      "entry_price": 4350.91,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "thesis_key": "frxXAUUSD:short:starter_m1@v0",
+      "equity_before": 100.0,
+      "regime": "micro_research",
+      "leg": "scalp",
+      "broker_managed_only": true,
+      "entry_reason": "M1 EMA9/21 + 3-bar momentum, ranked with M5 bias",
+      "experimental": true,
+      "virtual_account_id": "scalp_m1",
+      "horizon": "scalp",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M5",
+        "M1",
+        "M1"
+      ]
+    },
+    "13805188339": {
+      "instrument": "frxXAUUSD",
+      "strategy": "starter_ticks@v0",
+      "side": "short",
+      "entry_time": "2026-09-21T06:17:46.925241+00:00",
+      "entry_price": 4351.02,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "thesis_key": "frxXAUUSD:short:starter_ticks@v0",
+      "equity_before": 100.0,
+      "regime": "micro_research",
+      "leg": "scalp",
+      "broker_managed_only": true,
+      "entry_reason": "8-tick vs 30-tick mean + 8-tick impulse",
+      "experimental": true,
+      "virtual_account_id": "scalp_ticks",
+      "horizon": "scalp",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "M5",
+        "M1",
+        "TICK"
+      ]
     }
   },
   "operating_mode": "normal",
