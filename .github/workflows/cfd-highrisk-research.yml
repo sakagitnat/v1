@@ -1,6 +1,9 @@
 name: CFD High Risk Growth Research
 
 on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "11,26,41,56 * * * 0-5"
   push:
     branches:
       - gpt/autonomous-demo-runner
