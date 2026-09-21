@@ -17,6 +17,8 @@ from trading.cfd.drawdown_monitor import (
     classify_drawdown_tier,
     drawdown_risk_multiplier,
 )
+from trading.cfd.event_blackout import in_blackout_window
+from trading.cfd.event_calendar import EVENTS as OFFICIAL_EVENTS
 from trading.cfd.exit_manager import (
     TrailingStopState,
     split_stake_for_partial_close,
@@ -645,6 +647,21 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 volatility_lookback=settings.cfd_regime_volatility_lookback,
                 unstable_volatility_ratio=settings.cfd_regime_unstable_volatility_ratio,
             )
+
+            # Event context is SHADOW-ONLY until blackout validation clears
+            # the project's TRAIN/TEST + forward qualification discipline.
+            # We tag event windows now so later analysis has point-in-time
+            # evidence; this does not alter BUY/SELL/NO TRADE yet.
+            matched_event = in_blackout_window(datetime.now(timezone.utc), OFFICIAL_EVENTS)
+            if matched_event is not None:
+                record_incident(
+                    "event_blackout",
+                    severity="info",
+                    message=f"shadow event window: {matched_event.name}",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "mode": "shadow_only"},
+                )
 
             # Paper Trading runs independently of the real position below
             # -- every PAPER-state strategy gets evaluated on this same
