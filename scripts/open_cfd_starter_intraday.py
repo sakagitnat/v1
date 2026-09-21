@@ -89,10 +89,10 @@ async def main():
             # strongest M5 EMA separation whose latest candle agrees with
             # that M5 direction. This is intentionally tagged experimental
             # and uses the same tiny fixed risk.
-            if m5_fast > m5_slow and m5_momentum > 0:
-                m5_only.append((strength, symbol, "long", "experimental M5-only momentum probe", float(m5["close"].iloc[-1])))
-            elif m5_fast < m5_slow and m5_momentum < 0:
-                m5_only.append((strength, symbol, "short", "experimental M5-only momentum probe", float(m5["close"].iloc[-1])))
+            if m5_fast > m5_slow:
+                m5_only.append((strength, symbol, "long", "experimental M5 EMA-direction execution probe", float(m5["close"].iloc[-1])))
+            elif m5_fast < m5_slow:
+                m5_only.append((strength, symbol, "short", "experimental M5 EMA-direction execution probe", float(m5["close"].iloc[-1])))
 
         if not candidates:
             if fallbacks:
