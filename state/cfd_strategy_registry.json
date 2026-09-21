@@ -213,5 +213,33 @@
       "ranging",
       "trending"
     ]
+  },
+  "trend_pullback@v1": {
+    "name": "trend_pullback",
+    "version": "v1",
+    "params": {
+      "fast_span": 20,
+      "slow_span": 50,
+      "adx_window": 14,
+      "adx_threshold": 20,
+      "atr_window": 14,
+      "pullback_atr_tolerance": 0.5,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 3
+    },
+    "state": "RESEARCH",
+    "created_at": "2026-09-21T03:05:00+00:00",
+    "updated_at": "2026-09-21T03:05:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "RESEARCH",
+        "reason": "Structurally distinct established-trend pullback candidate; waits for retracement and fast-EMA reclaim instead of a fresh EMA crossover. Parameters unvalidated.",
+        "at": "2026-09-21T03:05:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
   }
 }
