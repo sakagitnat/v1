@@ -40,7 +40,7 @@ DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("breakout_h1", "H1 breakout forward lab", 100.0, PAPER, "swing", "H1", ("H4", "H1"), "donchian_breakout@v2"),
     VirtualAccountSpec("intraday_m15", "M15 intraday research", 100.0, SHADOW, "intraday", "M15", ("H4", "H1", "M15")),
     VirtualAccountSpec("intraday_m5", "M5 intraday research", 100.0, SHADOW, "intraday", "M5", ("H1", "M15", "M5")),
-    VirtualAccountSpec("starter_m5_probe", "M5 starter demo probe", 100.0, ACTIVE_DEMO, "intraday", "M5", ("H1", "M15", "M5"), "starter_intraday@v0"),
+    VirtualAccountSpec("starter_m5_probe", "M5 starter research probe", 100.0, SHADOW, "intraday", "M5", ("H1", "M15", "M5"), "starter_intraday@v0"),
     VirtualAccountSpec("scalp_m1", "M1 execution research", 100.0, SHADOW, "scalp", "M1", ("M15", "M5", "M1")),
 )
 
