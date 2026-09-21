@@ -3,6 +3,12 @@
 Separate from the closed-trade database: records TRADE / NO_TRADE / REJECTED /
 ERROR decisions so the manager can learn from opportunities it deliberately
 skipped, not only from positions that were opened and later closed.
+
+``context`` is deliberately open-ended, structured shadow telemetry.  It lets
+experiments (for example the scheduled-event blackout hypothesis) collect the
+point-in-time facts that existed when a decision was made without changing the
+trading decision itself.  Missing context remains an empty dict; callers must
+never infer facts that were not observed.
 """
 from __future__ import annotations
 import json
@@ -21,6 +27,7 @@ def record_decision(
     strategy: Optional[str] = None,
     run_id: Optional[str] = None,
     bridge_command_id: Optional[str] = None,
+    context: Optional[dict] = None,
 ) -> dict:
     row = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -31,6 +38,7 @@ def record_decision(
         "strategy": strategy,
         "run_id": run_id,
         "bridge_command_id": bridge_command_id,
+        "context": context or {},
     }
     _PATH.parent.mkdir(parents=True, exist_ok=True)
     with _PATH.open("a", encoding="utf-8") as f:
