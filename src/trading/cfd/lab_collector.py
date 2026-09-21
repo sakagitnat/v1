@@ -15,6 +15,8 @@ import pandas as pd
 
 from trading.cfd.regime import classify_regime, classify_volatility
 from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.breakout import DonchianBreakoutStrategy
+from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.virtual_accounts import ensure_virtual_accounts, DEFAULT_VIRTUAL_ACCOUNTS
 from trading.strategy.base import Action
 
@@ -35,8 +37,17 @@ def _research_streams():
 
 
 
-def _signal_payload(instrument: str, bars: pd.DataFrame) -> dict:
-    strategy = EmaCrossoverStrategy()
+def _strategy_for_tag(strategy_tag: str | None):
+    tag = (strategy_tag or "").lower()
+    if "breakout" in tag:
+        return DonchianBreakoutStrategy()
+    if "meanrev" in tag or "mean_reversion" in tag:
+        return MeanReversionStrategy()
+    return EmaCrossoverStrategy()
+
+
+def _signal_payload(instrument: str, bars: pd.DataFrame, strategy_tag: str | None) -> dict:
+    strategy = _strategy_for_tag(strategy_tag)
     prepared = strategy.prepare(bars)
     row, prev = prepared.iloc[-1], prepared.iloc[-2]
     sig = strategy.signal_for_row(instrument, row, prev, None)
@@ -94,7 +105,7 @@ async def collect_lab_observations(broker, instruments: list[str], run_id: str |
                         "regime": classify_regime(bars),
                         "volatility": classify_volatility(bars),
                     }
-                    payload.update(_signal_payload(instrument, bars))
+                    payload.update(_signal_payload(instrument, bars, account.get("strategy_tag")))
                     fh.write(json.dumps(payload) + "\n")
                     written += 1
                 except Exception as exc:
