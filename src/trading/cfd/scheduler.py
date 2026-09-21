@@ -1,10 +1,14 @@
 import asyncio
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
 
+from trading.cfd.auto_mode import choose_autonomous_mode
 from trading.cfd.broker import DerivBroker
+from trading.cfd.decision_log import record_decision
+from trading.cfd.incident_log import record_incident
 from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.drawdown_monitor import (
@@ -46,6 +50,7 @@ from trading.cfd.state import (
     set_daily_risk_tracking,
     set_equity_tracking,
     set_pending_entry,
+    set_operating_mode,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
 from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
@@ -351,8 +356,23 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     """
     summary: list[dict] = []
 
-    def _record(instrument: str, outcome: str, reason: str) -> None:
+    def _record(
+        instrument: str,
+        outcome: str,
+        reason: str,
+        regime: Optional[str] = None,
+        strategy: Optional[str] = None,
+    ) -> None:
         summary.append({"instrument": instrument, "outcome": outcome, "reason": reason})
+        record_decision(
+            instrument,
+            outcome,
+            reason,
+            regime=regime,
+            strategy=strategy,
+            run_id=os.environ.get("GITHUB_RUN_ID"),
+            bridge_command_id=bridge_command_id,
+        )
 
     state = load_state()
     if state.get("paused"):
@@ -427,6 +447,18 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         )
         drawdown_tier = classify_drawdown_tier(equity, high_water_mark, drawdown_thresholds)
         drawdown_multiplier = drawdown_risk_multiplier(drawdown_tier, drawdown_thresholds)
+
+        # Autonomy boundary: the manager may reduce risk on its own but may
+        # never raise it. Persist a defensive/recovery mode when drawdown
+        # warrants it; normal conditions never auto-upgrade the current mode.
+        current_mode = state.get("operating_mode", NORMAL)
+        auto_mode, auto_reason = choose_autonomous_mode(drawdown_tier, current_mode)
+        if auto_mode != current_mode:
+            set_operating_mode(auto_mode, auto_reason)
+            state["operating_mode"] = auto_mode
+            state["operating_mode_reason"] = auto_reason
+            logger.warning("Autonomous risk reduction: operating mode %s -> %s (%s)", current_mode, auto_mode, auto_reason)
+
         if drawdown_tier != DRAWDOWN_NORMAL:
             logger.warning(
                 "Drawdown tier=%s (equity %.2f vs high-water-mark %.2f) -- new-entry risk scaled by %.2fx this run.",
@@ -594,6 +626,14 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             bars = await broker.get_candles(instrument, granularity_seconds=GRANULARITY_SECONDS, count=CANDLE_COUNT)
             if len(bars) < 2:
                 logger.debug("%s: not enough candles yet", instrument)
+                record_incident(
+                    "data_quality",
+                    severity="warning",
+                    message="insufficient candle history",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"bar_count": len(bars)},
+                )
                 _record(instrument, "NO_TRADE", "insufficient candle history")
                 continue
 
@@ -730,7 +770,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     "%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it with an available slot)",
                     instrument, regime,
                 )
-                _record(instrument, "NO_TRADE", f"regime={regime}, no ACTIVE strategy suited to it with an available slot")
+                _record(instrument, "NO_TRADE", f"regime={regime}, no ACTIVE strategy suited to it with an available slot", regime=regime)
                 continue
 
             strategy = entry_candidate.build()
@@ -740,7 +780,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
-                _record(instrument, "NO_TRADE", signal.reason)
+                _record(instrument, "NO_TRADE", signal.reason, regime=regime, strategy=f"{entry_candidate.name}@{entry_candidate.version}")
                 continue
             if total_open_slots >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
@@ -767,7 +807,15 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             )
             if rejection is not None:
                 logger.info("Skipping %s: Portfolio Risk Governor rejected this entry -- %s", instrument, rejection)
-                _record(instrument, "REJECTED", rejection)
+                record_incident(
+                    "risk_control",
+                    severity="info",
+                    message=rejection,
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "strategy": strategy_tag},
+                )
+                _record(instrument, "REJECTED", rejection, regime=regime, strategy=strategy_tag)
                 continue
 
             # Adaptive Exit Management (trading.cfd.exit_manager, see
@@ -854,9 +902,17 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 risk.register_open()
                 positions_by_instrument[instrument] = opened_legs
                 total_open_slots += 1
-                _record(instrument, "TRADE", f"{side} {strategy_tag} ({len(opened_legs)} leg(s))")
+                _record(instrument, "TRADE", f"{side} {strategy_tag} ({len(opened_legs)} leg(s))", regime=regime, strategy=strategy_tag)
             else:
-                _record(instrument, "ERROR", "order submitted but no contract_id returned for any leg")
+                record_incident(
+                    "broker_error",
+                    severity="error",
+                    message="order submitted but no contract_id returned for any leg",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "strategy": strategy_tag},
+                )
+                _record(instrument, "ERROR", "order submitted but no contract_id returned for any leg", regime=regime, strategy=strategy_tag)
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
         return summary
