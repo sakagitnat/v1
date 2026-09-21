@@ -106,7 +106,7 @@ async def main():
                 return
         candidates.sort(reverse=True)
         _, symbol, side, reason, entry_price = candidates[0]
-        stake, stop_loss_amount, take_profit_amount, multiplier = 1.00, 0.50, 1.00, 20
+        stake, stop_loss_amount, take_profit_amount, multiplier = 1.00, 0.50, 1.00, 100
         print(f"STARTER_INTRADAY {symbol} {side}; {reason}; stake={stake:.2f} stop={stop_loss_amount:.2f} target={take_profit_amount:.2f}")
         result = await broker.submit_multiplier_order(symbol, side, stake, multiplier, stop_loss_amount, take_profit_amount)
         contract_id = result.get("buy", {}).get("contract_id")
