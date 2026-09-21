@@ -38,7 +38,7 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_incidents.jsonl; do
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_incidents.jsonl state/cfd_micro_observations.jsonl; do
             [ -f "$f" ] && git add "$f"
           done
           if ! git diff --cached --quiet; then
