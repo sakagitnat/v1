@@ -54,20 +54,42 @@ async def main():
         if broker_positions:
             raise SystemExit(f"Refusing: {len(broker_positions)} broker position(s) already open")
         candidates = []
+        fallbacks = []
         for symbol in INSTRUMENTS:
             h1 = await broker.get_candles(symbol, granularity_seconds=3600, count=120)
             m15 = await broker.get_candles(symbol, granularity_seconds=900, count=160)
             m5 = await broker.get_candles(symbol, granularity_seconds=300, count=220)
             sig = _signal(h1, m15, m5)
+            f = ema(m5["close"], 9).iloc[-1]
+            s = ema(m5["close"], 21).iloc[-1]
+            strength = abs(f - s) / max(abs(m5["close"].iloc[-1]), 1e-9)
             if sig:
                 side, reason = sig
-                f = ema(m5["close"], 9).iloc[-1]
-                s = ema(m5["close"], 21).iloc[-1]
-                strength = abs(f - s) / max(abs(m5["close"].iloc[-1]), 1e-9)
-                candidates.append((strength, symbol, side, reason, float(m5["close"].iloc[-1])))
+                candidates.append((strength + 10.0, symbol, side, reason, float(m5["close"].iloc[-1])))
+                continue
+
+            h1_fast, h1_slow = ema(h1["close"], 20).iloc[-1], ema(h1["close"], 50).iloc[-1]
+            m15_fast, m15_slow = ema(m15["close"], 9).iloc[-1], ema(m15["close"], 21).iloc[-1]
+            m5_fast, m5_slow = f, s
+            votes = [
+                1 if h1_fast > h1_slow else -1,
+                1 if m15_fast > m15_slow else -1,
+                1 if m5_fast > m5_slow else -1,
+            ]
+            score = sum(votes)
+            m5_momentum = 1 if m5["close"].iloc[-1] > m5["close"].iloc[-2] else -1
+            if abs(score) >= 1 and (score > 0) == (m5_momentum > 0):
+                side = "long" if score > 0 else "short"
+                reason = f"experimental majority MTF vote H1/M15/M5={votes}, M5 momentum confirms"
+                confidence = abs(score) + strength
+                fallbacks.append((confidence, symbol, side, reason, float(m5["close"].iloc[-1])))
+
         if not candidates:
-            print("NO_TRADE: no H1+M15 aligned M5 setup right now")
-            return
+            if not fallbacks:
+                print("NO_TRADE: even exploratory majority-score setup unavailable")
+                return
+            fallbacks.sort(reverse=True)
+            candidates = [fallbacks[0]]
         candidates.sort(reverse=True)
         _, symbol, side, reason, entry_price = candidates[0]
         stake, stop_loss_amount, take_profit_amount, multiplier = 1.00, 0.50, 1.00, 20
@@ -83,7 +105,8 @@ async def main():
             "thesis_key": f"{symbol}:{side}:starter_intraday",
             "equity_before": settings.cfd_virtual_starting_capital,
             "regime": "short_horizon_probe", "leg": "scalp", "broker_managed_only": True,
-            "entry_reason": reason, "timeframes": ["H1", "M15", "M5"]
+            "entry_reason": reason, "timeframes": ["H1", "M15", "M5"],
+            "experimental": True
         })
         print(f"TRADE_OPENED contract_id={contract_id} {symbol} {side}")
     finally:
