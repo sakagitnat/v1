@@ -5,7 +5,30 @@
   "initial_floor": 100.0,
   "excluded_instruments": {},
   "broker_baseline": 10000.0,
-  "open_trades": {},
+  "open_trades": {
+    "13803503519": {
+      "instrument": "frxUSDJPY",
+      "strategy": "starter_intraday@v0",
+      "side": "long",
+      "entry_time": "2026-09-21T05:55:45.568492+00:00",
+      "entry_price": 157.053,
+      "stake": 1.0,
+      "risk_amount": 0.5,
+      "multiplier": 100,
+      "thesis_key": "frxUSDJPY:long:starter_intraday",
+      "equity_before": 100.0,
+      "regime": "short_horizon_probe",
+      "leg": "scalp",
+      "broker_managed_only": true,
+      "entry_reason": "experimental majority MTF vote H1/M15/M5=[1, 1, 1], M5 momentum confirms",
+      "timeframes": [
+        "H1",
+        "M15",
+        "M5"
+      ],
+      "experimental": true
+    }
+  },
   "operating_mode": "normal",
   "operating_mode_reason": "",
   "paper_positions": {},
