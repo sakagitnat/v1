@@ -20,4 +20,16 @@ from trading.strategy.base import Action
 
 LAB_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_lab_observations.jsonl"
 
-_GRANULARITY = {"H4": 14400, "H1": 3600, "M15": 900, "M5": 300, "M1": 60}\n_COUNT = {"H4": 120, "H1": 160, "M15": 160, "M5": 260, "M1": 300}\n\n\ndef _research_streams():\n    for spec in DEFAULT_VIRTUAL_ACCOUNTS:\n        if spec.entry_timeframe == "EVENT":\n            continue\n        tfs = spec.context_timeframes if spec.entry_timeframe in ("MULTI", "TICK") else (spec.entry_timeframe,)\n        for tf in tfs:\n            if tf in _GRANULARITY:\n                yield spec.account_id, tf, _GRANULARITY[tf], _COUNT[tf]\n
+_GRANULARITY = {"H4": 14400, "H1": 3600, "M15": 900, "M5": 300, "M1": 60}
+_COUNT = {"H4": 120, "H1": 160, "M15": 160, "M5": 260, "M1": 300}
+
+
+def _research_streams():
+    for spec in DEFAULT_VIRTUAL_ACCOUNTS:
+        if spec.entry_timeframe == "EVENT":
+            continue
+        tfs = spec.context_timeframes if spec.entry_timeframe in ("MULTI", "TICK") else (spec.entry_timeframe,)
+        for tf in tfs:
+            if tf in _GRANULARITY:
+                yield spec.account_id, tf, _GRANULARITY[tf], _COUNT[tf]
+
