@@ -200,7 +200,7 @@ def _resolve_exit_strategy_entry(meta: Optional[dict]):
     return active_now[0] if len(active_now) == 1 else None
 
 
-async def run_once():
+async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     """Evaluate each configured CFD instrument on its latest completed H1
     candle and place/close orders accordingly. Meant to run roughly
     hourly during market hours via a scheduled GitHub Actions workflow --
@@ -340,11 +340,27 @@ async def run_once():
     figure keeps a quick win from instantly scaling the next trade's
     risk up by the same proportion. Neither ever forces an exit on an
     already-open position -- only new entries are affected.
+
+    bridge_command_id (only set by the CFD AI Demo Bridge workflow -- see
+    .github/workflows/cfd-ai-demo-bridge.yml) doesn't change any decision
+    made here; it's threaded through purely so the bridge's audit trail can
+    correlate one comment-triggered command_id with the resulting per-
+    instrument outcomes, which are always accumulated into the returned
+    list regardless of whether bridge_command_id is set (the normal hourly
+    schedule just discards the return value, same as before this existed).
     """
+    summary: list[dict] = []
+
+    def _record(instrument: str, outcome: str, reason: str) -> None:
+        summary.append({"instrument": instrument, "outcome": outcome, "reason": reason})
+
     state = load_state()
     if state.get("paused"):
         logger.info("CFD bot is paused (state/cfd_bot_state.json) -- skipping this run.")
-        return
+        return summary
+
+    if bridge_command_id:
+        logger.info("Bridge-triggered run (command_id=%s)", bridge_command_id)
 
     trades = load_trades()
 
@@ -572,11 +588,13 @@ async def run_once():
         for instrument in settings.cfd_instruments:
             if instrument in excluded:
                 logger.debug("%s: excluded (%s)", instrument, excluded[instrument] or "no reason given")
+                _record(instrument, "NO_TRADE", f"excluded: {excluded[instrument] or 'no reason given'}")
                 continue
 
             bars = await broker.get_candles(instrument, granularity_seconds=GRANULARITY_SECONDS, count=CANDLE_COUNT)
             if len(bars) < 2:
                 logger.debug("%s: not enough candles yet", instrument)
+                _record(instrument, "NO_TRADE", "insufficient candle history")
                 continue
 
             regime = classify_regime(
@@ -712,6 +730,7 @@ async def run_once():
                     "%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it with an available slot)",
                     instrument, regime,
                 )
+                _record(instrument, "NO_TRADE", f"regime={regime}, no ACTIVE strategy suited to it with an available slot")
                 continue
 
             strategy = entry_candidate.build()
@@ -721,9 +740,11 @@ async def run_once():
 
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
+                _record(instrument, "NO_TRADE", signal.reason)
                 continue
             if total_open_slots >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
+                _record(instrument, "NO_TRADE", "max open positions reached")
                 continue
 
             strategy_tag = f"{entry_candidate.name}@{entry_candidate.version}"
@@ -736,6 +757,7 @@ async def run_once():
             )
             if stake <= 0:
                 logger.info("Skipping %s: stake computed as 0 (risk limit, halt, or below Deriv's minimum stake)", instrument)
+                _record(instrument, "NO_TRADE", "stake computed as 0 (risk limit, halt, or below Deriv's minimum stake)")
                 continue
 
             side = "long" if signal.action == Action.BUY else "short"
@@ -745,6 +767,7 @@ async def run_once():
             )
             if rejection is not None:
                 logger.info("Skipping %s: Portfolio Risk Governor rejected this entry -- %s", instrument, rejection)
+                _record(instrument, "REJECTED", rejection)
                 continue
 
             # Adaptive Exit Management (trading.cfd.exit_manager, see
@@ -831,8 +854,12 @@ async def run_once():
                 risk.register_open()
                 positions_by_instrument[instrument] = opened_legs
                 total_open_slots += 1
+                _record(instrument, "TRADE", f"{side} {strategy_tag} ({len(opened_legs)} leg(s))")
+            else:
+                _record(instrument, "ERROR", "order submitted but no contract_id returned for any leg")
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
+        return summary
     finally:
         await broker.close()
 

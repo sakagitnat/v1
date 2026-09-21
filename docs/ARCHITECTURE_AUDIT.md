@@ -1274,6 +1274,54 @@ capital model. These all still match the revised vision as-is.
       existing fade shape, vs. a structurally new
       volatility-expansion/breakout-transition candidate) more than
       the diagnostic alone can settle.
+- **2026-09-21 — PR #6 (CFD AI Demo Bridge) activation blockers closed on
+  `gpt/deriv-demo-bridge`, not yet synced to `main`.** GPT opened PR #6
+  implementing the ChatGPT -> GitHub issue #5 -> Deriv DEMO evaluate bridge
+  (`scripts/cfd_ai_bridge.py`'s exact-grammar parser + replay-protected
+  reservation, `.github/workflows/cfd-ai-demo-bridge.yml`), explicitly as
+  mutual-failover coverage for when either AI is out of tokens/context, not
+  a human-approval gate — see the PR thread's six-point review exchange for
+  the full threat-model discussion. Two of the six points were agreed
+  blockers for activation; both closed here:
+  - **Shared concurrency** — the bridge workflow's `concurrency.group` was
+    `cfd-ai-demo-bridge`, a different group than `cfd-trading.yml`'s
+    `cfd-trading`, meaning a bridge-triggered `run_once()` and the real
+    scheduled `run_once()` could execute simultaneously against the same
+    state files (a real lost-update race). Now the literal same group.
+  - **Structured audit/result posting** — `run_once()` previously only
+    logged; nothing surfaced whether a bridge-triggered evaluation actually
+    did anything without checking Actions logs by hand. `run_once()` now
+    takes an optional `bridge_command_id` and always returns a per-
+    instrument `[{"instrument", "outcome", "reason"}, ...]` summary
+    (`TRADE`/`NO_TRADE`/`REJECTED`, plus `ERROR` for a leg whose order
+    submitted but returned no `contract_id`) — the normal hourly schedule
+    just discards the return value, so this is additive, not a behavior
+    change for the real scheduler. `scripts/run_cfd_trading.py` reads
+    `BRIDGE_COMMAND_ID` from the environment (only the bridge workflow sets
+    it), threads it through, and prints a `BRIDGE_RESULT_JSON=` line; if
+    `run_once()` itself raises, that's caught and reported as an `ERROR`
+    result carrying only the exception's *class name*, deliberately never
+    `str(exc)` — a broker/library error's message text could echo account
+    or token details, and this line is posted to a public issue. A new
+    workflow step posts the formatted result
+    (`cfd_ai_bridge.py`'s new `report` action) as a comment on issue #5.
+  - Deliberately **not** done here (per the PR thread's agreement): the
+    richer `reserved`/`running`/`completed`/`failed-before-execution`
+    reservation state machine (current fail-closed binary reservation was
+    judged safe-by-default and not an activation blocker), and the
+    authoritative-state-ref / thin-main-trigger design (both still open,
+    intentionally deferred until after this delta's shape was settled).
+  - Full suite green (436 passed) after this change, including new tests
+    for `format_audit_comment` (`tests/test_cfd_ai_bridge.py`) and the
+    bridge-mode wrapper's OK/ERROR paths (`tests/test_run_cfd_trading.py`,
+    including an explicit assertion that a raised exception's message text
+    never reaches stdout). **Not live-smoke-tested**: exercising
+    `run_once()`'s new bridge path for real means either dispatching
+    `cfd-trading.yml` or posting an actual `AI_EXECUTE_DEMO` comment on
+    issue #5, and per standing project rules neither happens without the
+    user's own explicit go-ahead for that specific step — this entry
+    documents the code + test state only. Still not synced to `main`; no
+    live trading enabled; `CFD_ALLOW_LIVE_TRADING=false` unchanged.
 
 ## Executive summary
 
