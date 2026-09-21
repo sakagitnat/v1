@@ -27,6 +27,7 @@ from trading.cfd.breakout import DonchianBreakoutStrategy
 from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.trend_pullback import TrendPullbackStrategy
 from trading.cfd.support_resistance import SupportResistanceReversionStrategy
 from trading.cfd.volatility_expansion import VolatilityExpansionBreakoutStrategy
 
@@ -63,6 +64,7 @@ _FORWARD_ORDER = [
 # it's first registered.
 STRATEGY_CLASSES = {
     "ema_crossover": EmaCrossoverStrategy,
+    "trend_pullback": TrendPullbackStrategy,
     "donchian_breakout": DonchianBreakoutStrategy,
     "mean_reversion": MeanReversionStrategy,
     "rsi_reversion": RsiReversionStrategy,
