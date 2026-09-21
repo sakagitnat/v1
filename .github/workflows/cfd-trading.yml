@@ -60,7 +60,7 @@ jobs:
           CFD_ALLOW_LIVE_TRADING: "false"
         run: |
           python scripts/run_cfd_trading.py
-          python -c "from trading.cfd.virtual_accounts import ensure_virtual_accounts; a=ensure_virtual_accounts(); print('VIRTUAL_ACCOUNTS='+str(len(a)))"
+          PYTHONPATH=src python -c "from trading.cfd.virtual_accounts import ensure_virtual_accounts; a=ensure_virtual_accounts(); print('VIRTUAL_ACCOUNTS='+str(len(a)))"
 
       - name: Mark scheduler completion
         if: always()
