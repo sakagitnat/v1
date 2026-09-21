@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
 from trading.cfd.state import list_open_trades, record_open_trade
+from trading.cfd.virtual_accounts import ensure_virtual_accounts
 from trading.config import settings
 from trading.indicators import ema
 
@@ -70,6 +71,7 @@ async def _open(broker, symbol, side, strategy, account_id, timeframe, reason, e
 async def main():
     if settings.cfd_allow_live_trading:
         raise SystemExit("Refusing while CFD_ALLOW_LIVE_TRADING=true")
+    ensure_virtual_accounts()
     broker=DerivBroker()
     try:
         account=await broker.connect()
