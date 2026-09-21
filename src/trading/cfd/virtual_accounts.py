@@ -52,10 +52,22 @@ def ensure_virtual_accounts() -> dict:
     accounts = dict(state.get("virtual_accounts") or {})
     changed = False
     for spec in DEFAULT_VIRTUAL_ACCOUNTS:
+        spec_row = asdict(spec)
+        spec_row["context_timeframes"] = list(spec.context_timeframes)
         if spec.account_id in accounts:
+            # Keep accumulated P&L/statistics, but reconcile descriptive
+            # metadata/execution tier with the current lab configuration.
+            row = dict(accounts[spec.account_id])
+            for key in (
+                "label", "starting_equity", "execution_tier", "horizon",
+                "entry_timeframe", "context_timeframes", "strategy_tag",
+            ):
+                if row.get(key) != spec_row.get(key):
+                    row[key] = spec_row.get(key)
+                    changed = True
+            accounts[spec.account_id] = row
             continue
-        row = asdict(spec)
-        row["context_timeframes"] = list(spec.context_timeframes)
+        row = spec_row
         row.update({
             "equity": spec.starting_equity,
             "high_water_mark": spec.starting_equity,
