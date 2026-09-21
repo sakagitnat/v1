@@ -11,3 +11,4 @@ retry-expanded-matrix-after-pythonpath-fix 2026-09-21 demo-only
 collect-expanded-forward-streams 2026-09-21 demo-only
 retry-expanded-collector-clean 2026-09-21 demo-only
 retry-normalized-collector 2026-09-21 demo-only
+retry-literal-newline-repair 2026-09-21 demo-only
