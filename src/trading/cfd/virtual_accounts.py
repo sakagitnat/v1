@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Optional
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 from trading.cfd.state import load_state, set_virtual_accounts
 
@@ -21,6 +24,7 @@ from trading.cfd.state import load_state, set_virtual_accounts
 ACTIVE_DEMO = "ACTIVE_DEMO"
 PAPER = "PAPER"
 SHADOW = "SHADOW"
+RUIN_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_virtual_account_ruin_log.jsonl"
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,30 @@ def record_virtual_close(account_id: str, pnl: float) -> dict:
         row["wins"] = int(row.get("wins", 0)) + 1
     elif pnl < 0:
         row["losses"] = int(row.get("losses", 0)) + 1
+    # Research "ruin" event: keep the ledger alive for analysis but mark
+    # catastrophic drawdowns so we can study why aggressive variants failed.
+    start = float(row.get("starting_equity", 100.0))
+    dd = 0.0 if start <= 0 else max(0.0, (start - float(row["equity"])) / start)
+    row["drawdown_from_start_pct"] = round(dd * 100.0, 2)
+    ruined_now = float(row["equity"]) <= start * 0.25
+    if ruined_now and not row.get("ruined"):
+        row["ruined"] = True
+        row["ruined_at"] = datetime.now(timezone.utc).isoformat()
+        RUIN_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with RUIN_LOG_PATH.open("a") as f:
+            f.write(json.dumps({
+                "timestamp": row["ruined_at"],
+                "virtual_account_id": account_id,
+                "strategy": row.get("strategy_tag"),
+                "starting_equity": start,
+                "equity": row["equity"],
+                "realized_pnl": row.get("realized_pnl", 0.0),
+                "closed_trades": row.get("closed_trades", 0),
+                "wins": row.get("wins", 0),
+                "losses": row.get("losses", 0),
+                "drawdown_from_start_pct": row["drawdown_from_start_pct"],
+                "reason": "virtual account equity fell to <=25% of starting equity"
+            }) + "\n")
     accounts[account_id] = row
     set_virtual_accounts(accounts)
     return row
