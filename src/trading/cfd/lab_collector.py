@@ -55,14 +55,31 @@ async def collect_lab_observations(broker, instruments: list[str], run_id: str |
     written = 0
     LAB_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat()
+    streams = list(_research_streams())
+    needed = sorted({(tf, gran, count) for _, tf, gran, count in streams}, key=lambda x: x[1], reverse=True)
+    cache = {}
+    # Fetch each instrument/timeframe once, then fan the same market snapshot
+    # out to all virtual accounts. This avoids hammering Deriv ticks_history.
+    for instrument in instruments:
+        for tf, granularity, count in needed:
+            try:
+                cache[(instrument, tf)] = await broker.get_candles(
+                    instrument, granularity_seconds=granularity, count=count
+                )
+            except Exception as exc:
+                cache[(instrument, tf)] = exc
     with LAB_LOG_PATH.open("a") as fh:
-        for account_id, observed_tf, granularity, count in _research_streams():
+        for account_id, observed_tf, granularity, count in streams:
             account = accounts[account_id]
             for instrument in instruments:
+                bars = cache.get((instrument, observed_tf))
+                if isinstance(bars, Exception):
+                    fh.write(json.dumps({"timestamp": now, "run_id": run_id, "virtual_account_id": account_id, "observed_timeframe": observed_tf, "instrument": instrument, "error": str(bars)}) + "\n")
+                    written += 1
+                    continue
+                if bars is None or len(bars) < 50:
+                    continue
                 try:
-                    bars = await broker.get_candles(instrument, granularity_seconds=granularity, count=count)
-                    if len(bars) < 50:
-                        continue
                     payload = {
                         "timestamp": now, "run_id": run_id,
                         "virtual_account_id": account_id,
