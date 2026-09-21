@@ -15,7 +15,7 @@ import pandas as pd
 
 from trading.cfd.regime import classify_regime, classify_volatility
 from trading.cfd.strategy import EmaCrossoverStrategy
-from trading.cfd.virtual_accounts import ensure_virtual_accounts
+from trading.cfd.virtual_accounts import ensure_virtual_accounts, DEFAULT_VIRTUAL_ACCOUNTS
 from trading.strategy.base import Action
 
 LAB_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_lab_observations.jsonl"
@@ -65,7 +65,7 @@ async def collect_lab_observations(broker, instruments: list[str], run_id: str |
                         "virtual_account_id": account_id,
                         "execution_tier": account["execution_tier"],
                         "horizon": account["horizon"],
-                        "entry_timeframe": account["entry_timeframe"],
+                        "entry_timeframe": account["entry_timeframe"],\n                        "observed_timeframe": observed_tf,\n                        "strategy_tag": account.get("strategy_tag"),
                         "context_timeframes": account["context_timeframes"],
                         "instrument": instrument,
                         "bar_time": bars.index[-1].isoformat(),
