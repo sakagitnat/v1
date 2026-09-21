@@ -87,6 +87,7 @@ jobs:
             state/cfd_paper_trades.jsonl \
             state/cfd_decisions.jsonl \
             state/cfd_incidents.jsonl \
+            state/cfd_lab_observations.jsonl \
             state/cfd_scheduler_heartbeat.json; do
             [ -f "$f" ] && git add "$f"
           done
