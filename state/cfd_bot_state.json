@@ -203,7 +203,7 @@
       "account_id": "scalp_m1",
       "label": "M1 execution research",
       "starting_equity": 100,
-      "execution_tier": "SHADOW",
+      "execution_tier": "ACTIVE_DEMO",
       "horizon": "scalp",
       "entry_timeframe": "M1",
       "context_timeframes": [
@@ -211,10 +211,30 @@
         "M5",
         "M1"
       ],
-      "strategy_tag": null,
+      "strategy_tag": "starter_m1@v0",
       "equity": 100,
       "high_water_mark": 100,
       "realized_pnl": 0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "scalp_ticks": {
+      "account_id": "scalp_ticks",
+      "label": "Tick-seconds execution research",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "scalp",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "starter_ticks@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
       "closed_trades": 0,
       "wins": 0,
       "losses": 0
