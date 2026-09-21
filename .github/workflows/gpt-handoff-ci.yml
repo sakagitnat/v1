@@ -5,6 +5,14 @@ on:
     branches:
       - gpt/deriv-demo-bridge
   workflow_dispatch: {}
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/gpt-handoff-ci.yml"
 
 permissions:
   contents: read
