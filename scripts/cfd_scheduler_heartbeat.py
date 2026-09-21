@@ -32,6 +32,17 @@ def mark(status: str, *, path: Path = HEARTBEAT_PATH) -> dict:
     if status not in {"started", "success", "failure"}:
         raise ValueError(f"unsupported heartbeat status: {status}")
 
+    # This file is the authoritative trading-runtime heartbeat. Do not let
+    # CI/research/helper workflows overwrite it and make a non-trading run
+    # look like a scheduler run.
+    workflow = os.environ.get("GITHUB_WORKFLOW")
+    expected_workflow = os.environ.get("CFD_HEARTBEAT_OWNER", "CFD Trading (Deriv)")
+    if workflow and workflow != expected_workflow:
+        raise RuntimeError(
+            f"refusing to write scheduler heartbeat from workflow {workflow!r}; "
+            f"owner is {expected_workflow!r}"
+        )
+
     data = load_heartbeat(path)
     now = _now_iso()
     data.update(
