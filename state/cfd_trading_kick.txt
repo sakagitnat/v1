@@ -15,3 +15,4 @@ retry-literal-newline-repair 2026-09-21 demo-only
 retry-restored-expanded-collector 2026-09-21 demo-only
 retry-cached-expanded-collector 2026-09-21 demo-only
 strategy-specific-paper-lab 2026-09-21
+unified-stale-recovery 2026-09-21T15:58:00Z demo-only
