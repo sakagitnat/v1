@@ -85,6 +85,33 @@
         "M1",
         "TICK"
       ]
+    },
+    "13805845259": {
+      "instrument": "frxXAUUSD",
+      "strategy": "highrisk_m1@v0",
+      "side": "short",
+      "entry_time": "2026-09-21T06:25:50.654396+00:00",
+      "entry_price": 4346.97,
+      "stake": 10.0,
+      "risk_amount": 8.0,
+      "multiplier": 100,
+      "thesis_key": "frxXAUUSD:short:highrisk_m1@v0",
+      "equity_before": 100.0,
+      "regime": "highrisk_growth_experiment",
+      "leg": "aggressive",
+      "broker_managed_only": true,
+      "entry_reason": "M15/M5/M1 vote=[-1, -1, -1], M1 momentum confirmed; score=3.000405",
+      "experimental": true,
+      "high_risk": true,
+      "virtual_account_id": "highrisk_m1",
+      "horizon": "highrisk",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "M1"
+      ]
     }
   },
   "operating_mode": "normal",
@@ -232,6 +259,46 @@
         "TICK"
       ],
       "strategy_tag": "starter_ticks@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "highrisk_m1": {
+      "account_id": "highrisk_m1",
+      "label": "High-risk M1 growth experiment",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "highrisk",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "highrisk_m1@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "highrisk_ticks": {
+      "account_id": "highrisk_ticks",
+      "label": "High-risk tick growth experiment",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "highrisk",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "highrisk_ticks@v0",
       "equity": 100.0,
       "high_water_mark": 100.0,
       "realized_pnl": 0.0,
