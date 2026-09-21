@@ -8,3 +8,4 @@ verify-reserved-stake-and-m15-lab 2026-09-21T06:10:00Z
 unified-keepalive 2026-09-21T07:00:53Z demo-only
 expand-virtual-matrix-and-start 2026-09-21 demo-only
 retry-expanded-matrix-after-pythonpath-fix 2026-09-21 demo-only
+collect-expanded-forward-streams 2026-09-21 demo-only
