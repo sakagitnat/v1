@@ -1,0 +1,45 @@
+name: CFD Rebase Virtual Capital
+
+on:
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - state/cfd_virtual_capital_rebase_kick.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cfd-virtual-capital-rebase
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Rebase demo account to virtual starting capital
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/rebase_cfd_demo_virtual_capital.py
+      - name: Persist rebased state
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          git add state/cfd_bot_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Rebase CFD demo account to virtual capital"
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
+          fi
