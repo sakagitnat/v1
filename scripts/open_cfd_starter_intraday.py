@@ -29,10 +29,15 @@ def _signal(h1, m15, m5):
     crossed_down = m5_fast.iloc[-2] >= m5_slow.iloc[-2] and m5_fast.iloc[-1] < m5_slow.iloc[-1]
     reclaim_up = bullish and m5["close"].iloc[-2] <= m5_fast.iloc[-2] and m5["close"].iloc[-1] > m5_fast.iloc[-1]
     reclaim_down = bearish and m5["close"].iloc[-2] >= m5_fast.iloc[-2] and m5["close"].iloc[-1] < m5_fast.iloc[-1]
-    if bullish and (crossed_up or reclaim_up):
-        return "long", "H1+M15 bullish; M5 crossover/reclaim"
-    if bearish and (crossed_down or reclaim_down):
-        return "short", "H1+M15 bearish; M5 crossover/rejection"
+    m5_bullish = m5_fast.iloc[-1] > m5_slow.iloc[-1]
+    m5_bearish = m5_fast.iloc[-1] < m5_slow.iloc[-1]
+    momentum_up = m5["close"].iloc[-1] > m5["close"].iloc[-2]
+    momentum_down = m5["close"].iloc[-1] < m5["close"].iloc[-2]
+
+    if bullish and m5_bullish and (crossed_up or reclaim_up or momentum_up):
+        return "long", "H1+M15+M5 bullish alignment with short-horizon momentum"
+    if bearish and m5_bearish and (crossed_down or reclaim_down or momentum_down):
+        return "short", "H1+M15+M5 bearish alignment with short-horizon momentum"
     return None
 
 async def main():
