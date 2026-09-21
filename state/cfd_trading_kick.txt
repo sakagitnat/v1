@@ -2,3 +2,4 @@
 manual-start 2026-09-21T04:19:36.164Z
 post-rebase-verify 2026-09-21T05:45:00Z
 continue-demo-trading 2026-09-21
+virtual-lab-first-collection 2026-09-21T06:05:00Z
