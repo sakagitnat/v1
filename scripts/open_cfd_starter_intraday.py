@@ -55,6 +55,7 @@ async def main():
             raise SystemExit(f"Refusing: {len(broker_positions)} broker position(s) already open")
         candidates = []
         fallbacks = []
+        m5_only = []
         for symbol in INSTRUMENTS:
             h1 = await broker.get_candles(symbol, granularity_seconds=3600, count=120)
             m15 = await broker.get_candles(symbol, granularity_seconds=900, count=160)
@@ -84,12 +85,25 @@ async def main():
                 confidence = abs(score) + strength
                 fallbacks.append((confidence, symbol, side, reason, float(m5["close"].iloc[-1])))
 
+            # Final exploratory fallback for the very first demo data point:
+            # strongest M5 EMA separation whose latest candle agrees with
+            # that M5 direction. This is intentionally tagged experimental
+            # and uses the same tiny fixed risk.
+            if m5_fast > m5_slow and m5_momentum > 0:
+                m5_only.append((strength, symbol, "long", "experimental M5-only momentum probe", float(m5["close"].iloc[-1])))
+            elif m5_fast < m5_slow and m5_momentum < 0:
+                m5_only.append((strength, symbol, "short", "experimental M5-only momentum probe", float(m5["close"].iloc[-1])))
+
         if not candidates:
-            if not fallbacks:
-                print("NO_TRADE: even exploratory majority-score setup unavailable")
+            if fallbacks:
+                fallbacks.sort(reverse=True)
+                candidates = [fallbacks[0]]
+            elif m5_only:
+                m5_only.sort(reverse=True)
+                candidates = [m5_only[0]]
+            else:
+                print("NO_TRADE: no M5 momentum candidate available")
                 return
-            fallbacks.sort(reverse=True)
-            candidates = [fallbacks[0]]
         candidates.sort(reverse=True)
         _, symbol, side, reason, entry_price = candidates[0]
         stake, stop_loss_amount, take_profit_amount, multiplier = 1.00, 0.50, 1.00, 20
