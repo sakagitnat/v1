@@ -22,6 +22,7 @@ _DEFAULTS = {
     "pending_entries": {},
     "smoothed_equity": None,
     "high_water_mark": None,
+    "virtual_accounts": {},
 }
 
 
@@ -230,6 +231,16 @@ def pop_paper_position(strategy_tag: str, instrument: str) -> Optional[dict]:
     _write_state(state)
     return meta
 
+
+
+def get_virtual_accounts() -> dict:
+    return load_state().get("virtual_accounts", {})
+
+
+def set_virtual_accounts(accounts: dict) -> None:
+    state = load_state()
+    state["virtual_accounts"] = accounts
+    _write_state(state)
 
 def exclude_instrument(instrument: str, reason: str = "") -> None:
     # Deliberately NOT .upper()'d: Deriv symbol names are mixed-case and
