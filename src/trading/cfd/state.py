@@ -119,6 +119,29 @@ def set_broker_baseline(balance: float) -> None:
         _write_state(state)
 
 
+def rebase_demo_virtual_capital(broker_balance: float, virtual_starting_capital: float) -> None:
+    """Administrative one-time migration for a demo account whose legacy
+    broker_baseline predates the virtual-capital model.
+
+    This intentionally overwrites the normally immutable baseline and
+    resets equity-derived safety state to the requested virtual starting
+    capital. Callers MUST first prove there are no bot trade records,
+    locally tracked positions, pending entries, or broker-side open
+    contracts. It is not a normal runtime operation and must never be used
+    to erase genuine trading P&L.
+    """
+    state = load_state()
+    state["broker_baseline"] = float(broker_balance)
+    state["smoothed_equity"] = float(virtual_starting_capital)
+    state["high_water_mark"] = float(virtual_starting_capital)
+    state["daily_risk_tracking"] = {
+        "date": None,
+        "start_equity": None,
+        "halted": False,
+    }
+    _write_state(state)
+
+
 def record_open_trade(contract_id: int, meta: dict) -> None:
     """Persists the entry-time details of a just-opened contract so a
     later run (a fresh process, on GitHub Actions) can still compute that
