@@ -13,3 +13,4 @@ retry-expanded-collector-clean 2026-09-21 demo-only
 retry-normalized-collector 2026-09-21 demo-only
 retry-literal-newline-repair 2026-09-21 demo-only
 retry-restored-expanded-collector 2026-09-21 demo-only
+retry-cached-expanded-collector 2026-09-21 demo-only
