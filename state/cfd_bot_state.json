@@ -112,6 +112,33 @@
         "M1",
         "M1"
       ]
+    },
+    "13831550959": {
+      "instrument": "frxXAUUSD",
+      "strategy": "highrisk_ticks@v0",
+      "side": "short",
+      "entry_time": "2026-09-21T10:59:51.439624+00:00",
+      "entry_price": 4343.06,
+      "stake": 10.0,
+      "risk_amount": 8.0,
+      "multiplier": 100,
+      "thesis_key": "frxXAUUSD:short:highrisk_ticks@v0",
+      "equity_before": 100.0,
+      "regime": "highrisk_growth_experiment",
+      "leg": "aggressive",
+      "broker_managed_only": true,
+      "entry_reason": "6/24/60-tick trend stack + 12-tick impulse; score=0.00024637",
+      "experimental": true,
+      "high_risk": true,
+      "virtual_account_id": "highrisk_ticks",
+      "horizon": "highrisk",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ]
     }
   },
   "operating_mode": "normal",

@@ -8,3 +8,9 @@
 {"timestamp": "2026-09-21T06:25:50.944864+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxEURUSD", "candidate": null}
 {"timestamp": "2026-09-21T06:25:51.085270+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxGBPUSD", "candidate": null}
 {"timestamp": "2026-09-21T06:25:51.224216+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxUSDJPY", "candidate": null}
+{"timestamp": "2026-09-21T10:59:50.438915+00:00", "event": "scan_start", "tracked_risk": 9.0, "open_count": 4}
+{"timestamp": "2026-09-21T10:59:50.535918+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxXAUUSD", "candidate": {"side": "short", "score": 0.0002463700708716225, "price": 4343.06}}
+{"timestamp": "2026-09-21T10:59:50.642722+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxEURUSD", "candidate": null}
+{"timestamp": "2026-09-21T10:59:50.730228+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxGBPUSD", "candidate": {"side": "short", "score": 1.4947794826500182e-05, "price": 1.33799}}
+{"timestamp": "2026-09-21T10:59:50.859541+00:00", "event": "candidate", "account": "highrisk_ticks", "instrument": "frxUSDJPY", "candidate": {"side": "long", "score": 2.543202655115715e-05, "price": 157.282}}
+{"timestamp": "2026-09-21T10:59:51.440979+00:00", "event": "trade_opened", "account": "highrisk_ticks", "strategy": "highrisk_ticks@v0", "instrument": "frxXAUUSD", "side": "short", "risk": 8.0, "target": 12.0, "contract_id": 13831550959, "reason": "6/24/60-tick trend stack + 12-tick impulse; score=0.00024637"}
