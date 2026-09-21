@@ -43,6 +43,8 @@ DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("starter_m5_probe", "M5 starter demo probe", 100.0, ACTIVE_DEMO, "intraday", "M5", ("H1", "M15", "M5"), "starter_intraday@v0"),
     VirtualAccountSpec("scalp_m1", "M1 execution research", 100.0, ACTIVE_DEMO, "scalp", "M1", ("M15", "M5", "M1"), "starter_m1@v0"),
     VirtualAccountSpec("scalp_ticks", "Tick-seconds execution research", 100.0, ACTIVE_DEMO, "scalp", "TICK", ("M5", "M1", "TICK"), "starter_ticks@v0"),
+    VirtualAccountSpec("highrisk_m1", "High-risk M1 growth experiment", 100.0, ACTIVE_DEMO, "highrisk", "M1", ("M15", "M5", "M1"), "highrisk_m1@v0"),
+    VirtualAccountSpec("highrisk_ticks", "High-risk tick growth experiment", 100.0, ACTIVE_DEMO, "highrisk", "TICK", ("M5", "M1", "TICK"), "highrisk_ticks@v0"),
 )
 
 
