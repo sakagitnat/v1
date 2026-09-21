@@ -5,6 +5,11 @@ name: CFD Trading (Deriv)
 # The code/state source of truth for this handoff is pinned explicitly.
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - state/cfd_trading_kick.txt
   schedule:
     # Sunday open: XAUUSD published open is 22:10 GMT.
     - cron: "15,30,45 22 * * 0"
@@ -75,7 +80,14 @@ jobs:
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_decisions.jsonl             state/cfd_incidents.jsonl             state/cfd_scheduler_heartbeat.json; do
+          for f in \
+            state/cfd_bot_state.json \
+            state/cfd_trades.jsonl \
+            state/cfd_strategy_registry.json \
+            state/cfd_paper_trades.jsonl \
+            state/cfd_decisions.jsonl \
+            state/cfd_incidents.jsonl \
+            state/cfd_scheduler_heartbeat.json; do
             [ -f "$f" ] && git add "$f"
           done
           if ! git diff --cached --quiet; then
