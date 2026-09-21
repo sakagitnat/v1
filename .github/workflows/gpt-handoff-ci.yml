@@ -5,18 +5,12 @@ on:
     branches:
       - gpt/deriv-demo-bridge
   workflow_dispatch: {}
-  push:
-    branches:
-      - gpt/autonomous-demo-runner
-    paths:
-      - state/cfd_trading_ci_kick.txt
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -26,59 +20,3 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: pytest -q
-
-  demo-kick:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: gpt/autonomous-demo-runner
-          fetch-depth: 0
-      - name: Mark scheduler started
-        run: python3 scripts/cfd_scheduler_heartbeat.py started
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
-        id: deps
-        run: pip install -r requirements.txt
-      - name: Run deterministic CFD scheduler in demo-only mode
-        id: trade
-        env:
-          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
-          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
-          CFD_ALLOW_LIVE_TRADING: "false"
-        run: python scripts/run_cfd_trading.py
-      - name: Mark scheduler completion
-        if: always()
-        env:
-          DEPS_OUTCOME: ${{ steps.deps.outcome }}
-          TRADE_OUTCOME: ${{ steps.trade.outcome }}
-        run: |
-          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ]; then
-            python3 scripts/cfd_scheduler_heartbeat.py success
-          else
-            python3 scripts/cfd_scheduler_heartbeat.py failure
-          fi
-      - name: Persist demo runtime telemetry
-        if: always()
-        run: |
-          git config user.name "trading-bot"
-          git config user.email "actions@github.com"
-          for f in \
-            state/cfd_bot_state.json \
-            state/cfd_trades.jsonl \
-            state/cfd_strategy_registry.json \
-            state/cfd_paper_trades.jsonl \
-            state/cfd_decisions.jsonl \
-            state/cfd_incidents.jsonl \
-            state/cfd_scheduler_heartbeat.json; do
-            [ -f "$f" ] && git add "$f"
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Update CFD runtime state from emergency demo kick"
-            git pull --rebase origin gpt/autonomous-demo-runner
-            git push origin HEAD:gpt/autonomous-demo-runner
-          fi
