@@ -2,6 +2,11 @@ name: CFD Actions Schedule Probe
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - state/cfd_probe_kick.txt
   schedule:
     - cron: "*/10 * * * *"
 
