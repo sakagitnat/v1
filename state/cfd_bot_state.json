@@ -305,6 +305,613 @@
       "closed_trades": 0,
       "wins": 0,
       "losses": 0
+    },
+    "iso_trend_h1": {
+      "account_id": "iso_trend_h1",
+      "label": "Isolated trend H1",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ],
+      "strategy_tag": "ema_crossover@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_trend_m15": {
+      "account_id": "iso_trend_m15",
+      "label": "Isolated trend M15",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ],
+      "strategy_tag": "ema_crossover@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_trend_m5": {
+      "account_id": "iso_trend_m5",
+      "label": "Isolated trend M5",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": "ema_crossover@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_breakout_m15": {
+      "account_id": "iso_breakout_m15",
+      "label": "Isolated breakout M15",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ],
+      "strategy_tag": "donchian_breakout@v2",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_breakout_m5": {
+      "account_id": "iso_breakout_m5",
+      "label": "Isolated breakout M5",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": "donchian_breakout@v2",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_breakout_m1": {
+      "account_id": "iso_breakout_m1",
+      "label": "Isolated breakout M1",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "isolated",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "donchian_breakout@v2",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_meanrev_m15": {
+      "account_id": "iso_meanrev_m15",
+      "label": "Isolated mean reversion M15",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ],
+      "strategy_tag": "mean_reversion@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_meanrev_m5": {
+      "account_id": "iso_meanrev_m5",
+      "label": "Isolated mean reversion M5",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": "mean_reversion@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_meanrev_m1": {
+      "account_id": "iso_meanrev_m1",
+      "label": "Isolated mean reversion M1",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "isolated",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "mean_reversion@v1",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_momentum_m15": {
+      "account_id": "iso_momentum_m15",
+      "label": "Isolated momentum M15",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ],
+      "strategy_tag": "momentum_research@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_momentum_m5": {
+      "account_id": "iso_momentum_m5",
+      "label": "Isolated momentum M5",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ],
+      "strategy_tag": "momentum_research@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "iso_momentum_m1": {
+      "account_id": "iso_momentum_m1",
+      "label": "Isolated momentum M1",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "isolated",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "momentum_research@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "family_trend_alltf": {
+      "account_id": "family_trend_alltf",
+      "label": "Trend family all timeframes",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "strategy_family",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "family_trend@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "family_breakout_alltf": {
+      "account_id": "family_breakout_alltf",
+      "label": "Breakout family all timeframes",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "strategy_family",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "family_breakout@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "family_momentum_alltf": {
+      "account_id": "family_momentum_alltf",
+      "label": "Momentum family all timeframes",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "strategy_family",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "family_momentum@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "family_meanrev_alltf": {
+      "account_id": "family_meanrev_alltf",
+      "label": "Mean reversion family all timeframes",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "strategy_family",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "family_meanrev@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hybrid_balanced": {
+      "account_id": "hybrid_balanced",
+      "label": "Hybrid balanced multi-strategy",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "hybrid",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "hybrid_balanced@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hybrid_adaptive": {
+      "account_id": "hybrid_adaptive",
+      "label": "Hybrid regime-adaptive",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "hybrid",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H1",
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "hybrid_adaptive@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hybrid_aggressive": {
+      "account_id": "hybrid_aggressive",
+      "label": "Hybrid aggressive research",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "hybrid",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "hybrid_aggressive@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "main_control": {
+      "account_id": "main_control",
+      "label": "Main control benchmark",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "main",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H4",
+        "H1",
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "main_control@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "main_balanced": {
+      "account_id": "main_balanced",
+      "label": "Main balanced champion",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "main",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H4",
+        "H1",
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "main_balanced@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "main_adaptive": {
+      "account_id": "main_adaptive",
+      "label": "Main adaptive champion",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "main",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H4",
+        "H1",
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "main_adaptive@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "main_challenger": {
+      "account_id": "main_challenger",
+      "label": "Main challenger",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "main",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "H4",
+        "H1",
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "main_challenger@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hr20_trend": {
+      "account_id": "hr20_trend",
+      "label": "20pct risk trend lab",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "ultra_highrisk",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "hr20_trend@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hr20_momentum": {
+      "account_id": "hr20_momentum",
+      "label": "20pct risk momentum lab",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "ultra_highrisk",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1",
+        "TICK"
+      ],
+      "strategy_tag": "hr20_momentum@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hr20_breakout": {
+      "account_id": "hr20_breakout",
+      "label": "20pct risk breakout lab",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "ultra_highrisk",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "hr20_breakout@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "hr20_meanrev": {
+      "account_id": "hr20_meanrev",
+      "label": "20pct risk mean-reversion lab",
+      "starting_equity": 100.0,
+      "execution_tier": "PAPER",
+      "horizon": "ultra_highrisk",
+      "entry_timeframe": "MULTI",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "hr20_meanrev@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "news_breakout": {
+      "account_id": "news_breakout",
+      "label": "News event breakout lab",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "news",
+      "entry_timeframe": "EVENT",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "news_breakout@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "news_momentum": {
+      "account_id": "news_momentum",
+      "label": "News event momentum lab",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "news",
+      "entry_timeframe": "EVENT",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "news_momentum@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "news_control": {
+      "account_id": "news_control",
+      "label": "News no-entry counterfactual control",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "news",
+      "entry_timeframe": "EVENT",
+      "context_timeframes": [
+        "M15",
+        "M5",
+        "M1"
+      ],
+      "strategy_tag": "news_control@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
     }
   }
 }
