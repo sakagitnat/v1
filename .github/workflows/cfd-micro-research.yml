@@ -1,0 +1,48 @@
+name: CFD Micro Research Demo
+
+on:
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - state/cfd_micro_research_kick.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cfd-micro-research
+  cancel-in-progress: false
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run M1 and tick demo research
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/open_cfd_micro_research.py
+      - name: Persist research state
+        if: always()
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_incidents.jsonl; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Persist M1/tick demo research state"
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
+          fi
