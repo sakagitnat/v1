@@ -9,6 +9,7 @@ from trading.cfd.auto_mode import choose_autonomous_mode
 from trading.cfd.broker import DerivBroker
 from trading.cfd.decision_log import record_decision
 from trading.cfd.incident_log import record_incident
+from trading.cfd.lab_collector import collect_lab_observations
 from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.drawdown_monitor import (
@@ -56,6 +57,7 @@ from trading.cfd.state import (
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
 from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
+from trading.cfd.virtual_accounts import account_for_strategy, ensure_virtual_accounts, record_virtual_close
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -120,6 +122,10 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 regime=meta.get("regime"),
                 thesis_key=meta.get("thesis_key"),
                 leg=meta.get("leg"),
+                virtual_account_id=meta.get("virtual_account_id"),
+                horizon=meta.get("horizon"),
+                entry_timeframe=meta.get("entry_timeframe"),
+                context_timeframes=meta.get("context_timeframes"),
             )
         )
     return records
@@ -428,6 +434,15 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
         equity = equity_for_account(broker_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
 
+        # Virtual sub-account lab: seed logical $100 ledgers and collect
+        # genuine forward observations on M15/M5/M1. SHADOW accounts never
+        # submit orders; this cannot increase broker risk.
+        virtual_accounts = ensure_virtual_accounts()
+        lab_rows = await collect_lab_observations(
+            broker, settings.cfd_instruments, run_id=os.environ.get("GITHUB_RUN_ID")
+        )
+        logger.info("Virtual-account lab collected %d forward observation row(s).", lab_rows)
+
         # Smoothed Equity / High-Water-Mark + Automatic Drawdown-Tiered
         # Risk Reduction (docs/VISION.md's Revision 3 "Drawdown
         # handling"): computed from RAW equity right here, before any
@@ -530,6 +545,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         reconciled_ids: set[int] = set()
         for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity):
             record_trade(record)
+            if record.pnl is not None and record.virtual_account_id:
+                record_virtual_close(record.virtual_account_id, record.pnl)
             pop_open_trade(record.contract_id)
             reconciled_ids.add(record.contract_id)
             logger.info(
@@ -771,8 +788,14 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                                 regime=meta.get("regime"),
                                 thesis_key=meta.get("thesis_key"),
                                 leg=leg_tag,
+                                virtual_account_id=meta.get("virtual_account_id"),
+                                horizon=meta.get("horizon"),
+                                entry_timeframe=meta.get("entry_timeframe"),
+                                context_timeframes=meta.get("context_timeframes"),
                             )
                         )
+                        if meta.get("virtual_account_id") and pnl is not None:
+                            record_virtual_close(meta["virtual_account_id"], pnl)
                     else:
                         logger.warning(
                             "%s: closed contract %d with no tracked entry metadata "
@@ -865,6 +888,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             entry_thesis_key = compute_thesis_key(instrument, side)
             entry_time = _now_iso()
+            virtual_account_id = account_for_strategy(strategy_tag) or "core_h1"
+            virtual_account = virtual_accounts.get(virtual_account_id, {})
             leg_metas = []
             for leg_tag, leg_terms in legs_to_open:
                 leg_meta = {
@@ -880,6 +905,10 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     "equity_before": risk.equity,
                     "regime": regime,
                     "leg": leg_tag,
+                    "virtual_account_id": virtual_account_id,
+                    "horizon": virtual_account.get("horizon", "core"),
+                    "entry_timeframe": virtual_account.get("entry_timeframe", "H1"),
+                    "context_timeframes": virtual_account.get("context_timeframes", ["H4", "H1"]),
                 }
                 if leg_tag == "runner":
                     leg_meta["trailing_stop"] = TrailingStopState(
