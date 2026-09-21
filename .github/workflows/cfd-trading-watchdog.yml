@@ -1,0 +1,88 @@
+name: CFD Trading Watchdog (Deriv)
+
+# Independent recovery path for the DEMO scheduler. It never invents a trade:
+# when the normal scheduler heartbeat is stale during the expected XAUUSD
+# market window, it invokes the exact same deterministic run_cfd_trading.py.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "7,37 * * * *"
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: cfd-trading
+  cancel-in-progress: false
+
+env:
+  CFD_RUNTIME_REF: gpt/autonomous-demo-runner
+
+jobs:
+  health-and-recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check scheduler heartbeat
+        id: health
+        continue-on-error: true
+        run: python scripts/cfd_runner_health.py --max-age-minutes 40
+
+      - name: Install dependencies for recovery
+        if: steps.health.outcome == 'failure'
+        run: pip install -r requirements.txt
+
+      - name: Mark recovery run started
+        if: steps.health.outcome == 'failure'
+        run: python scripts/cfd_scheduler_heartbeat.py started
+
+      - name: Run deterministic recovery evaluation
+        if: steps.health.outcome == 'failure'
+        id: recovery
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/run_cfd_trading.py
+
+      - name: Mark recovery completion
+        if: steps.health.outcome == 'failure' && always()
+        env:
+          RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
+        run: |
+          if [ "$RECOVERY_OUTCOME" = "success" ]; then
+            python scripts/cfd_scheduler_heartbeat.py success
+          else
+            python scripts/cfd_scheduler_heartbeat.py failure
+          fi
+
+      - name: Persist recovered state and heartbeat
+        if: steps.health.outcome == 'failure' && always()
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_scheduler_heartbeat.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if ! git diff --cached --quiet; then
+            git commit -m "Recover stale CFD scheduler runtime state"
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
+          fi
+
+      - name: Alert if recovery failed
+        if: steps.health.outcome == 'failure' && steps.recovery.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment 5 --repo "${{ github.repository }}" --body "AUTONOMOUS CFD WATCHDOG ALERT: scheduler heartbeat was stale and recovery run failed. GitHub run id: ${{ github.run_id }}. Demo-only safety remains enforced (CFD_ALLOW_LIVE_TRADING=false). Please inspect Actions logs before any further operational change."
