@@ -1,3 +1,4 @@
 2026-09-21T02:03:00Z safe demo scheduler kick; CFD_ALLOW_LIVE_TRADING remains false.
 manual-start 2026-09-21T04:19:36.164Z
 post-rebase-verify 2026-09-21T05:45:00Z
+continue-demo-trading 2026-09-21
