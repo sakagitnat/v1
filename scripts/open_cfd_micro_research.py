@@ -11,14 +11,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 import pandas as pd
 import json
+import os
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
-from trading.cfd.state import list_open_trades, record_open_trade
-from trading.cfd.virtual_accounts import ensure_virtual_accounts
+from trading.cfd.state import list_open_trades, record_open_trade, pop_open_trade
+from trading.cfd.virtual_accounts import ensure_virtual_accounts, record_virtual_close
 from trading.config import settings
 from trading.indicators import ema
+from trading.cfd.trade_log import TradeRecord, record_trade
 
 INSTRUMENTS = ["frxXAUUSD","frxEURUSD","frxGBPUSD","frxUSDJPY"]
 MAX_TOTAL_RESEARCH_RISK = 1.50
@@ -33,6 +36,9 @@ STAKE = 1.00
 STOP = 0.25
 TARGET = 0.50
 MULTIPLIER = 100
+CONTINUOUS_SECONDS = int(os.getenv("CFD_MICRO_CONTINUOUS_SECONDS", "0"))
+TICK_CYCLE_SECONDS = 55
+MINUTE_CYCLE_SECONDS = 3300
 
 def _m1_signal(df):
     if len(df) < 60: return None
@@ -67,6 +73,87 @@ async def _open(broker, symbol, side, strategy, account_id, timeframe, reason, e
         "entry_timeframe":timeframe,"context_timeframes":["M5","M1",timeframe],
     })
     print(f"OPENED {strategy} {symbol} {side} contract_id={cid}")
+
+
+async def _quota_cycle(broker, timeframe, cycle_no):
+    """DEMO-only forced research cycle. Kept explicitly separate from qualified signals."""
+    is_tick = timeframe == "TICK"
+    strategy = "quota_ticks@v0" if is_tick else "quota_m1@v0"
+    account_id = "quota_ticks_forward" if is_tick else "quota_m1_forward"
+    symbol = INSTRUMENTS[cycle_no % len(INSTRUMENTS)]
+    if is_tick:
+        data = await broker.get_ticks(symbol, 80)
+        if data.empty: return
+        price = float(data["price"].iloc[-1])
+        side = _tick_signal(data) or ("long" if float(data["price"].iloc[-1]) >= float(data["price"].iloc[-2]) else "short")
+    else:
+        data = await broker.get_candles(symbol, 60, 80)
+        if data.empty: return
+        price = float(data["close"].iloc[-1])
+        side = _m1_signal(data) or ("long" if float(data["close"].iloc[-1]) >= float(data["close"].iloc[-2]) else "short")
+    result = await broker.submit_multiplier_order(symbol, side, STAKE, MULTIPLIER, STOP, TARGET)
+    cid = result.get("buy", {}).get("contract_id")
+    if cid is None:
+        _log({"event":"quota_open_failed","timeframe":timeframe,"instrument":symbol,"result":result})
+        return
+    opened = datetime.now(timezone.utc)
+    meta={"instrument":symbol,"strategy":strategy,"side":side,"entry_time":opened.isoformat(),
+          "entry_price":price,"stake":STAKE,"risk_amount":STOP,"multiplier":MULTIPLIER,
+          "equity_before":100.0,"regime":"forced_quota_research","leg":"quota",
+          "broker_managed_only":False,"entry_reason":"research quota; not strategy-qualified",
+          "experimental":True,"forced_quota":True,"virtual_account_id":account_id,
+          "horizon":"seconds" if is_tick else "minute","entry_timeframe":timeframe,
+          "context_timeframes":[timeframe]}
+    record_open_trade(cid, meta)
+    # Give Deriv at least one price tick before attempting an explicit sell.
+    await asyncio.sleep(8 if is_tick else 20)
+    try:
+        sold = await broker.close_position(int(cid))
+        sell = sold.get("sell", {})
+        pnl = sell.get("profit")
+        pnl = None if pnl is None else float(pnl)
+        exit_price = sell.get("sell_price")
+        exit_price = None if exit_price is None else float(exit_price)
+        pop_open_trade(int(cid))
+        if pnl is not None:
+            try: record_virtual_close(account_id, pnl)
+            except KeyError: pass
+        record_trade(TradeRecord(contract_id=int(cid),instrument=symbol,strategy=strategy,side=side,
+            entry_time=opened.isoformat(),exit_time=datetime.now(timezone.utc).isoformat(),
+            entry_price=price,stake=STAKE,risk_amount=STOP,exit_price=exit_price,pnl=pnl,
+            equity_before=100.0,equity_after=None,exit_reason="forced_quota_cycle",
+            regime="forced_quota_research",leg="quota",virtual_account_id=account_id,
+            horizon="seconds" if is_tick else "minute",entry_timeframe=timeframe,
+            context_timeframes=[timeframe]))
+        _log({"event":"quota_cycle_closed","timeframe":timeframe,"account":account_id,
+              "instrument":symbol,"side":side,"contract_id":cid,"pnl":pnl,"forced_quota":True})
+    except Exception as exc:
+        _log({"event":"quota_close_error","timeframe":timeframe,"account":account_id,
+              "instrument":symbol,"contract_id":cid,"error":repr(exc),"forced_quota":True})
+
+
+async def continuous_quota_loop():
+    """Run inside one Actions job; avoids pretending cron can schedule every minute."""
+    if settings.cfd_allow_live_trading:
+        raise SystemExit("Refusing while CFD_ALLOW_LIVE_TRADING=true")
+    broker=DerivBroker()
+    try:
+        account=await broker.connect()
+        if account.get("account_type")!="demo": raise SystemExit("demo account required")
+        started=time.monotonic(); tick_n=0; m1_n=0; next_tick=started; next_m1=started
+        while time.monotonic()-started < CONTINUOUS_SECONDS:
+            now=time.monotonic()
+            if now >= next_tick:
+                try: await _quota_cycle(broker,"TICK",tick_n)
+                except Exception as exc: _log({"event":"tick_cycle_error","error":repr(exc)})
+                tick_n += 1; next_tick = max(next_tick + TICK_CYCLE_SECONDS, time.monotonic())
+            if now >= next_m1:
+                try: await _quota_cycle(broker,"M1",m1_n)
+                except Exception as exc: _log({"event":"m1_cycle_error","error":repr(exc)})
+                m1_n += 1; next_m1 = max(next_m1 + MINUTE_CYCLE_SECONDS, time.monotonic())
+            await asyncio.sleep(1)
+    finally:
+        await broker.close()
 
 async def main():
     if settings.cfd_allow_live_trading:
@@ -119,4 +206,7 @@ async def main():
         await broker.close()
 
 if __name__=="__main__":
-    asyncio.run(main())
+    if CONTINUOUS_SECONDS > 0:
+        asyncio.run(continuous_quota_loop())
+    else:
+        asyncio.run(main())
