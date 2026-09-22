@@ -43,7 +43,6 @@ async def collect_lab_observations(broker, instruments, run_id=None):
     Broker candle access is async. Keep run_id on every observation so forward
     evidence can be attributed to the exact Actions run.
     """
-    state = None
     ensure_virtual_accounts()
     LAB_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     observations = []
@@ -83,7 +82,8 @@ async def collect_lab_observations(broker, instruments, run_id=None):
                 with LAB_LOG_PATH.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(obs, ensure_ascii=False) + "\n")
                 if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe:
-                    run_virtual_account_paper(spec, instrument, df, regime, run_id=run_id)
+                    paper_strategy = EmaCrossoverStrategy()
+                    run_virtual_account_paper(spec.account_id, instrument, df, regime, paper_strategy)
             except Exception as exc:
                 obs = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
