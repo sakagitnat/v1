@@ -36,33 +36,6 @@
         "M5"
       ]
     },
-    "13805845259": {
-      "instrument": "frxXAUUSD",
-      "strategy": "highrisk_m1@v0",
-      "side": "short",
-      "entry_time": "2026-09-21T06:25:50.654396+00:00",
-      "entry_price": 4346.97,
-      "stake": 10.0,
-      "risk_amount": 8.0,
-      "multiplier": 100,
-      "thesis_key": "frxXAUUSD:short:highrisk_m1@v0",
-      "equity_before": 100.0,
-      "regime": "highrisk_growth_experiment",
-      "leg": "aggressive",
-      "broker_managed_only": true,
-      "entry_reason": "M15/M5/M1 vote=[-1, -1, -1], M1 momentum confirmed; score=3.000405",
-      "experimental": true,
-      "high_risk": true,
-      "virtual_account_id": "highrisk_m1",
-      "horizon": "highrisk",
-      "entry_timeframe": "M1",
-      "context_timeframes": [
-        "M15",
-        "M5",
-        "M1",
-        "M1"
-      ]
-    },
     "13831550959": {
       "instrument": "frxXAUUSD",
       "strategy": "highrisk_ticks@v0",
@@ -102,8 +75,8 @@
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 99.5,
-  "high_water_mark": 100,
+  "smoothed_equity": 103.11200000000026,
+  "high_water_mark": 111.54000000000087,
   "virtual_accounts": {
     "core_h1": {
       "account_id": "core_h1",
@@ -256,12 +229,13 @@
         "M1"
       ],
       "strategy_tag": "highrisk_m1@v0",
-      "equity": 100.0,
-      "high_water_mark": 100.0,
-      "realized_pnl": 0.0,
-      "closed_trades": 0,
-      "wins": 0,
-      "losses": 0
+      "equity": 111.54,
+      "high_water_mark": 111.54,
+      "realized_pnl": 11.54,
+      "closed_trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "drawdown_from_start_pct": 0.0
     },
     "highrisk_ticks": {
       "account_id": "highrisk_ticks",
