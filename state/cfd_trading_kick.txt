@@ -17,3 +17,4 @@ retry-cached-expanded-collector 2026-09-21 demo-only
 strategy-specific-paper-lab 2026-09-21
 unified-stale-recovery 2026-09-21T15:58:00Z demo-only
 unified-stale-recovery 2026-09-21T19:58:13Z demo-only
+unified-stale-recovery 2026-09-22T02:00:00Z demo-only
