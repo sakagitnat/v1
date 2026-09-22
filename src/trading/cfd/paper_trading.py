@@ -199,3 +199,81 @@ def run_paper_trading(instrument: str, bars: pd.DataFrame, regime: str) -> None:
             },
         )
         logger.info("PAPER %s: opened %s %s stake=%.2f (regime=%s)", strategy_tag, side.upper(), instrument, stake, regime)
+
+
+def run_virtual_account_paper(account_id: str, instrument: str, bars: pd.DataFrame, regime: str, strategy) -> None:
+    """Run one PAPER virtual account on genuine forward candles.
+
+    State is keyed by account_id (not strategy tag), so several timeframe/account
+    experiments may use the same strategy without contaminating one another.
+    This is simulation only and never calls the broker order API.
+    """
+    if len(bars) < 2:
+        return
+    accounts = ensure_virtual_accounts()
+    account = accounts.get(account_id)
+    if not account or account.get("execution_tier") != "PAPER":
+        return
+
+    strategy_tag = account.get("strategy_tag") or strategy.name
+    state_key = f"virtual:{account_id}"
+    prepared = strategy.prepare(bars)
+    row, prev_row = prepared.iloc[-1], prepared.iloc[-2]
+    position = get_paper_position(state_key, instrument)
+
+    if position is not None:
+        side = position["side"]
+        price_exit_reason, price_exit_price = _check_price_exit(position, row)
+        signal = strategy.signal_for_row(instrument, row, prev_row, side)
+        signal_exit = (side == "long" and signal.action == Action.SELL) or (
+            side == "short" and signal.action == Action.BUY
+        )
+        if price_exit_reason is None and not signal_exit:
+            return
+        exit_reason = price_exit_reason or f"signal_exit: {signal.reason}"
+        exit_price = price_exit_price if price_exit_reason else signal.price
+        pnl = round(_pnl(side, position["entry_price"], exit_price, position["stake"], position["multiplier"]), 2)
+        pop_paper_position(state_key, instrument)
+        row_account = record_virtual_close(account_id, pnl)
+        set_paper_equity(state_key, row_account["equity"])
+        record_trade(
+            TradeRecord(
+                contract_id=position["contract_id"], instrument=instrument, strategy=strategy_tag,
+                side=side, entry_time=position["entry_time"], exit_time=_now_iso(),
+                entry_price=position["entry_price"], stake=position["stake"],
+                risk_amount=position["risk_amount"], exit_price=exit_price, pnl=pnl,
+                equity_before=position["equity_before"], equity_after=row_account["equity"],
+                exit_reason=f"paper-forward: {exit_reason}", regime=position.get("regime"),
+                virtual_account_id=account_id, horizon=account.get("horizon"),
+                entry_timeframe=position.get("entry_timeframe"),
+                context_timeframes=account.get("context_timeframes"),
+            ), path=PAPER_LOG_PATH,
+        )
+        logger.info("PAPER-FORWARD %s: closed %s %s pnl=%.2f", account_id, instrument, side, pnl)
+        return
+
+    signal = strategy.signal_for_row(instrument, row, prev_row, None)
+    if signal.action == Action.HOLD:
+        return
+    equity = float(account.get("equity", account.get("starting_equity", settings.cfd_virtual_starting_capital)))
+    risk_fraction = 0.20 if account.get("horizon") == "ultra_highrisk" else settings.cfd_risk_per_trade
+    risk = CfdRiskManager(equity=equity, risk_per_trade=risk_fraction, min_stake=settings.cfd_min_stake)
+    stake, stop_loss_amount, _ = risk.stake_and_limits(
+        signal.price, signal.stop_price, signal.take_profit_price,
+        risk_per_trade_override=risk_fraction,
+    )
+    if stake <= 0:
+        return
+    side = "long" if signal.action == Action.BUY else "short"
+    set_paper_position(state_key, instrument, {
+        "contract_id": next_paper_contract_id(), "side": side,
+        "entry_price": signal.price, "stop_price": signal.stop_price,
+        "target_price": signal.take_profit_price, "stake": stake,
+        "multiplier": risk.multiplier, "risk_amount": stop_loss_amount,
+        "entry_time": _now_iso(), "equity_before": equity, "regime": regime,
+        "virtual_account_id": account_id, "horizon": account.get("horizon"),
+        "entry_timeframe": account.get("entry_timeframe"),
+        "context_timeframes": account.get("context_timeframes"),
+    })
+    set_paper_equity(state_key, equity)
+    logger.info("PAPER-FORWARD %s: opened %s %s stake=%.2f tf=%s", account_id, side, instrument, stake, account.get("entry_timeframe"))
