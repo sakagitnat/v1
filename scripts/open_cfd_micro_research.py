@@ -37,7 +37,7 @@ STOP = 0.25
 TARGET = 0.50
 MULTIPLIER = 100
 CONTINUOUS_SECONDS = int(os.getenv("CFD_MICRO_CONTINUOUS_SECONDS", "0"))
-TICK_CYCLE_SECONDS = 55
+TICK_CYCLE_SECONDS = 1650
 MINUTE_CYCLE_SECONDS = 3300
 
 def _m1_signal(df):
@@ -78,8 +78,8 @@ async def _open(broker, symbol, side, strategy, account_id, timeframe, reason, e
 async def _quota_cycle(broker, timeframe, cycle_no):
     """DEMO-only forced research cycle. Kept explicitly separate from qualified signals."""
     is_tick = timeframe == "TICK"
-    strategy = "quota_ticks@v0" if is_tick else "quota_m1@v0"
-    account_id = "quota_ticks_forward" if is_tick else "quota_m1_forward"
+    strategy = "quota_30m@v0" if is_tick else "quota_h1@v0"
+    account_id = "quota_30m_forward" if is_tick else "quota_h1_forward"
     symbol = INSTRUMENTS[cycle_no % len(INSTRUMENTS)]
     if is_tick:
         data = await broker.get_ticks(symbol, 80)
@@ -102,7 +102,7 @@ async def _quota_cycle(broker, timeframe, cycle_no):
           "equity_before":100.0,"regime":"forced_quota_research","leg":"quota",
           "broker_managed_only":False,"entry_reason":"research quota; not strategy-qualified",
           "experimental":True,"forced_quota":True,"virtual_account_id":account_id,
-          "horizon":"seconds" if is_tick else "minute","entry_timeframe":timeframe,
+          "horizon":"30m" if is_tick else "h1","entry_timeframe":timeframe,
           "context_timeframes":[timeframe]}
     record_open_trade(cid, meta)
     # Give Deriv at least one price tick before attempting an explicit sell.
@@ -133,7 +133,7 @@ async def _quota_cycle(broker, timeframe, cycle_no):
 
 
 async def continuous_quota_loop():
-    """Run inside one Actions job; avoids pretending cron can schedule every minute."""
+    """Run inside one Actions job: 30-minute and hourly DEMO research quotas."""
     if settings.cfd_allow_live_trading:
         raise SystemExit("Refusing while CFD_ALLOW_LIVE_TRADING=true")
     broker=DerivBroker()
