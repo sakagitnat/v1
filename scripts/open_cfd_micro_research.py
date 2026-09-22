@@ -110,14 +110,27 @@ async def _quota_cycle(broker, timeframe, cycle_no):
     try:
         sold = await broker.close_position(int(cid))
         sell = sold.get("sell", {})
-        pnl = sell.get("profit")
-        pnl = None if pnl is None else float(pnl)
-        exit_price = sell.get("sell_price")
-        exit_price = None if exit_price is None else float(exit_price)
+        # Deriv's newer sell response may omit "profit". The sell_price is
+        # the actual cash returned on close; for a multiplier bought on a
+        # stake basis, realized P&L is sell_price - original stake.
+        # Never persist a closed quota trade with unknown P&L.
+        raw_profit = sell.get("profit")
+        raw_sell_price = sell.get("sell_price")
+        if raw_profit is not None:
+            pnl = float(raw_profit)
+        elif raw_sell_price is not None:
+            pnl = float(raw_sell_price) - STAKE
+        else:
+            raise RuntimeError(f"sell response missing both profit and sell_price: {sold!r}")
+        exit_price = None if raw_sell_price is None else float(raw_sell_price)
         pop_open_trade(int(cid))
-        if pnl is not None:
-            try: record_virtual_close(account_id, pnl)
-            except KeyError: pass
+        try:
+            record_virtual_close(account_id, pnl)
+        except KeyError:
+            # Quota accounts are intentionally separate forward ledgers.
+            # Seed them in virtual_accounts.py; unknown attribution is an
+            # error rather than silently dropping realized P&L.
+            raise RuntimeError(f"unknown quota virtual account: {account_id}")
         record_trade(TradeRecord(contract_id=int(cid),instrument=symbol,strategy=strategy,side=side,
             entry_time=opened.isoformat(),exit_time=datetime.now(timezone.utc).isoformat(),
             entry_price=price,stake=STAKE,risk_amount=STOP,exit_price=exit_price,pnl=pnl,
