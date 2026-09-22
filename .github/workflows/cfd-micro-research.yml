@@ -3,7 +3,7 @@ name: CFD Micro Research Demo
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "7,22,37,52 * * * 0-5"
+    - cron: "0 * * * 0-5"
   push:
     branches:
       - gpt/autonomous-demo-runner
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +35,7 @@ jobs:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
+          CFD_MICRO_CONTINUOUS_SECONDS: "3540"
         run: python scripts/open_cfd_micro_research.py
       - name: Persist research state
         if: always()
