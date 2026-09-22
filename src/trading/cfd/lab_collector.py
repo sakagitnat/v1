@@ -37,16 +37,21 @@ def _research_streams():
                 yield spec, tf
 
 
-def collect_lab_observations(broker, state, instruments):
-    """Collect forward-only lab observations and advance PAPER virtual accounts."""
-    ensure_virtual_accounts(state)
+async def collect_lab_observations(broker, instruments, run_id=None):
+    """Collect forward-only lab observations and advance PAPER virtual accounts.
+
+    Broker candle access is async. Keep run_id on every observation so forward
+    evidence can be attributed to the exact Actions run.
+    """
+    state = None
+    ensure_virtual_accounts()
     LAB_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     observations = []
 
     for spec, tf in _research_streams():
         for instrument in instruments:
             try:
-                candles = broker.get_candles(instrument, _GRANULARITY[tf], _COUNT[tf])
+                candles = await broker.get_candles(instrument, _GRANULARITY[tf], _COUNT[tf])
                 if not candles:
                     continue
                 df = pd.DataFrame(candles)
@@ -61,6 +66,7 @@ def collect_lab_observations(broker, state, instruments):
                 meanrev = MeanReversionStrategy().generate_signal(df)
                 obs = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "run_id": run_id,
                     "account": spec.account_id,
                     "tier": spec.execution_tier,
                     "strategy": spec.strategy_tag,
@@ -77,10 +83,11 @@ def collect_lab_observations(broker, state, instruments):
                 with LAB_LOG_PATH.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(obs, ensure_ascii=False) + "\n")
                 if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe:
-                    run_virtual_account_paper(state, spec, instrument, df, regime)
+                    run_virtual_account_paper(spec, instrument, df, regime, run_id=run_id)
             except Exception as exc:
                 obs = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "run_id": run_id,
                     "account": spec.account_id,
                     "timeframe": tf,
                     "instrument": instrument,
