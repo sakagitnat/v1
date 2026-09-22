@@ -1,4 +1,1 @@
-run-now 2026-09-21
-rerun-with-observation-log 2026-09-21
-sync-ledgers-and-continue 2026-09-21
-autonomous-schedule-verification 2026-09-21
+2026-09-22 continuous-tick-m1-forward-research demo-only
