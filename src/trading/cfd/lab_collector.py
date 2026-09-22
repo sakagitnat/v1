@@ -17,7 +17,7 @@ from trading.cfd.regime import classify_regime, classify_volatility
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.breakout import DonchianBreakoutStrategy
 from trading.cfd.mean_reversion import MeanReversionStrategy
-from trading.cfd.virtual_accounts import ensure_virtual_accounts, DEFAULT_VIRTUAL_ACCOUNTS
+from trading.cfd.virtual_accounts import ensure_virtual_accounts, DEFAULT_VIRTUAL_ACCOUNTS\nfrom trading.cfd.paper_trading import run_virtual_account_paper
 from trading.strategy.base import Action
 
 LAB_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_lab_observations.jsonl"
@@ -105,7 +105,7 @@ async def collect_lab_observations(broker, instruments: list[str], run_id: str |
                         "regime": classify_regime(bars),
                         "volatility": classify_volatility(bars),
                     }
-                    payload.update(_signal_payload(instrument, bars, account.get("strategy_tag")))
+                    payload.update(_signal_payload(instrument, bars, account.get("strategy_tag")))\n                    # PAPER accounts now consume the same genuine forward candle snapshot.\n                    # Single-timeframe accounts execute only on their entry TF; MULTI accounts\n                    # may maintain independent instrument positions while preserving account attribution.\n                    if account.get("execution_tier") == "PAPER" and (\n                        account.get("entry_timeframe") == observed_tf or account.get("entry_timeframe") == "MULTI"\n                    ):\n                        run_virtual_account_paper(\n                            account_id, instrument, bars, payload["regime"],\n                            _strategy_for_tag(account.get("strategy_tag")),\n                        )
                     fh.write(json.dumps(payload) + "\n")
                     written += 1
                 except Exception as exc:
