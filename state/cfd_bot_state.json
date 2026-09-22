@@ -863,6 +863,42 @@
       "closed_trades": 0,
       "wins": 0,
       "losses": 0
+    },
+    "quota_30m_forward": {
+      "account_id": "quota_30m_forward",
+      "label": "30-minute forced-quota forward research",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "quota_forward",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "TICK"
+      ],
+      "strategy_tag": "quota_30m@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "quota_h1_forward": {
+      "account_id": "quota_h1_forward",
+      "label": "Hourly forced-quota forward research",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "quota_forward",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M1"
+      ],
+      "strategy_tag": "quota_h1@v0",
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
     }
   }
 }
