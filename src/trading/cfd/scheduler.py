@@ -92,26 +92,13 @@ def _reserved_stake_for_open_ids(tracked_open: dict, open_ids: set[int]) -> floa
     return round(total, 10)
 
 
-def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], equity_now: float) -> list[TradeRecord]:
-    """Detects contracts this system was tracking as open that are no
-    longer open on Deriv's side -- closed by Deriv's own stop-loss/
-    take-profit (or a manual scripts/cfd_cli.py close-position) between
-    runs, rather than by this scheduler's own signal-exit/trailing-stop
-    logic below.
+def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], equity_now: float,
+                             contract_profits: Optional[dict[int, float]] = None) -> list[TradeRecord]:
+    """Attribute closed trades only from verified contract settlements.
 
-    Deriv's account balance only moves on a realized close or a new stake
-    being paid, never on the unrealized/floating P&L of a still-open
-    contract. So if exactly one tracked contract disappeared and nothing
-    else touched the balance since it was opened, equity_now minus that
-    trade's recorded equity_before is its exact realized P&L. With more
-    than one simultaneous disappearance there's no way to split one
-    combined balance change between them without an extra API call this
-    project doesn't make yet (see docs/ARCHITECTURE_AUDIT.md) -- those are
-    still logged, honestly, with pnl=None rather than a guessed split.
-    Two legs of one entry (see exit_manager.split_stake_for_partial_close)
-    disappearing in the same run is exactly this "more than one" case --
-    e.g. a "scalp" leg's Deriv-side take-profit firing the same hour a
-    "runner" leg's stop is hit externally would both land here unpriced.
+    A balance delta can contain other trades and cash movements, even if
+    only one locally tracked contract disappeared. Missing evidence stays
+    unknown; the runtime fetches all settlements before applying changes.
     """
     disappeared = {cid: meta for cid, meta in tracked_open.items() if int(cid) not in currently_open_ids}
     if not disappeared:
@@ -119,10 +106,8 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
 
     records = []
     for contract_id, meta in disappeared.items():
-        pnl = None
+        pnl = (contract_profits or {}).get(int(contract_id))
         equity_before = meta.get("equity_before")
-        if len(disappeared) == 1 and equity_before is not None:
-            pnl = round(equity_now - equity_before, 2)
         records.append(
             TradeRecord(
                 contract_id=int(contract_id),
@@ -468,7 +453,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         lab_rows = await collect_lab_observations(
             broker, settings.cfd_instruments, run_id=os.environ.get("GITHUB_RUN_ID")
         )
-        logger.info("Virtual-account lab collected %d forward observation row(s).", lab_rows)
+        logger.info("Virtual-account lab collected %d forward observation row(s).", len(lab_rows))
 
         # Smoothed Equity / High-Water-Mark + Automatic Drawdown-Tiered
         # Risk Reduction (docs/VISION.md's Revision 3 "Drawdown
@@ -571,7 +556,11 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # Reuse the broker-open set captured for equity reconstruction so
         # reconciliation and the equity snapshot describe the same instant.
         reconciled_ids: set[int] = set()
-        for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity):
+        contract_profits = {}
+        for cid in tracked_open:
+            if int(cid) not in currently_open_ids:
+                contract_profits[int(cid)] = await broker.settled_profit(int(cid))
+        for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity, contract_profits):
             record_trade(record)
             if record.pnl is not None and record.virtual_account_id:
                 record_virtual_close(record.virtual_account_id, record.pnl)
@@ -785,12 +774,12 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                         "%s: closing %s leg (contract %d, %s position) -- %s",
                         instrument, leg_tag or "untagged", contract_id, in_position, close_reason,
                     )
-                    pop_open_trade(contract_id)
-                    open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
                     equity_before = risk.equity
                     await broker.close_position(contract_id)
                     new_balance = await broker.account_equity()
                     remaining_ids = await broker.open_contract_ids()
+                    if contract_id in remaining_ids:
+                        raise RuntimeError("Close not confirmed; retaining tracked contract for reconciliation")
                     remaining_tracked = list_open_trades()
                     remaining_reserved = _reserved_stake_for_open_ids(remaining_tracked, remaining_ids)
                     new_equity = equity_for_account(
@@ -799,7 +788,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                         broker_baseline,
                         settings.cfd_virtual_starting_capital,
                     )
-                    pnl = round(new_equity - equity_before, 2)
+                    pnl = await broker.settled_profit(contract_id)
                     risk.register_close(pnl)
                     equity = new_equity
                     if meta:
@@ -836,6 +825,11 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                             "(opened before trade logging existed) -- pnl not logged to the trade database.",
                             instrument, contract_id,
                         )
+                    # Retain recovery metadata until broker confirmation and
+                    # local accounting finish. A timeout must never orphan a
+                    # position or release its risk budget for a new entry.
+                    pop_open_trade(contract_id)
+                    open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
 
                 if group_still_open:
                     occupied_tags.add(strategy_tag)

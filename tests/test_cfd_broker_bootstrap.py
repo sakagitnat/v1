@@ -72,3 +72,22 @@ def test_ambiguous_buy_is_never_retransmitted(broker):
     with pytest.raises(TimeoutError):
         asyncio.run(broker._request({"buy": "proposal-test", "price": 1}))
     assert broker._ws.send.await_count == 1
+
+
+def test_settlement_reads_profit_for_the_specific_closed_contract(broker):
+    broker._request = AsyncMock(return_value={"proposal_open_contract": {
+        "contract_id": 42, "currency": "USD", "is_sold": 1, "profit": "-1.25"}})
+    assert asyncio.run(broker.settled_profit(42)) == -1.25
+    broker._request.assert_awaited_once_with({"proposal_open_contract": 1, "contract_id": 42})
+
+
+@pytest.mark.parametrize("override", [
+    {"contract_id": 99}, {"is_sold": 0}, {"currency": "EUR"},
+    {"profit": None}, {"profit": "NaN"}, {"profit": "inf"}, {"profit": True},
+])
+def test_settlement_rejects_unconfirmed_or_invalid_data(broker, override):
+    data = {"contract_id": 42, "currency": "USD", "is_sold": 1, "profit": 1}
+    data.update(override)
+    broker._request = AsyncMock(return_value={"proposal_open_contract": data})
+    with pytest.raises(RuntimeError):
+        asyncio.run(broker.settled_profit(42))

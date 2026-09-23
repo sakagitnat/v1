@@ -44,8 +44,6 @@ jobs:
 
       - name: Mark recovery run started
         if: steps.health.outcome == 'failure'
-        env:
-          CFD_HEARTBEAT_OWNER: "CFD Trading Watchdog (Deriv)"
         run: python scripts/cfd_scheduler_heartbeat.py started
 
       - name: Run deterministic recovery evaluation
@@ -61,7 +59,6 @@ jobs:
         if: steps.health.outcome == 'failure' && always()
         env:
           RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
-          CFD_HEARTBEAT_OWNER: "CFD Trading Watchdog (Deriv)"
         run: |
           if [ "$RECOVERY_OUTCOME" = "success" ]; then
             python scripts/cfd_scheduler_heartbeat.py success
@@ -69,17 +66,31 @@ jobs:
             python scripts/cfd_scheduler_heartbeat.py failure
           fi
 
+      - name: Archive runtime state before publishing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfd-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            state/cfd_*.json
+            state/cfd_*.jsonl
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Persist recovered state and heartbeat
         if: steps.health.outcome == 'failure' && always()
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_decisions.jsonl             state/cfd_incidents.jsonl             state/cfd_scheduler_heartbeat.json; do
-            [ -f "$f" ] && git add "$f"
+          # Include all runtime ledgers and observations, not a partial list.
+          # This includes state/cfd_scheduler_heartbeat.json.
+          git add -u -- state
+          for f in state/cfd_*.json state/cfd_*.jsonl; do
+            if [ -f "$f" ]; then git add -- "$f"; fi
           done
           if ! git diff --cached --quiet; then
             git commit -m "Recover stale CFD scheduler runtime state"
-            git pull --rebase --autostash origin gpt/autonomous-demo-runner
+            git pull --rebase origin gpt/autonomous-demo-runner
             git push origin HEAD:gpt/autonomous-demo-runner
           fi
 
