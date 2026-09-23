@@ -62,6 +62,75 @@
         "M1",
         "TICK"
       ]
+    },
+    "14051102839": {
+      "instrument": "frxXAUUSD",
+      "strategy": "quota_30m@v0",
+      "side": "long",
+      "entry_time": "2026-09-23T04:00:19.338602+00:00",
+      "entry_price": 4343.68,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 100.0,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": false,
+      "entry_reason": "research quota; not strategy-qualified",
+      "experimental": true,
+      "forced_quota": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "30m",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "TICK"
+      ]
+    },
+    "14051112219": {
+      "instrument": "frxXAUUSD",
+      "strategy": "quota_h1@v0",
+      "side": "long",
+      "entry_time": "2026-09-23T04:00:28.383588+00:00",
+      "entry_price": 4344.0,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 100.0,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": false,
+      "entry_reason": "research quota; not strategy-qualified",
+      "experimental": true,
+      "forced_quota": true,
+      "virtual_account_id": "quota_h1_forward",
+      "horizon": "h1",
+      "entry_timeframe": "M1",
+      "context_timeframes": [
+        "M1"
+      ]
+    },
+    "14053108399": {
+      "instrument": "frxEURUSD",
+      "strategy": "quota_30m@v0",
+      "side": "long",
+      "entry_time": "2026-09-23T04:27:49.018894+00:00",
+      "entry_price": 1.14289,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 100.0,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": false,
+      "entry_reason": "research quota; not strategy-qualified",
+      "experimental": true,
+      "forced_quota": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "30m",
+      "entry_timeframe": "TICK",
+      "context_timeframes": [
+        "TICK"
+      ]
     }
   },
   "operating_mode": "normal",
