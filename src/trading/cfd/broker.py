@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 
@@ -101,16 +102,42 @@ class DerivBroker:
     def _auth_headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token}", "Deriv-App-ID": self._app_id}
 
-    async def connect(self) -> dict:
+    async def _bootstrap_request(self, method: str, path: str):
+        """Retry connection bootstrap only, NEVER buy/sell requests.
+
+        An OTP request may mint an unused credential after an ambiguous
+        response, but cannot place a trade. Each retry requests a fresh OTP.
+        Transport failures are bounded; auth, rate-limit and other HTTP
+        errors fail immediately. Do not expose response bodies or OTP URLs.
+        """
         import requests
+
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(
+                    requests.request, method, f"{OPTIONS_API_BASE}{path}",
+                    headers=self._auth_headers(), timeout=(5, 15),
+                    allow_redirects=False,
+                )
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                if attempt == 2:
+                    raise RuntimeError("Deriv bootstrap transport failed after 3 attempts") from None
+                await asyncio.sleep(2 ** attempt)
+                continue
+            if not 200 <= response.status_code < 300:
+                status = response.status_code
+                response.close()
+                raise RuntimeError(f"Deriv bootstrap HTTP {status}")
+            return response
+
+    async def connect(self) -> dict:
         import websockets
 
-        accounts_resp = requests.get(f"{OPTIONS_API_BASE}/accounts", headers=self._auth_headers())
-        if not accounts_resp.ok:
-            raise RuntimeError(
-                f"Deriv API error (GET /accounts): HTTP {accounts_resp.status_code} -- {accounts_resp.text}"
-            )
-        accounts = accounts_resp.json().get("data") or []
+        accounts_resp = await self._bootstrap_request("GET", "/accounts")
+        try:
+            accounts = accounts_resp.json().get("data") or []
+        finally:
+            accounts_resp.close()
         if not accounts:
             raise RuntimeError("Deriv API: no accounts found for this token (GET /accounts returned none)")
 
@@ -134,14 +161,13 @@ class DerivBroker:
             )
         account_id = account["account_id"]
 
-        otp_resp = requests.post(f"{OPTIONS_API_BASE}/accounts/{account_id}/otp", headers=self._auth_headers())
-        if not otp_resp.ok:
-            raise RuntimeError(
-                f"Deriv API error (POST /accounts/{account_id}/otp): HTTP {otp_resp.status_code} -- {otp_resp.text}"
-            )
-        ws_url = otp_resp.json()["data"]["url"]
+        otp_resp = await self._bootstrap_request("POST", f"/accounts/{account_id}/otp")
+        try:
+            ws_url = otp_resp.json()["data"]["url"]
+        finally:
+            otp_resp.close()
 
-        self._ws = await websockets.connect(ws_url)
+        self._ws = await websockets.connect(ws_url, open_timeout=15, close_timeout=5)
         return account
 
     async def close(self) -> None:
