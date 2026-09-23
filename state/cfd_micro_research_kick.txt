@@ -1,1 +1,1 @@
-2026-09-22 replace-stale-runner-30m-h1-demo-only
+2026-09-23T03:59:23Z validate quota 30m/h1 pnl ledger after capture and persistence fixes
