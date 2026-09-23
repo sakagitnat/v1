@@ -1,5 +1,7 @@
 import copy
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -37,7 +39,18 @@ def load_state() -> dict:
 
 def _write_state(state: dict) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_PATH.write_text(json.dumps(state, indent=2) + "\n")
+    # Atomic local replacement: an interrupted write leaves the old file intact.
+    payload = json.dumps(state, indent=2, allow_nan=False) + "\n"
+    fd, name = tempfile.mkstemp(prefix=".cfd-state-", dir=_STATE_PATH.parent)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(name, _STATE_PATH)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def set_paused(paused: bool, reason: str = "") -> None:
@@ -257,3 +270,4 @@ def include_instrument(instrument: str) -> None:
     state = load_state()
     state.setdefault("excluded_instruments", {}).pop(instrument, None)
     _write_state(state)
+

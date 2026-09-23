@@ -51,6 +51,8 @@ DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("highrisk_ticks", "High-risk tick growth experiment", 100.0, ACTIVE_DEMO, "highrisk", "TICK", ("M5", "M1", "TICK"), "highrisk_ticks@v0"),
     VirtualAccountSpec("quota_30m_forward", "30-minute forced-quota forward research", 100.0, ACTIVE_DEMO, "quota_forward", "TICK", ("TICK",), "quota_30m@v0"),
     VirtualAccountSpec("quota_h1_forward", "Hourly forced-quota forward research", 100.0, ACTIVE_DEMO, "quota_forward", "M1", ("M1",), "quota_h1@v0"),
+    VirtualAccountSpec("quota_h4_forward", "Four-hour quota execution research", 100.0, ACTIVE_DEMO, "quota_forward", "H4", ("H4",), "quota_h4_forward@execution_v1"),
+    VirtualAccountSpec("quota_d1_forward", "Daily quota execution research", 100.0, ACTIVE_DEMO, "quota_forward", "D1", ("D1",), "quota_d1_forward@execution_v1"),
     # Phase-1 controlled experiment expansion. Most new accounts are PAPER/SHADOW
     # so they collect attributable counterfactual evidence without multiplying broker exposure.
     VirtualAccountSpec("iso_trend_h1", "Isolated trend H1", 100.0, PAPER, "isolated", "H1", ("H4","H1"), "ema_crossover@v1"),

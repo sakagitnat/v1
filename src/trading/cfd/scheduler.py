@@ -7,6 +7,7 @@ import pandas as pd
 
 from trading.cfd.auto_mode import choose_autonomous_mode
 from trading.cfd.broker import DerivBroker
+from trading.cfd.quota import commit_close as commit_quota_close
 from trading.cfd.decision_log import record_decision
 from trading.cfd.incident_log import record_incident
 from trading.cfd.lab_collector import collect_lab_observations
@@ -561,6 +562,11 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             if int(cid) not in currently_open_ids:
                 contract_profits[int(cid)] = await broker.settled_profit(int(cid))
         for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity, contract_profits):
+            meta = tracked_open[str(record.contract_id)]
+            if "quota_window" in meta:
+                commit_quota_close(record, meta["quota_window"])
+                reconciled_ids.add(record.contract_id)
+                continue
             record_trade(record)
             if record.pnl is not None and record.virtual_account_id:
                 record_virtual_close(record.virtual_account_id, record.pnl)
@@ -603,6 +609,13 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 leg_meta.get("instrument", ""), contract_id,
             )
         for pending_instrument in pending_entries:
+            pending = pending_entries[pending_instrument]
+            if pending.get("quota_intent"):
+                # An absent position may already have closed at the broker.
+                # Do not erase an ambiguous quota buy without attribution.
+                if not any(m.get("instrument") == pending_instrument for _, m in adoptions):
+                    exclude_instrument(pending_instrument, "unresolved quota buy intent")
+                    continue
             clear_pending_entry(pending_instrument)
         excluded = dict(state.get("excluded_instruments") or {})
         for f in foreign:

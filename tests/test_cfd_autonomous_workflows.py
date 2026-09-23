@@ -40,3 +40,10 @@ def test_runtime_ref_is_explicit_and_same_for_both_workflows():
     assert needle in WATCHDOG
     assert "ref: gpt/autonomous-demo-runner" in TRADING
     assert "ref: gpt/autonomous-demo-runner" in WATCHDOG
+
+
+def test_main_runtime_runs_quota_cycle_after_scheduler_and_persists_events():
+    assert "Run four-horizon DEMO quota cycle" in TRADING
+    assert "run: python scripts/run_cfd_quota.py" in TRADING
+    assert "QUOTA_OUTCOME" in TRADING
+    assert "state/cfd_quota_events.jsonl" in TRADING
