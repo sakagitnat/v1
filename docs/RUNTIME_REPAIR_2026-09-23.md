@@ -37,3 +37,17 @@ writers, four-horizon quota execution, realistic simulation and migration.
 Do not call this the completed rebuild. Contract settlement failure deliberately
 retains recovery metadata and aborts this scheduler evaluation. There is no
 claim that a direct Claude session has read this repository handoff.
+
+## Verified deployment outcome
+PR #15 merged runtime fixes; PR #16 merged main scheduler workflows.
+Run https://github.com/sakagitnat/v1/actions/runs/35887954639 completed SUCCESS.
+Job 107272855207: scheduler, state archive and state publication all succeeded.
+Heartbeat saved at 2026-09-23T16:20:08Z (23:20:08 Asia/Bangkok).
+Runtime state commit: 753c439 (324 new forward observation rows logged).
+Latest repository state still tracks 1 open contract and 0 pending entries;
+this count is from persisted state, not an independently queried broker snapshot.
+quota_30m_forward and quota_h1_forward each still show 0 closed trades.
+A PAPER close is not a broker-demo fill. No new complete broker trade lifecycle
+has been verified during this repair, and this run does not certify 24/7 uptime.
+No host/service deployment manifest was found in the inspected runtime tree;
+continuous hosting access must be established for the requested 24/7 rebuild.
