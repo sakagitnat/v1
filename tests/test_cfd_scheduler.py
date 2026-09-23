@@ -21,13 +21,13 @@ def test_no_disappeared_contracts_returns_nothing():
     assert _reconcile_closed_trades(tracked, currently_open_ids={1}, equity_now=100.0) == []
 
 
-def test_single_disappeared_contract_gets_exact_pnl():
+def test_single_disappeared_contract_does_not_guess_from_balance():
     tracked = {"1": _meta(equity_before=100.0)}
     records = _reconcile_closed_trades(tracked, currently_open_ids=set(), equity_now=112.0)
     assert len(records) == 1
     assert records[0].contract_id == 1
-    assert records[0].pnl == 12.0
-    assert records[0].equity_after == 112.0
+    assert records[0].pnl is None
+    assert records[0].equity_after is None
     assert "externally" in records[0].exit_reason
 
 
@@ -37,6 +37,12 @@ def test_multiple_simultaneous_disappearances_are_unattributed():
     assert len(records) == 2
     assert all(r.pnl is None for r in records)
     assert all(r.equity_after is None for r in records)
+
+
+def test_multiple_closes_use_individual_contract_results_not_shared_balance():
+    tracked = {"1": _meta(), "2": _meta()}
+    records = _reconcile_closed_trades(tracked, set(), 9999, {1: 3.5, 2: -1.25})
+    assert {r.contract_id: r.pnl for r in records} == {1: 3.5, 2: -1.25}
 
 
 def test_only_disappeared_contracts_are_included():

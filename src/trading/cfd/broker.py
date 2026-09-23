@@ -1,6 +1,7 @@
 import asyncio
 import itertools
 import json
+import math
 
 import pandas as pd
 
@@ -326,6 +327,31 @@ class DerivBroker:
 
     async def close_position(self, contract_id: int) -> dict:
         return await self._request({"sell": contract_id, "price": 0})
+
+    async def settled_profit(self, contract_id: int) -> float:
+        """Read contract-level realized profit; never infer it from balance.
+
+        Fail closed if settlement is not yet visible or the response cannot
+        be attributed to this USD contract. The caller retains metadata.
+        """
+        response = await asyncio.wait_for(
+            self._request({"proposal_open_contract": 1, "contract_id": contract_id}),
+            timeout=20,
+        )
+        data = response.get("proposal_open_contract") or {}
+        if (str(data.get("contract_id")) != str(contract_id)
+                or data.get("is_sold") not in (1, True, "1")
+                or data.get("currency") != "USD"):
+            raise RuntimeError("Contract settlement not confirmed")
+        try:
+            if isinstance(data.get("profit"), bool):
+                raise ValueError
+            profit = float(data["profit"])
+        except (KeyError, ValueError, TypeError):
+            raise RuntimeError("Contract settlement profit is missing or invalid") from None
+        if not math.isfinite(profit):
+            raise RuntimeError("Contract settlement profit is not finite")
+        return round(profit, 2)
 
     async def list_active_symbols(self) -> list[dict]:
         """Returns Deriv's own list of tradable symbols -- used to
