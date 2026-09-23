@@ -40,6 +40,25 @@ def _append(obs):
         f.write(json.dumps(obs, ensure_ascii=False) + "\n")
 
 
+def _latest_signal(strategy, instrument, bars):
+    """Evaluate a strategy through its actual prepare/signal_for_row contract."""
+    prepared = strategy.prepare(bars)
+    if len(prepared) < 2:
+        return None
+    return strategy.signal_for_row(instrument, prepared.iloc[-1], prepared.iloc[-2], None)
+
+
+def _strategy_for_tag(strategy_tag):
+    """Use the strategy family encoded in the virtual-account attribution."""
+    tag = (strategy_tag or "").lower()
+    if "breakout" in tag:
+        return DonchianBreakoutStrategy()
+    if "meanrev" in tag or "mean_reversion" in tag:
+        return MeanReversionStrategy()
+    # Trend/control variants currently use the validated EMA implementation.
+    return EmaCrossoverStrategy()
+
+
 async def collect_lab_observations(broker, instruments, run_id=None):
     """Collect forward observations while bounding broker history requests.
 
@@ -80,22 +99,22 @@ async def collect_lab_observations(broker, instruments, run_id=None):
                     continue
                 regime = classify_regime(df)
                 volatility = classify_volatility(df)
-                signal = EmaCrossoverStrategy().generate_signal(df)
-                breakout = DonchianBreakoutStrategy().generate_signal(df)
-                meanrev = MeanReversionStrategy().generate_signal(df)
+                signal = _latest_signal(EmaCrossoverStrategy(), instrument, df)
+                breakout = _latest_signal(DonchianBreakoutStrategy(), instrument, df)
+                meanrev = _latest_signal(MeanReversionStrategy(), instrument, df)
                 obs = {
                     "timestamp": datetime.now(timezone.utc).isoformat(), "run_id": run_id,
                     "account": spec.account_id, "tier": spec.execution_tier,
                     "strategy": spec.strategy_tag, "timeframe": tf, "instrument": instrument,
                     "regime": regime, "volatility": volatility, "close": float(close.iloc[-1]),
-                    "ema_action": signal.action.value if hasattr(signal.action, "value") else str(signal.action),
-                    "breakout_action": breakout.action.value if hasattr(breakout.action, "value") else str(breakout.action),
-                    "meanrev_action": meanrev.action.value if hasattr(meanrev.action, "value") else str(meanrev.action),
+                    "ema_action": (signal.action.value if hasattr(signal.action, "value") else str(signal.action)) if signal else "hold",
+                    "breakout_action": (breakout.action.value if hasattr(breakout.action, "value") else str(breakout.action)) if breakout else "hold",
+                    "meanrev_action": (meanrev.action.value if hasattr(meanrev.action, "value") else str(meanrev.action)) if meanrev else "hold",
                 }
                 observations.append(obs)
                 _append(obs)
                 if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe:
-                    run_virtual_account_paper(spec.account_id, instrument, df, regime, EmaCrossoverStrategy())
+                    run_virtual_account_paper(spec.account_id, instrument, df, regime, _strategy_for_tag(spec.strategy_tag))
             except Exception as exc:
                 obs = {"timestamp": datetime.now(timezone.utc).isoformat(), "run_id": run_id,
                        "account": spec.account_id, "timeframe": tf, "instrument": instrument,
