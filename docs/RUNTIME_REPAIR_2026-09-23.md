@@ -51,3 +51,17 @@ A PAPER close is not a broker-demo fill. No new complete broker trade lifecycle
 has been verified during this repair, and this run does not certify 24/7 uptime.
 No host/service deployment manifest was found in the inspected runtime tree;
 continuous hosting access must be established for the requested 24/7 rebuild.
+
+## Verified four-horizon quota run
+Run https://github.com/sakagitnat/v1/actions/runs/35890858855 completed SUCCESS.
+The main scheduler and the quota runner both completed, runtime state was archived,
+and publication succeeded. Quota events recorded eight lifecycle events:
+- quota_30m_forward: contract 14125430179, frxEURUSD, P&L -$0.02.
+- quota_h1_forward: contract 14125447779, frxXAUUSD, P&L +$0.01.
+- quota_h4_forward: contract 14125464299, frxGBPUSD, P&L -$0.03.
+- quota_d1_forward: contract 14125479019, frxUSDJPY, P&L -$0.03.
+All four were demo orders closed by the bot and have contract-level settlement evidence.
+The four results prove execution and accounting paths, not strategy profitability;
+forced quota trades remain excluded from qualified strategy performance.
+The persisted state has no quota open trades or pending quota intents after the run.
+The regular strategy scheduler still has one tracked open contract to manage.
