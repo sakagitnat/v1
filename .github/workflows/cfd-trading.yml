@@ -58,13 +58,23 @@ jobs:
           CFD_ALLOW_LIVE_TRADING: "false"
         run: python scripts/run_cfd_trading.py
 
+      - name: Run four-horizon DEMO quota cycle
+        id: quota
+        if: steps.trade.outcome == 'success'
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/run_cfd_quota.py
+
       - name: Mark scheduler completion
         if: always()
         env:
           DEPS_OUTCOME: ${{ steps.deps.outcome }}
           TRADE_OUTCOME: ${{ steps.trade.outcome }}
+          QUOTA_OUTCOME: ${{ steps.quota.outcome }}
         run: |
-          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ]; then
+          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ] && { [ "$QUOTA_OUTCOME" = "success" ] || [ "$QUOTA_OUTCOME" = "skipped" ]; }; then
             python3 scripts/cfd_scheduler_heartbeat.py success
           else
             python3 scripts/cfd_scheduler_heartbeat.py failure
@@ -81,6 +91,7 @@ jobs:
           path: |
             state/cfd_*.json
             state/cfd_*.jsonl
+            state/cfd_quota_events.jsonl
           retention-days: 14
           if-no-files-found: warn
 
