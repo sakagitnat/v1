@@ -5,6 +5,9 @@ name: CFD Trading (Deriv)
 # The code/state source of truth for this handoff is pinned explicitly.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [.github/workflows/cfd-trading.yml]
   schedule:
     # Sunday open: XAUUSD published open is 22:10 GMT.
     - cron: "15,30,45 22 * * 0"
@@ -70,13 +73,27 @@ jobs:
       # IMPORTANT: persist local state even when the Python scheduler fails.
       # set_pending_entry() writes before broker submission; skipping this
       # commit on failure would throw away recovery metadata with the runner.
+      - name: Archive runtime state before publishing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfd-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            state/cfd_*.json
+            state/cfd_*.jsonl
+          retention-days: 14
+          if-no-files-found: warn
+
       - name: Persist scheduler state and heartbeat
         if: always()
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in             state/cfd_bot_state.json             state/cfd_trades.jsonl             state/cfd_strategy_registry.json             state/cfd_paper_trades.jsonl             state/cfd_decisions.jsonl             state/cfd_incidents.jsonl             state/cfd_scheduler_heartbeat.json; do
-            [ -f "$f" ] && git add "$f"
+          # Include all runtime ledgers and observations, not a partial list.
+          # This includes state/cfd_scheduler_heartbeat.json.
+          git add -u -- state
+          for f in state/cfd_*.json state/cfd_*.jsonl; do
+            if [ -f "$f" ]; then git add -- "$f"; fi
           done
           if ! git diff --cached --quiet; then
             git commit -m "Update CFD runtime state from scheduled run"
