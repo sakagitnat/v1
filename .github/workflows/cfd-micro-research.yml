@@ -47,6 +47,6 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m "Persist M1/tick demo research state"
-            git pull --rebase origin gpt/autonomous-demo-runner
+            git pull --rebase --autostash origin gpt/autonomous-demo-runner
             git push origin HEAD:gpt/autonomous-demo-runner
           fi
