@@ -3,7 +3,6 @@ name: CFD Trading (Deriv)
 # Autonomous DEMO runner. The schedule follows the conservative XAUUSD
 # trading window in UTC/GMT and stays out of the published daily break.
 # The code/state source of truth for this handoff is pinned explicitly.
-# Runtime quota executor merged at 9435aec; this main-workflow push validates it.
 on:
   workflow_dispatch: {}
   push:
@@ -59,13 +58,23 @@ jobs:
           CFD_ALLOW_LIVE_TRADING: "false"
         run: python scripts/run_cfd_trading.py
 
+      - name: Run four-horizon DEMO quota cycle
+        id: quota
+        if: steps.trade.outcome == 'success'
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/run_cfd_quota.py
+
       - name: Mark scheduler completion
         if: always()
         env:
           DEPS_OUTCOME: ${{ steps.deps.outcome }}
           TRADE_OUTCOME: ${{ steps.trade.outcome }}
+          QUOTA_OUTCOME: ${{ steps.quota.outcome }}
         run: |
-          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ]; then
+          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ] && { [ "$QUOTA_OUTCOME" = "success" ] || [ "$QUOTA_OUTCOME" = "skipped" ]; }; then
             python3 scripts/cfd_scheduler_heartbeat.py success
           else
             python3 scripts/cfd_scheduler_heartbeat.py failure
@@ -82,6 +91,7 @@ jobs:
           path: |
             state/cfd_*.json
             state/cfd_*.jsonl
+            state/cfd_quota_events.jsonl
           retention-days: 14
           if-no-files-found: warn
 
