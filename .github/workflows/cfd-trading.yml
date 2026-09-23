@@ -98,7 +98,9 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m "Update CFD runtime state from scheduled run"
-            git pull --rebase origin gpt/autonomous-demo-runner
+            # Runtime/research files not owned by this workflow may also be dirty.
+            # Rebase with autostash so those changes cannot block heartbeat persistence.
+            git pull --rebase --autostash origin gpt/autonomous-demo-runner
             git push origin HEAD:gpt/autonomous-demo-runner
           else
             echo "No runtime state changes to commit."
