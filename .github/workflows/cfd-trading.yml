@@ -3,6 +3,7 @@ name: CFD Trading (Deriv)
 # Autonomous DEMO runner. The schedule follows the conservative XAUUSD
 # trading window in UTC/GMT and stays out of the published daily break.
 # The code/state source of truth for this handoff is pinned explicitly.
+# Runtime quota executor merged at 9435aec; this main-workflow push validates it.
 on:
   workflow_dispatch: {}
   push:
