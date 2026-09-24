@@ -343,6 +343,26 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_breakout_m5|frxGBPUSD": {
+      "contract_id": -81,
+      "side": "short",
+      "entry_price": 1.32138,
+      "stop_price": 1.322628463066523,
+      "target_price": 1.3193824590935632,
+      "stake": 54.27,
+      "multiplier": 20,
+      "risk_amount": 1.03,
+      "entry_time": "2026-09-24T14:32:04.218373+00:00",
+      "equity_before": 102.55,
+      "regime": "ranging",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -355,14 +375,14 @@
     "virtual:iso_trend_m15": 100.24,
     "virtual:iso_trend_m5": 101.99
   },
-  "paper_trade_counter": 80,
+  "paper_trade_counter": 81,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 119.82999999999993,
+  "smoothed_equity": 119.84200000000018,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -1163,15 +1183,15 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "M30 experimental timeframe quota",
+      "label": "30-minute forced-quota forward research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "M30",
+      "entry_timeframe": "TICK",
       "context_timeframes": [
-        "M30"
+        "TICK"
       ],
-      "strategy_tag": "quota_30m_forward@timeframe_v2",
+      "strategy_tag": "quota_30m@v0",
       "equity": 99.0,
       "high_water_mark": 100.0,
       "realized_pnl": -1.0,
