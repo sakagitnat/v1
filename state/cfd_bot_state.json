@@ -403,6 +403,26 @@
         "H4",
         "H1"
       ]
+    },
+    "virtual:iso_breakout_m15|frxEURUSD": {
+      "contract_id": -66,
+      "side": "short",
+      "entry_price": 1.13715,
+      "stop_price": 1.1385913612771228,
+      "target_price": 1.1348438219566037,
+      "stake": 40.32,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-09-24T10:13:35.400097+00:00",
+      "equity_before": 102.22,
+      "regime": "ranging",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
     }
   },
   "paper_equity": {
@@ -415,7 +435,7 @@
     "virtual:iso_trend_m15": 98.28,
     "virtual:iso_trend_m5": 101.99
   },
-  "paper_trade_counter": 65,
+  "paper_trade_counter": 66,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
