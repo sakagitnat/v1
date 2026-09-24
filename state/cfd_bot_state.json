@@ -1224,15 +1224,15 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "M30 experimental timeframe quota",
+      "label": "30-minute forced-quota forward research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "M30",
+      "entry_timeframe": "TICK",
       "context_timeframes": [
-        "M30"
+        "TICK"
       ],
-      "strategy_tag": "quota_30m_forward@timeframe_v2",
+      "strategy_tag": "quota_30m@v0",
       "equity": 99.25,
       "high_water_mark": 100.0,
       "realized_pnl": -0.75,
