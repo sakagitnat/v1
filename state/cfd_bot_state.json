@@ -6,35 +6,31 @@
   "excluded_instruments": {},
   "broker_baseline": 10000,
   "open_trades": {
-    "13803503519": {
-      "instrument": "frxUSDJPY",
-      "strategy": "starter_intraday@v0",
+    "14189898999": {
+      "instrument": "frxEURUSD",
+      "strategy": "quota_30m_forward@timeframe_v2",
       "side": "long",
-      "entry_time": "2026-09-21T05:55:45.568492+00:00",
-      "entry_price": 157.053,
-      "stake": 1,
-      "risk_amount": 0.5,
+      "entry_time": "2026-09-24T04:46:55.595430+00:00",
+      "entry_price": 1.13803,
+      "stake": 1.0,
+      "risk_amount": 0.25,
       "multiplier": 100,
-      "thesis_key": "frxUSDJPY:long:starter_intraday",
-      "equity_before": 100,
-      "regime": "short_horizon_probe",
-      "leg": "scalp",
+      "equity_before": 99.71,
+      "regime": "forced_quota_research",
+      "leg": "quota",
       "broker_managed_only": true,
-      "entry_reason": "experimental majority MTF vote H1/M15/M5=[1, 1, 1], M5 momentum confirms",
-      "timeframes": [
-        "H1",
-        "M15",
-        "M5"
-      ],
+      "forced_quota": true,
       "experimental": true,
-      "virtual_account_id": "starter_m5_probe",
-      "horizon": "intraday",
-      "entry_timeframe": "M5",
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "H1",
-        "M15",
-        "M5"
-      ]
+        "M30"
+      ],
+      "quota_window": 994569,
+      "close_at": 1790225880,
+      "entry_reason": "experimental direction of last two completed timeframe candles",
+      "buy_price": 1.0
     }
   },
   "operating_mode": "normal",
@@ -155,7 +151,7 @@
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 120.94373763256985,
+  "smoothed_equity": 121.12561634279868,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -250,12 +246,13 @@
         "M5"
       ],
       "strategy_tag": "starter_intraday@v0",
-      "equity": 100,
-      "high_water_mark": 100,
-      "realized_pnl": 0,
-      "closed_trades": 0,
-      "wins": 0,
-      "losses": 0
+      "equity": 100.52,
+      "high_water_mark": 100.52,
+      "realized_pnl": 0.52,
+      "closed_trades": 1,
+      "wins": 1,
+      "losses": 0,
+      "drawdown_from_start_pct": 0.0
     },
     "scalp_m1": {
       "account_id": "scalp_m1",
@@ -1488,5 +1485,11 @@
       "contract_id": 14171864639,
       "closed_at": "2026-09-24T00:29:24.632997+00:00"
     }
+  },
+  "quota_evaluation_windows": {
+    "quota_30m_forward": 994569,
+    "quota_h1_forward": 497284,
+    "quota_h4_forward": 124321,
+    "quota_d1_forward": 20720
   }
 }
