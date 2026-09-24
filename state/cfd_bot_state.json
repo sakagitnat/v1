@@ -6,32 +6,6 @@
   "excluded_instruments": {},
   "broker_baseline": 10000,
   "open_trades": {
-    "14191048999": {
-      "instrument": "frxGBPUSD",
-      "strategy": "quota_30m_forward@timeframe_v2",
-      "side": "long",
-      "entry_time": "2026-09-24T05:00:54.818486+00:00",
-      "entry_price": 1.32418,
-      "stake": 1.0,
-      "risk_amount": 0.25,
-      "multiplier": 100,
-      "equity_before": 99.65,
-      "regime": "forced_quota_research",
-      "leg": "quota",
-      "broker_managed_only": true,
-      "forced_quota": true,
-      "experimental": true,
-      "virtual_account_id": "quota_30m_forward",
-      "horizon": "1800s_window",
-      "entry_timeframe": "M30",
-      "context_timeframes": [
-        "M30"
-      ],
-      "quota_window": 994570,
-      "close_at": 1790227680,
-      "entry_reason": "experimental direction of last two completed timeframe candles",
-      "buy_price": 1.0
-    },
     "14191049799": {
       "instrument": "frxEURUSD",
       "strategy": "quota_h1_forward@timeframe_v2",
@@ -987,12 +961,12 @@
         "TICK"
       ],
       "strategy_tag": "quota_30m@v0",
-      "equity": 99.65,
+      "equity": 99.57,
       "high_water_mark": 100.0,
-      "realized_pnl": -0.35,
-      "closed_trades": 6,
+      "realized_pnl": -0.43,
+      "closed_trades": 7,
       "wins": 0,
-      "losses": 6,
+      "losses": 7,
       "quota_daily": {
         "date": "2026-09-24",
         "start_equity": 99.8
@@ -1515,13 +1489,38 @@
       "context_timeframes": [
         "M30"
       ]
+    },
+    "14191048999": {
+      "contract_id": 14191048999,
+      "instrument": "frxGBPUSD",
+      "strategy": "quota_30m_forward@timeframe_v2",
+      "side": "long",
+      "entry_time": "2026-09-24T05:00:54.818486+00:00",
+      "exit_time": "2026-09-24T05:28:54.826409+00:00",
+      "entry_price": 1.32418,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": -0.08,
+      "equity_before": 99.65,
+      "equity_after": 99.57,
+      "exit_reason": "quota_window_deadline",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M30"
+      ]
     }
   },
   "quota_windows": {
     "quota_30m_forward": {
-      "window_id": 994569,
-      "contract_id": 14189898999,
-      "closed_at": "2026-09-24T04:58:54.885721+00:00"
+      "window_id": 994570,
+      "contract_id": 14191048999,
+      "closed_at": "2026-09-24T05:28:54.826409+00:00"
     },
     "quota_h1_forward": {
       "window_id": 497284,
