@@ -49,14 +49,24 @@ def _latest_signal(strategy, instrument, bars):
 
 
 def _strategy_for_tag(strategy_tag):
-    """Use the strategy family encoded in the virtual-account attribution."""
+    """Use the strategy family encoded in the virtual-account attribution.
+
+    Returns None when no real, distinct strategy implementation exists yet
+    for this tag (e.g. "momentum_research@v0", "hybrid_balanced@v0",
+    "main_control@v0" -- conceptual labels with no algorithm behind them).
+    This used to fall through to EmaCrossoverStrategy for every unrecognized
+    tag, which silently ran the same EMA logic under >12 different account
+    labels and contaminated the isolated strategy-family comparison this lab
+    exists to produce. The caller must skip recording a PAPER trade rather
+    than substitute a different strategy when this returns None."""
     tag = (strategy_tag or "").lower()
     if "breakout" in tag:
         return DonchianBreakoutStrategy()
     if "meanrev" in tag or "mean_reversion" in tag:
         return MeanReversionStrategy()
-    # Trend/control variants currently use the validated EMA implementation.
-    return EmaCrossoverStrategy()
+    if "ema_crossover" in tag or tag.startswith("family_trend") or tag.startswith("hr20_trend"):
+        return EmaCrossoverStrategy()
+    return None
 
 
 async def collect_lab_observations(broker, instruments, run_id=None):
@@ -114,7 +124,9 @@ async def collect_lab_observations(broker, instruments, run_id=None):
                 observations.append(obs)
                 _append(obs)
                 if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe:
-                    run_virtual_account_paper(spec.account_id, instrument, df, regime, _strategy_for_tag(spec.strategy_tag))
+                    strategy = _strategy_for_tag(spec.strategy_tag)
+                    if strategy is not None:
+                        run_virtual_account_paper(spec.account_id, instrument, df, regime, strategy)
             except Exception as exc:
                 obs = {"timestamp": datetime.now(timezone.utc).isoformat(), "run_id": run_id,
                        "account": spec.account_id, "timeframe": tf, "instrument": instrument,
