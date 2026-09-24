@@ -51,38 +51,50 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(quota.asyncio, "sleep", AsyncMock())
     monkeypatch.setattr(settings, "cfd_allow_live_trading", False)
     monkeypatch.setattr(settings, "cfd_instruments", ["frxXAUUSD"])
+    monkeypatch.setattr(settings, "cfd_max_open_positions", 5)
     state.set_broker_baseline(10000)
     broker = Broker()
     monkeypatch.setattr(quota, "DerivBroker", lambda: broker)
     return broker
 
 
-def test_all_four_windows_close_and_same_window_rerun_does_not_buy(setup):
+def expire_positions():
+    for cid, meta in state.list_open_trades().items():
+        meta["close_at"] = 1
+        state.record_open_trade(int(cid), meta)
+
+
+def test_timeframe_positions_survive_cycles_then_settle_once(setup):
     result = asyncio.run(quota.run_quotas())
-    assert [r["outcome"] for r in result] == ["CLOSED"] * 4
+    assert [r["outcome"] for r in result] == ["OPENED"] * 4
+    assert {m["entry_timeframe"] for m in state.list_open_trades().values()} == {"M30", "H1", "H4", "D1"}
+    assert all(r["outcome"] == "HOLDING" for r in asyncio.run(quota.run_quotas()))
     assert setup.buys == 4
+    expire_positions()
+    asyncio.run(quota.run_quotas())
     assert not setup.opened
-    s = state.load_state()
-    assert not s["open_trades"] and not s["pending_entries"]
-    assert len(s["quota_settlements"]) == 4
-    assert all(s["virtual_accounts"][aid]["equity"] == 99.99 for aid in quota.SPECS)
     assert len(trade_log.load_trades()) == 4
+    assert all(state.load_state()["virtual_accounts"][aid]["equity"] == 99.99 for aid in quota.SPECS)
     assert all(r["outcome"] == "ALREADY_COMPLETED" for r in asyncio.run(quota.run_quotas()))
     assert setup.buys == 4
 
 
 def test_sell_timeout_preserves_position_and_recovery_does_not_rebuy(setup):
+    asyncio.run(quota.run_quotas())
+    expire_positions()
     setup.fail_sell = True
     with pytest.raises(TimeoutError):
         asyncio.run(quota.run_quotas())
-    assert setup.buys == 1 and "1" in state.list_open_trades()
+    assert "1" in state.list_open_trades()
     setup.fail_sell = False
     asyncio.run(quota.run_quotas())
-    assert setup.buys == 4  # recovery closes old first account, adds only three
+    assert setup.buys == 4
     assert len(trade_log.load_trades()) == 4
 
 
 def test_outbox_replay_does_not_double_credit_after_log_failure(setup, monkeypatch):
+    asyncio.run(quota.run_quotas())
+    expire_positions()
     original = quota.record_trade
     monkeypatch.setattr(quota, "record_trade", lambda _: (_ for _ in ()).throw(OSError("disk")))
     with pytest.raises(OSError):
@@ -99,6 +111,24 @@ def test_pending_buy_blocks_new_orders(setup):
     state.set_pending_entry("frxXAUUSD", {"quota_intent": True, "legs": []})
     assert all(r["outcome"] == "RECOVERY_OR_PAUSE_BLOCKED" for r in asyncio.run(quota.run_quotas()))
     assert setup.buys == 0
+
+
+def test_thirty_minute_deadline_closes_without_closing_longer_horizons(setup, monkeypatch):
+    asyncio.run(quota.run_quotas())
+    monkeypatch.setattr(quota, "now", lambda: datetime(2026, 9, 23, 12, 28, tzinfo=timezone.utc))
+    result = asyncio.run(quota.run_quotas())
+    assert result[0]["outcome"] == "CLOSED"
+    assert result[0]["account"] == "quota_30m_forward"
+    assert len(setup.opened) == 3
+    assert setup.buys == 4
+
+
+def test_broker_stop_is_accounted_before_time_deadline(setup):
+    asyncio.run(quota.run_quotas())
+    setup.opened.remove(1)
+    asyncio.run(quota.run_quotas())
+    assert setup.buys == 4
+    assert state.load_state()["virtual_accounts"]["quota_30m_forward"]["closed_trades"] == 1
 
 
 def test_foreign_exposure_blocks_orders(setup):

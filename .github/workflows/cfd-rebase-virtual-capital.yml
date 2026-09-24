@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: cfd-virtual-capital-rebase
+  group: cfd-trading
   cancel-in-progress: false
 
 jobs:

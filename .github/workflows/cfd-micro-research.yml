@@ -14,8 +14,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: cfd-micro-research
-  cancel-in-progress: true
+  group: cfd-trading
+  cancel-in-progress: false
 
 jobs:
   trade:

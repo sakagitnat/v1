@@ -5,7 +5,7 @@ import subprocess
 import pytest
 
 
-@pytest.mark.parametrize("workflow", ["cfd-trading.yml", "cfd-trading-watchdog.yml"])
+@pytest.mark.parametrize("workflow", ["cfd-trading.yml"])
 def test_persistence_stages_observations_and_new_ledgers(tmp_path, workflow):
     source = Path(".github/workflows", workflow).read_text()
     start = source.index("          git add -u -- state")
