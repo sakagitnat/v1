@@ -1,1 +1,1 @@
-2026-09-24T00:01:24Z safe recovery kick after >70m stale persisted heartbeat; no workflow run observed in progress; demo-only
+2026-09-24T03:57:42Z safe recovery kick after >70m stale persisted heartbeat; no workflow run observed in progress; demo-only
