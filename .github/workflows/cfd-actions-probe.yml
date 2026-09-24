@@ -1,5 +1,12 @@
 name: CFD Actions Schedule Probe
 
+# 2026-09-24: was */10 (every 10 minutes, forever). A pure diagnostic
+# ping run this often, continuously, is itself an unusually heavy
+# schedule footprint for one repository -- plausibly contributing to
+# GitHub deprioritizing this repo's own schedule: event delivery (see
+# cfd-trading.yml's matching comment). Hourly is still enough to notice
+# a real scheduling outage without adding to the load that likely
+# caused this one.
 on:
   workflow_dispatch: {}
   push:
@@ -8,7 +15,7 @@ on:
     paths:
       - state/cfd_probe_kick.txt
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 * * * *"
 
 permissions:
   contents: write

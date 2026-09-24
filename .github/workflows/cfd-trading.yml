@@ -32,7 +32,7 @@ env:
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 200
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +50,19 @@ jobs:
         id: deps
         run: pip install -r requirements.txt
 
+      # 2026-09-24: was --minutes 180. The cron above already fires every
+      # ~15 minutes during market hours; a 180-minute run meant this job
+      # stayed "in_progress" almost continuously, so the concurrency group
+      # (cfd-trading) queued essentially every scheduled tick behind
+      # whichever run was already active. schedule: is documented as
+      # best-effort and can be delayed under load -- this repo's own
+      # scheduled events (this workflow, the watchdog, and the probe) went
+      # silent for ~4.5 hours while push/workflow_dispatch kept working
+      # normally, consistent with GitHub deprioritizing a workflow that
+      # looks perpetually busy. 12 minutes leaves headroom under the
+      # 15-minute cadence so a run finishes and frees the concurrency slot
+      # before the next tick, instead of relying on the queue to serialize
+      # an ever-growing backlog.
       - name: Run checkpointed DEMO service
         id: trade
         env:
@@ -57,7 +70,7 @@ jobs:
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
           CFD_MAX_OPEN_POSITIONS: "5"
-        run: python scripts/run_cfd_service.py --minutes 180
+        run: python scripts/run_cfd_service.py --minutes 12
 
       # IMPORTANT: persist local state even when the Python scheduler fails.
       # set_pending_entry() writes before broker submission; skipping this
