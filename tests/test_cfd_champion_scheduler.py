@@ -4,13 +4,15 @@ from unittest.mock import AsyncMock, Mock
 import pandas as pd
 import pytest
 
-from trading.cfd import champion_scheduler, state, timeframe_champion, virtual_accounts
+from trading.cfd import champion_scheduler, state, timeframe_champion, trade_log, virtual_accounts
 from trading.strategy.base import Action, Signal
 
 
 @pytest.fixture(autouse=True)
 def isolated_state(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(trade_log, "_LOG_PATH", tmp_path / "cfd_trades.jsonl")
+    monkeypatch.setattr(virtual_accounts, "RUIN_LOG_PATH", tmp_path / "cfd_virtual_account_ruin_log.jsonl")
     monkeypatch.setattr(champion_scheduler.settings, "cfd_instruments", ["frxXAUUSD"])
 
 
