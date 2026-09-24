@@ -24,3 +24,12 @@ This file is repository handoff, not proof Claude has read it. DEMO only. GitHub
 Official platform references:
 - https://docs.github.com/en/actions/how-tos/troubleshoot-workflows
 - https://docs.github.com/en/enterprise-cloud@latest/actions/concepts/security/github_token
+
+## Deployment verification
+- PR #18 merged into runtime: b5919c5228fc7a89219e9b790613cdb816093cdf.
+- Main workflow deployment: c26a01a1289013c33beeca9866f1cc5cf6bbb8ff.
+- Live DEMO service run: https://github.com/sakagitnat/v1/actions/runs/35957074348 (still in progress as intended for the bounded service).
+- GitHub CI run 35957073305 completed successfully.
+- Two remote checkpoints verified at 04:47:07 and 04:47:54 UTC (832bf6b and 4a683f8).
+- Legacy contract 13803503519 settled with verified P&L +$0.52, exit reason legacy_demo_probe_max_holding_time. starter_m5_probe ledger is $100.52. Trade-log equity_after on this legacy reconciliation is master equity, not logical account equity; use the account ledger for account balances.
+- New contract 14189898999 opened using M30 completed candles under quota_30m_forward@timeframe_v2 at 04:46:55 UTC and remained open across the two checkpoints. Scheduled deadline 04:58 UTC. Closing this contract at its deadline has not yet been observed at handoff.
