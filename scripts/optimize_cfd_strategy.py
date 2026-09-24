@@ -106,21 +106,30 @@ YFINANCE_TICKERS = {
     "frxUSDJPY": ["USDJPY=X", "JPY=X"],
     "frxXAUUSD": ["XAUUSD=X", "GC=F"],
 }
-YFINANCE_INTERVAL_BY_GRANULARITY = {900: "15m", 3600: "1h", 86400: "1d"}
-YFINANCE_PERIOD_BY_INTERVAL = {"15m": "60d", "1h": "730d", "1d": "10y"}
+YFINANCE_INTERVAL_BY_GRANULARITY = {900: "15m", 1800: "30m", 3600: "1h", 14400: "4h", 86400: "1d"}
+YFINANCE_PERIOD_BY_INTERVAL = {"15m": "60d", "30m": "60d", "1h": "730d", "1d": "10y"}
 
 
 def fetch_history_yfinance(instrument: str, interval: str) -> pd.DataFrame:
     import yfinance as yf
 
-    period = YFINANCE_PERIOD_BY_INTERVAL.get(interval, "730d")
+    # Yahoo Finance has no native 4-hour bar -- fetch native 1h bars and
+    # resample, rather than silently substituting a different granularity's
+    # candles the way YFINANCE_INTERVAL_BY_GRANULARITY.get(..., "1h")'s
+    # fallback used to for every unmapped granularity (900/3600/86400 were
+    # the only entries until the 4-timeframe champion-account work needed
+    # 1800/14400 too) -- the same class of bug lab_collector's
+    # _strategy_for_tag() had: validating a strategy against candles it
+    # will never actually see live.
+    fetch_interval = "1h" if interval == "4h" else interval
+    period = YFINANCE_PERIOD_BY_INTERVAL.get(fetch_interval, "730d")
     candidates = YFINANCE_TICKERS.get(instrument, [])
     if not candidates:
         print(f"  no known yfinance ticker mapping for {instrument} -- skipping")
         return pd.DataFrame(columns=["open", "high", "low", "close"])
 
     for ticker in candidates:
-        df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
+        df = yf.download(ticker, period=period, interval=fetch_interval, progress=False, auto_adjust=True)
         if df is None or df.empty:
             print(f"  yfinance ticker {ticker}: no data, trying next candidate...")
             continue
@@ -131,6 +140,8 @@ def fetch_history_yfinance(instrument: str, interval: str) -> pd.DataFrame:
         out = df[["open", "high", "low", "close"]].copy()
         out.index = pd.to_datetime(out.index, utc=True)
         out.index.name = "time"
+        if interval == "4h":
+            out = out.resample("4h").agg({"open": "first", "high": "max", "low": "min", "close": "last"}).dropna()
         print(f"  {instrument} -> yfinance {ticker}: {len(out)} bars, {out.index[0]} to {out.index[-1]}")
         return out
     print(f"  no yfinance data found for {instrument} under any candidate ticker ({candidates})")
