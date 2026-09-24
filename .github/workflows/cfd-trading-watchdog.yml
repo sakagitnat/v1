@@ -1,20 +1,13 @@
 name: CFD Trading Watchdog (Deriv)
-
-# Health-only watchdog. If the authoritative scheduler heartbeat is stale during
-# an expected trading window, recover only through the existing safe kick path.
-# The watchdog never writes the scheduler heartbeat and never trades directly.
 on:
   workflow_dispatch: {}
   schedule:
     - cron: "7,37 * * * *"
-
 permissions:
-  contents: write
-  issues: write
-
+  contents: read
+  actions: write
 env:
   CFD_RUNTIME_REF: gpt/autonomous-demo-runner
-
 jobs:
   health-and-recover:
     runs-on: ubuntu-latest
@@ -23,31 +16,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: gpt/autonomous-demo-runner
-          fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Check scheduler heartbeat
         id: health
         continue-on-error: true
-        run: python scripts/cfd_runner_health.py --max-age-minutes 70
-
-      - name: Trigger existing safe CFD kick path
-        if: steps.health.outcome == 'failure'
-        run: |
-          git config user.name "trading-bot"
-          git config user.email "actions@github.com"
-          printf 'watchdog_safe_kick=%s run=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${{ github.run_id }}" > state/cfd_trading_kick.txt
-          git add state/cfd_trading_kick.txt
-          git commit -m "Kick stale CFD scheduler via safe path"
-          git pull --rebase --autostash origin gpt/autonomous-demo-runner
-          git push origin HEAD:gpt/autonomous-demo-runner
-
-      - name: Record stale-scheduler incident
+        run: python scripts/cfd_runner_health.py --max-age-minutes 10
+      - name: Dispatch authoritative trading workflow
         if: steps.health.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue comment 5 --repo "${{ github.repository }}" --body "CFD WATCHDOG: authoritative heartbeat exceeded 70 minutes. Recovery was requested only through state/cfd_trading_kick.txt; watchdog did not trade or write the scheduler heartbeat. Watchdog run: ${{ github.run_id }}. Demo-only safety remains enforced."
+          active=$(gh run list --repo "${{ github.repository }}" --workflow cfd-trading.yml --limit 100 --json status --jq '[.[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting" or .status == "pending")] | length')
+          if [ "$active" = "0" ]; then
+            gh workflow run cfd-trading.yml --repo "${{ github.repository }}" --ref main
+          else
+            echo "Trading run already active or pending; no duplicate dispatch."
+          fi

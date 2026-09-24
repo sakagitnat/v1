@@ -74,6 +74,36 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def close_overdue_demo_probes(broker, account_type, current=None):
+    """Bound legacy experimental positions without applying an H1 signal exit.
+
+    Persist intent before sell; ordinary verified settlement reconciliation owns
+    accounting. Unknown/manual positions and quota deadlines are excluded.
+    """
+    if account_type != "demo":
+        return
+    current = current or datetime.now(timezone.utc)
+    limits = {"TICK": 1800, "M1": 1800, "M5": 1800, "M15": 3600, "H1": 14400}
+    actual = None
+    for cid, meta in list_open_trades().items():
+        if not meta.get("experimental") or not meta.get("broker_managed_only") or "quota_window" in meta:
+            continue
+        entered = datetime.fromisoformat(meta["entry_time"])
+        if entered.tzinfo is None:
+            raise ValueError("Probe entry timestamp must include timezone")
+        if (current-entered).total_seconds() < limits.get(meta.get("entry_timeframe"), 21600):
+            continue
+        if actual is None:
+            actual = await broker.open_contract_ids()
+        if int(cid) not in actual:
+            continue
+        meta["exit_requested_reason"] = "legacy_demo_probe_max_holding_time"
+        record_open_trade(int(cid), meta)
+        await broker.close_position(int(cid))
+        if int(cid) in await broker.open_contract_ids():
+            raise RuntimeError("Overdue demo probe close not confirmed")
+
+
 def _reserved_stake_for_open_ids(tracked_open: dict, open_ids: set[int]) -> float:
     """Cash paid as stake for bot contracts that are still open.
 
@@ -123,7 +153,7 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 pnl=pnl,
                 equity_before=equity_before,
                 equity_after=equity_now if pnl is not None else None,
-                exit_reason="closed_externally (stop-loss/take-profit or manual close)",
+                exit_reason=meta.get("exit_requested_reason", "closed_externally (stop-loss/take-profit or manual close)"),
                 regime=meta.get("regime"),
                 thesis_key=meta.get("thesis_key"),
                 leg=meta.get("leg"),
@@ -425,6 +455,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     try:
         account = await broker.connect()
         account_type = account.get("account_type")
+        await close_overdue_demo_probes(broker, account_type)
         broker_balance = await broker.account_equity()
         # Deriv deducts the contract stake from CASH at buy time. Cash alone
         # therefore falls when a position opens even though no loss has been

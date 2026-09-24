@@ -32,7 +32,7 @@ env:
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,35 +50,14 @@ jobs:
         id: deps
         run: pip install -r requirements.txt
 
-      - name: Run deterministic CFD scheduler
+      - name: Run checkpointed DEMO service
         id: trade
         env:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
-        run: python scripts/run_cfd_trading.py
-
-      - name: Run four-horizon DEMO quota cycle
-        id: quota
-        if: steps.trade.outcome == 'success'
-        env:
-          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
-          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
-          CFD_ALLOW_LIVE_TRADING: "false"
-        run: python scripts/run_cfd_quota.py
-
-      - name: Mark scheduler completion
-        if: always()
-        env:
-          DEPS_OUTCOME: ${{ steps.deps.outcome }}
-          TRADE_OUTCOME: ${{ steps.trade.outcome }}
-          QUOTA_OUTCOME: ${{ steps.quota.outcome }}
-        run: |
-          if [ "$DEPS_OUTCOME" = "success" ] && [ "$TRADE_OUTCOME" = "success" ] && { [ "$QUOTA_OUTCOME" = "success" ] || [ "$QUOTA_OUTCOME" = "skipped" ]; }; then
-            python3 scripts/cfd_scheduler_heartbeat.py success
-          else
-            python3 scripts/cfd_scheduler_heartbeat.py failure
-          fi
+          CFD_MAX_OPEN_POSITIONS: "5"
+        run: python scripts/run_cfd_service.py --minutes 180
 
       # IMPORTANT: persist local state even when the Python scheduler fails.
       # set_pending_entry() writes before broker submission; skipping this

@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: cfd-highrisk-research
+  group: cfd-trading
   cancel-in-progress: false
 
 jobs:

@@ -1,7 +1,7 @@
-"""Bounded DEMO quota experiments. Window size is NOT holding duration.
+"""Experimental DEMO timeframe quotas, closed before the UTC window ends.
 
-Short forced round trips establish execution evidence, not qualified strategy
-profitability. All writers must share the cfd-trading workflow concurrency group.
+The simple candle-direction baseline is not a qualified profitable strategy.
+All writers must share the cfd-trading workflow concurrency group.
 """
 import asyncio
 import json
@@ -20,13 +20,12 @@ from trading.cfd.virtual_accounts import ensure_virtual_accounts
 from trading.config import settings
 
 SPECS = {
-    "quota_30m_forward": (1800, "TICK", 0),
-    "quota_h1_forward": (3600, "M1", 60),
+    "quota_30m_forward": (1800, "M30", 1800),
+    "quota_h1_forward": (3600, "H1", 3600),
     "quota_h4_forward": (14400, "H4", 14400),
     "quota_d1_forward": (86400, "D1", 86400),
 }
 STAKE, STOP, TARGET, MULTIPLIER = 1.0, 0.25, 0.50, 100
-HOLD_SECONDS = 8
 LOG_PATH = Path(__file__).resolve().parents[3] / "state/cfd_quota_events.jsonl"
 
 
@@ -99,7 +98,8 @@ def commit_close(record, window_id):
 
 
 async def close_tracked(broker, cid, meta):
-    if cid in await broker.open_contract_ids():
+    was_open = cid in await broker.open_contract_ids()
+    if was_open:
         response = await broker.close_position(cid)  # no blind sell retry
         pnl = profit_from_sale(response, cid, float(meta.get("buy_price", meta["stake"])))
     else:
@@ -108,8 +108,10 @@ async def close_tracked(broker, cid, meta):
         contract_id=cid, instrument=meta["instrument"], strategy=meta["strategy"],
         side=meta["side"], entry_time=meta["entry_time"], exit_time=now().isoformat(),
         entry_price=meta["entry_price"], stake=meta["stake"], risk_amount=meta["risk_amount"],
-        pnl=pnl, equity_before=meta["equity_before"], exit_reason="forced_quota_execution_probe",
-        regime="forced_quota_research", leg="quota", virtual_account_id=meta["virtual_account_id"],
+        pnl=pnl, equity_before=meta["equity_before"],
+        exit_reason=("closed_externally; broker settlement verified" if not was_open else
+                     "quota_window_deadline" if meta.get("close_at") else "forced_quota_execution_probe"),
+        regime=meta.get("regime", "forced_quota_research"), leg="quota", virtual_account_id=meta["virtual_account_id"],
         horizon=meta["horizon"], entry_timeframe=meta["entry_timeframe"],
         context_timeframes=meta["context_timeframes"],
     )
@@ -135,7 +137,8 @@ async def run_quotas():
         # Recover existing quota contracts first, even when new entries are paused.
         for cid, meta in state.list_open_trades().items():
             if "quota_window" in meta:
-                results.append(await close_tracked(broker, int(cid), meta))
+                if not meta.get("close_at") or now().timestamp() >= meta["close_at"] or int(cid) not in await broker.open_contract_ids():
+                    results.append(await close_tracked(broker, int(cid), meta))
         active = await broker.list_active_symbols()
         available = {r.get("underlying_symbol", r.get("symbol")) for r in active
                      if r.get("exchange_is_open") == 1 and not r.get("is_trading_suspended")}
@@ -144,9 +147,17 @@ async def run_quotas():
             s = state.load_state()
             current = now()
             window = int(current.timestamp()) // period
+            observation = s.setdefault("quota_evaluation_windows", {}).get(aid)
+            if observation is not None and window > observation + 1:
+                event("EVALUATION_GAP", account=aid, previous_window=observation,
+                      current_window=window, unobserved_windows=window-observation-1)
+            s["quota_evaluation_windows"][aid] = window
+            state._write_state(s)
+            if any(m.get("virtual_account_id") == aid for m in s.get("open_trades", {}).values()):
+                results.append(event("HOLDING", account=aid, window_id=window)); continue
             if s.get("quota_windows", {}).get(aid, {}).get("window_id") == window:
                 results.append(event("ALREADY_COMPLETED", account=aid, window_id=window)); continue
-            if (window+1)*period-current.timestamp() < 90:
+            if (window+1)*period-current.timestamp() < 180:
                 results.append(event("WINDOW_TOO_SHORT", account=aid, window_id=window)); continue
             if s.get("paused") or s.get("pending_entries"):
                 results.append(event("RECOVERY_OR_PAUSE_BLOCKED", account=aid)); continue
@@ -191,22 +202,26 @@ async def run_quotas():
             reason = check_new_position(positions, symbol, side, STOP, STAKE*MULTIPLIER, equity, ceilings)
             if reason or sum(p.risk_amount for p in positions)+STOP > 1.50:
                 results.append(event("RISK_BLOCKED", account=aid, reason=reason or "research risk budget")); continue
-            meta = dict(instrument=symbol, strategy=aid+"@execution_v1", side=side,
+            meta = dict(instrument=symbol, strategy=aid+"@timeframe_v2", side=side,
                         entry_time=now().isoformat(), entry_price=float(prices.iloc[-1]),
                         stake=STAKE, risk_amount=STOP, multiplier=MULTIPLIER,
                         equity_before=row["equity"], regime="forced_quota_research", leg="quota",
                         broker_managed_only=True, forced_quota=True, experimental=True,
                         virtual_account_id=aid, horizon=str(period)+"s_window",
-                        entry_timeframe=timeframe, context_timeframes=[timeframe], quota_window=window)
+                        entry_timeframe=timeframe, context_timeframes=[timeframe], quota_window=window,
+                        close_at=(window+1)*period-120,
+                        entry_reason="experimental direction of last two completed timeframe candles")
+            row.update(entry_timeframe=timeframe, context_timeframes=[timeframe],
+                       strategy_tag=meta["strategy"], label=timeframe+" experimental timeframe quota")
+            state._write_state(s)
             state.set_pending_entry(symbol, {"legs": [meta], "quota_intent": True})
             bought = await broker.submit_multiplier_order(symbol, side, STAKE, MULTIPLIER, STOP, TARGET)
             cid = int(bought["buy"]["contract_id"])
             meta["buy_price"] = float(bought["buy"].get("buy_price", STAKE))
             state.record_open_trade(cid, meta)
             state.clear_pending_entry(symbol)
-            event("OPENED", account=aid, contract_id=cid, instrument=symbol, window_id=window)
-            await asyncio.sleep(HOLD_SECONDS)
-            results.append(await close_tracked(broker, cid, meta))
+            results.append(event("OPENED", account=aid, contract_id=cid, instrument=symbol, window_id=window,
+                                 timeframe=timeframe, strategy=meta["strategy"], close_at=meta["close_at"]))
     except Exception as exc:
         event("ERROR", error=type(exc).__name__)  # no sensitive response bodies
         raise

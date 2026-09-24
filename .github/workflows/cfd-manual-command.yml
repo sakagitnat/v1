@@ -64,6 +64,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: cfd-trading
+  cancel-in-progress: false
+
 jobs:
   run-command:
     runs-on: ubuntu-latest
