@@ -4,5 +4,7 @@
   "initial_floor": 100.0,
   "pause_reason": "",
   "milestone_reached": false,
-  "excluded_symbols": {}
+  "excluded_symbols": {
+    "GOOGL": "New antitrust lawsuit targeting AI business practices (filed ~Sep 23 2026); stock fell ~3.7% same day amid legal + AI-capex overhang"
+  }
 }
