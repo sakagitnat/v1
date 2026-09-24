@@ -274,6 +274,66 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_trend_m5|frxUSDJPY": {
+      "contract_id": -88,
+      "side": "short",
+      "entry_price": 158.805,
+      "stop_price": 158.88433651533188,
+      "target_price": 158.72566348466813,
+      "stake": 98.8,
+      "multiplier": 20,
+      "risk_amount": 0.99,
+      "entry_time": "2026-09-24T21:32:19.996036+00:00",
+      "equity_before": 98.8,
+      "regime": "ranging",
+      "virtual_account_id": "iso_trend_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxUSDJPY": {
+      "contract_id": -89,
+      "side": "short",
+      "entry_price": 158.805,
+      "stop_price": 158.90417064416485,
+      "target_price": 158.64632696933626,
+      "stake": 82.11,
+      "multiplier": 20,
+      "risk_amount": 1.03,
+      "entry_time": "2026-09-24T21:32:20.155014+00:00",
+      "equity_before": 102.55,
+      "regime": "ranging",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_meanrev_m5|frxUSDJPY": {
+      "contract_id": -90,
+      "side": "long",
+      "entry_price": 158.805,
+      "stop_price": 158.72566348466813,
+      "target_price": 158.8645023864989,
+      "stake": 108.1,
+      "multiplier": 20,
+      "risk_amount": 1.08,
+      "entry_time": "2026-09-24T21:32:20.365874+00:00",
+      "equity_before": 108.1,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -287,7 +347,7 @@
     "virtual:iso_trend_m5": 98.8,
     "donchian_breakout@v2": 101.71
   },
-  "paper_trade_counter": 87,
+  "paper_trade_counter": 90,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
