@@ -384,6 +384,25 @@
         "H1",
         "M15"
       ]
+    },
+    "donchian_breakout@v2|frxUSDJPY": {
+      "contract_id": -65,
+      "side": "long",
+      "entry_price": 158.795,
+      "stop_price": 157.99123157315697,
+      "target_price": 160.1728887317309,
+      "stake": 9.88,
+      "multiplier": 20,
+      "risk_amount": 1.0,
+      "entry_time": "2026-09-24T10:08:40.640495+00:00",
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
     }
   },
   "paper_equity": {
@@ -396,7 +415,7 @@
     "virtual:iso_trend_m15": 98.28,
     "virtual:iso_trend_m5": 101.99
   },
-  "paper_trade_counter": 64,
+  "paper_trade_counter": 65,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
