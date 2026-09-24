@@ -41,6 +41,16 @@ class VirtualAccountSpec:
 
 DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("core_h1", "Core H1 trend", 100.0, ACTIVE_DEMO, "core", "H1", ("H4", "H1"), "ema_crossover@v1"),
+    # Timeframe-champion accounts (docs/ARCHITECTURE_AUDIT.md, 2026-09-24):
+    # one isolated $100 account per timeframe, each running whichever
+    # strategy trading.cfd.timeframe_champion has currently assigned it --
+    # unassigned (strategy_tag=None) until something clears TRAIN/TEST/
+    # walk-forward at that timeframe's own granularity. core_h1 above is
+    # already H1's champion (wired into scheduler.run_once() since before
+    # this concept had a name); these three cover the other timeframes.
+    VirtualAccountSpec("champion_m30", "M30 timeframe champion", 100.0, ACTIVE_DEMO, "champion", "M30", ("H4", "H1", "M30"), None),
+    VirtualAccountSpec("champion_h4", "H4 timeframe champion", 100.0, ACTIVE_DEMO, "champion", "H4", ("D1", "H4"), None),
+    VirtualAccountSpec("champion_d1", "D1 timeframe champion", 100.0, ACTIVE_DEMO, "champion", "D1", ("D1",), None),
     VirtualAccountSpec("breakout_h1", "H1 breakout forward lab", 100.0, PAPER, "swing", "H1", ("H4", "H1"), "donchian_breakout@v2"),
     VirtualAccountSpec("intraday_m15", "M15 intraday research", 100.0, SHADOW, "intraday", "M15", ("H4", "H1", "M15")),
     VirtualAccountSpec("intraday_m5", "M5 intraday research", 100.0, SHADOW, "intraday", "M5", ("H1", "M15", "M5")),

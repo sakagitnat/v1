@@ -25,6 +25,8 @@ _DEFAULTS = {
     "smoothed_equity": None,
     "high_water_mark": None,
     "virtual_accounts": {},
+    "timeframe_champions": {},
+    "champion_daily_risk_tracking": {},
 }
 
 
@@ -254,6 +256,35 @@ def set_virtual_accounts(accounts: dict) -> None:
     state = load_state()
     state["virtual_accounts"] = accounts
     _write_state(state)
+
+
+def get_champion_daily_risk_tracking(account_id: str) -> dict:
+    """Same purpose as get_daily_risk_tracking(), keyed per champion
+    account instead of one global tracker -- each of the four timeframe-
+    champion accounts (trading.cfd.timeframe_champion) has its own
+    isolated $100 equity, so each needs its own daily-loss circuit
+    breaker rather than sharing core_h1's."""
+    return load_state().get("champion_daily_risk_tracking", {}).get(
+        account_id, {"date": None, "start_equity": None, "halted": False}
+    )
+
+
+def set_champion_daily_risk_tracking(account_id: str, date: str, start_equity: float, halted: bool) -> None:
+    state = load_state()
+    tracking = state.setdefault("champion_daily_risk_tracking", {})
+    tracking[account_id] = {"date": date, "start_equity": start_equity, "halted": halted}
+    _write_state(state)
+
+
+def get_timeframe_champions() -> dict:
+    return load_state().get("timeframe_champions", {})
+
+
+def set_timeframe_champions(champions: dict) -> None:
+    state = load_state()
+    state["timeframe_champions"] = champions
+    _write_state(state)
+
 
 def exclude_instrument(instrument: str, reason: str = "") -> None:
     # Deliberately NOT .upper()'d: Deriv symbol names are mixed-case and

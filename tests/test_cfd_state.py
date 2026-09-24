@@ -15,6 +15,8 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "smoothed_equity": None,
         "high_water_mark": None,
         "virtual_accounts": {},
+        "timeframe_champions": {},
+        "champion_daily_risk_tracking": {},
     }
 
 
