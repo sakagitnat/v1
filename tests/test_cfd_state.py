@@ -17,6 +17,7 @@ def test_load_state_defaults(tmp_path, monkeypatch):
         "virtual_accounts": {},
         "timeframe_champions": {},
         "champion_daily_risk_tracking": {},
+        "champion_pending_entries": {},
     }
 
 
@@ -177,3 +178,25 @@ def test_virtual_accounts_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
     state.set_virtual_accounts({"core_h1": {"equity": 100.0}})
     assert state.get_virtual_accounts() == {"core_h1": {"equity": 100.0}}
+
+
+def test_champion_pending_entry_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_champion_pending_entries() == {}
+    state.set_champion_pending_entry("champion_m30:frxXAUUSD", {"side": "long"})
+    assert state.get_champion_pending_entries() == {"champion_m30:frxXAUUSD": {"side": "long"}}
+    state.clear_champion_pending_entry("champion_m30:frxXAUUSD")
+    assert state.get_champion_pending_entries() == {}
+
+
+def test_champion_pending_entries_are_isolated_from_pending_entries(tmp_path, monkeypatch):
+    # run_once() unconditionally sweeps every entry in "pending_entries"
+    # it doesn't adopt at the end of every run -- champions must never
+    # share that key, or their own markers would be wiped before the
+    # champion scheduler (which always runs after run_once() in the same
+    # process) gets a chance to reconcile them.
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_champion_pending_entry("champion_m30:frxXAUUSD", {"side": "long"})
+    assert state.get_pending_entries() == {}
+    state.set_pending_entry("frxXAUUSD", {"legs": []})
+    assert state.get_champion_pending_entries() == {"champion_m30:frxXAUUSD": {"side": "long"}}

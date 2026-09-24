@@ -1416,6 +1416,78 @@ capital model. These all still match the revised vision as-is.
     user's go-ahead for that specific step, same standing rule as every
     other execution-adjacent change).
 
+- **2026-09-24 (later same day) — Five bugs in `champion_scheduler.py`
+  found by user review before any champion was ever assigned a
+  strategy** (all three were still unassigned at review time, so none of
+  this had opened a real position). Confirmed each against the live code
+  and fixed all five:
+  - **P1: no `paused`/`excluded_instruments` check.** `run_once()` skips
+    its whole run when `state["paused"]`, but `run_cfd_trading.py`'s
+    `run_normal()` called `run_champions()` unconditionally right after
+    — a champion could keep opening positions while the bot was
+    supposedly fully stopped. `_run_one_champion()` now loads state
+    itself and returns a single `NO_TRADE: bot paused` immediately if
+    paused (a full stop, matching `run_once()`'s own semantics, and
+    self-contained rather than trusting the caller to gate it). Excluded
+    instruments now block new entries the same way `run_once()`'s
+    per-instrument loop does — but only new entries: an already-open
+    champion position on a since-excluded instrument still gets managed
+    normally, since exclusion is about not taking on new risk, not
+    marooning an existing one.
+  - **P1: a stale persisted `halted` flag could mask an already-breached
+    day.** `CfdRiskManager.__post_init__` only ever trusted the
+    `initially_halted` bool a caller passed in; if that caller's own
+    end-of-run persist (`set_daily_risk_tracking`/
+    `set_champion_daily_risk_tracking`) never landed — e.g. an exception
+    partway through a run, after equity already moved but before that
+    final call — the next run would read a stale `False` and keep
+    trading past the real breach. User's repro: equity $100→$96 under a
+    3% daily cap, still submitted an order. `__post_init__` now also
+    recomputes `halted` directly from `equity` vs `daily_start_equity` on
+    every construction — the breaker can no longer be masked by a caller
+    failing to persist it, since it's derived from the numbers
+    themselves. Fixed in `risk.py`, so this benefits `core_h1` too, not
+    just champions.
+  - **P1: order submitted before any crash-recovery marker existed.**
+    Champions had none of `run_once()`'s pending-entry mechanism (this
+    was disclosed as a known v1 gap in the module's own docstring, not
+    missed — but real, and now the right time to close it before any
+    champion goes live). Fixed with its own `champion_pending_entries`
+    state namespace (new `state.py` functions), deliberately **not**
+    reusing `run_once()`'s `pending_entries` key: that one gets
+    unconditionally swept clean of everything it doesn't adopt at the
+    end of every single `run_once()` call, and since `run_normal()`
+    always runs `run_once()` first in the same process, sharing the key
+    (even with a composite `f"{account_id}:{instrument}"` name) would
+    have let `run_once()` silently wipe a champion's still-unresolved
+    marker before the champion's own reconciliation this same tick ever
+    saw it — a real bug found while designing the fix, not one that
+    shipped. A pending marker is now set before every order submission
+    and cleared after `record_open_trade` commits; the top of each
+    instrument's turn checks for one first and adopts it if exactly one
+    untracked (by any account) contract matches, or drops it if
+    unresolvable — same one-shot recovery window `run_once()` gives its
+    own pending entries.
+  - **P1: `pop_open_trade` ran before `record_virtual_close`/
+    `record_trade`.** A failure in either of the latter after the former
+    already ran would lose the only local record tying a settled
+    contract back to an account/strategy/thesis, while `open_trades`
+    itself already showed it as closed. Reordered: durable records now
+    persist first, `pop_open_trade` is the last step, so any failure in
+    between leaves the contract correctly still tracked as open for the
+    next run to retry.
+  - **P2: exit rebuilt the strategy with `{}` instead of the params used
+    at entry.** `record_open_trade`'s meta now stores `strategy_params`
+    (the assignment's params at the moment this position was opened);
+    the exit-side `_build_strategy` call reads it back instead of
+    hardcoding `{}` or re-reading the champion's *current* (possibly
+    since-reassigned) assignment — so a position's exit logic always
+    matches what was actually validated and live when it opened.
+  - 15 new tests in `test_cfd_champion_scheduler.py`, `test_cfd_risk.py`,
+    and `test_cfd_state.py`. Full suite: 558 passed. No live trading
+    enabled anywhere in this fix; `CFD_ALLOW_LIVE_TRADING=false`
+    unchanged; still no champion has an assigned strategy.
+
 ## Executive summary
 
 The repo has two systems in it: a mature stock system (Alpaca) and a

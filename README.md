@@ -1017,6 +1017,22 @@ entries -- fixed the same session) actually assigns each one its first
 validated strategy. No live trading; `CFD_ALLOW_LIVE_TRADING=false`
 unchanged; not live-smoke-tested yet.
 
+A user review the same day, before any champion was ever assigned a
+strategy, found and fixed five bugs in `champion_scheduler.py`: no
+`paused`/`excluded_instruments` check (a champion could keep trading
+while the bot was supposedly fully stopped), a stale persisted daily-
+loss `halted` flag that could mask an already-breached day (now
+self-heals from equity vs. daily start equity in `CfdRiskManager`
+itself, benefiting `core_h1` too), no crash-recovery pending-entry
+marker before order submission (fixed with its own
+`champion_pending_entries` state namespace, deliberately not sharing
+`run_once()`'s `pending_entries` key -- see `docs/ARCHITECTURE_AUDIT.md`'s
+matching entry for why that would have silently defeated it), closed
+positions popping their open-trade tracking before the trade/equity
+record was durably persisted, and exit rebuilding the strategy with
+`{}` instead of the params actually used at entry. 15 new tests, full
+suite 558 passed. Still no champion assigned; no live trading.
+
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
 news context (the user asked for a second AI's independent input on

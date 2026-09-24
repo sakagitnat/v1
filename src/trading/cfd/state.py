@@ -27,6 +27,7 @@ _DEFAULTS = {
     "virtual_accounts": {},
     "timeframe_champions": {},
     "champion_daily_risk_tracking": {},
+    "champion_pending_entries": {},
 }
 
 
@@ -273,6 +274,35 @@ def set_champion_daily_risk_tracking(account_id: str, date: str, start_equity: f
     state = load_state()
     tracking = state.setdefault("champion_daily_risk_tracking", {})
     tracking[account_id] = {"date": date, "start_equity": start_equity, "halted": halted}
+    _write_state(state)
+
+
+def get_champion_pending_entries() -> dict:
+    """Same purpose as get_pending_entries() -- crash-recovery attribution
+    for an order submitted but not yet confirmed committed to
+    open_trades -- but in a namespace of its own, never
+    "pending_entries". run_once() unconditionally clears every entry in
+    "pending_entries" it doesn't adopt at the end of every single run
+    (trading.cfd.scheduler); reusing that key for champions, even with a
+    composite f"{account_id}:{instrument}" key, would mean run_once()
+    (which always runs first in the same process, see
+    scripts/run_cfd_trading.py's run_normal()) silently wipes a
+    champion's still-unresolved pending marker before the champion's own
+    reconciliation in this same tick ever gets to look at it. Keyed by
+    f"{account_id}:{instrument}" since more than one champion can hold a
+    pending entry on the same instrument at once."""
+    return load_state().get("champion_pending_entries", {})
+
+
+def set_champion_pending_entry(key: str, meta: dict) -> None:
+    state = load_state()
+    state.setdefault("champion_pending_entries", {})[key] = meta
+    _write_state(state)
+
+
+def clear_champion_pending_entry(key: str) -> None:
+    state = load_state()
+    state.setdefault("champion_pending_entries", {}).pop(key, None)
     _write_state(state)
 
 
