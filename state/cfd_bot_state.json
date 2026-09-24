@@ -7,34 +7,7 @@
     "frxEURUSD": "unresolved quota buy intent"
   },
   "broker_baseline": 10000,
-  "open_trades": {
-    "14281562699": {
-      "instrument": "frxEURUSD",
-      "strategy": "quota_h4_forward@timeframe_v2",
-      "side": "long",
-      "entry_time": "2026-09-24T20:00:22.899253+00:00",
-      "entry_price": 1.13769,
-      "stake": 1.0,
-      "risk_amount": 0.25,
-      "multiplier": 100,
-      "equity_before": 99.23,
-      "regime": "forced_quota_research",
-      "leg": "quota",
-      "broker_managed_only": true,
-      "forced_quota": true,
-      "experimental": true,
-      "virtual_account_id": "quota_h4_forward",
-      "horizon": "14400s_window",
-      "entry_timeframe": "H4",
-      "context_timeframes": [
-        "H4"
-      ],
-      "quota_window": 124325,
-      "close_at": 1790294280,
-      "entry_reason": "experimental direction of last two completed timeframe candles",
-      "buy_price": 1.0
-    }
-  },
+  "open_trades": {},
   "operating_mode": "normal",
   "operating_mode_reason": "",
   "paper_positions": {
@@ -1239,12 +1212,12 @@
         "H4"
       ],
       "strategy_tag": "quota_h4_forward@execution_v1",
-      "equity": 99.23,
+      "equity": 99.13,
       "high_water_mark": 100.0,
-      "realized_pnl": -0.77,
-      "closed_trades": 7,
+      "realized_pnl": -0.87,
+      "closed_trades": 8,
       "wins": 1,
-      "losses": 6,
+      "losses": 7,
       "quota_daily": {
         "date": "2026-09-24",
         "start_equity": 99.81
@@ -2705,6 +2678,31 @@
       "context_timeframes": [
         "M30"
       ]
+    },
+    "14281562699": {
+      "contract_id": 14281562699,
+      "instrument": "frxEURUSD",
+      "strategy": "quota_h4_forward@timeframe_v2",
+      "side": "long",
+      "entry_time": "2026-09-24T20:00:22.899253+00:00",
+      "exit_time": "2026-09-24T23:58:47.559009+00:00",
+      "entry_price": 1.13769,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": -0.1,
+      "equity_before": 99.23,
+      "equity_after": 99.13,
+      "exit_reason": "quota_window_deadline",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_h4_forward",
+      "horizon": "14400s_window",
+      "entry_timeframe": "H4",
+      "context_timeframes": [
+        "H4"
+      ]
     }
   },
   "quota_windows": {
@@ -2719,9 +2717,9 @@
       "closed_at": "2026-09-24T20:58:40.938826+00:00"
     },
     "quota_h4_forward": {
-      "window_id": 124324,
-      "contract_id": 14269343539,
-      "closed_at": "2026-09-24T18:39:41.991266+00:00"
+      "window_id": 124325,
+      "contract_id": 14281562699,
+      "closed_at": "2026-09-24T23:58:47.559009+00:00"
     },
     "quota_d1_forward": {
       "window_id": 20720,
