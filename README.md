@@ -974,6 +974,49 @@ progress log (2026-09-21) for the full before/after. Still not synced to
 needs the user's own explicit go-ahead, same as any real-execution-
 adjacent step in this project).
 
+**Timeframe-champion accounts (30m/1H/4H/1D, foundation built, not yet
+populated).** Between 2026-09-21 and 09-24 the user asked GPT to take
+over operating the bot autonomously while Claude was rate-limited (see
+issue #5's "STATUS CHECKPOINT" comments) -- a large, legitimate expansion
+under the user's own direction, not a rogue action, that grew into a
+41-virtual-account research lab (`trading/cfd/virtual_accounts.py`) on a
+new `gpt/autonomous-demo-runner` branch. On handback, the user specified
+a concrete structure for it: four isolated $100 "champion" accounts, one
+per timeframe (30m/1H/4H/1D), each running whichever strategy most
+recently cleared TRAIN/TEST/walk-forward at that timeframe's own
+granularity -- explicitly *not* a shared risk pool across the four.
+Exit is price-bound (ATR stop/target via Deriv's own `stop_loss`/
+`take_profit`, enforced server-side) or the strategy's own signal exit,
+never a timeframe-duration-based forced close -- an initial "allow up to
+2x the timeframe before force-closing" idea was replaced with this after
+a design discussion surfaced that time-based extension while losing is
+functionally the same trap issue #5 already forbids for sizing
+(refusing to accept a loss and hoping it turns around).
+
+H1's champion is `core_h1`, already wired into `scheduler.run_once()` by
+GPT's autonomous work (every `ema_crossover@v1` trade already tags
+`virtual_account_id="core_h1"`) -- no new code needed there. Building the
+other three surfaced a real cross-system bug first: `run_once()` had no
+filter for which isolated account owns an open Deriv contract, so a
+champion's position on an instrument `core_h1` also trades would get
+wrongly adopted under `core_h1`'s own exit/risk accounting (see
+`docs/ARCHITECTURE_AUDIT.md`'s 2026-09-24 entry for the full mechanism).
+Fixed via `scheduler._owned_by()` before any champion code went further.
+New `trading/cfd/timeframe_champion.py` (per-timeframe strategy
+assignment, kept deliberately separate from the H1-only
+`strategy_registry.py`) and `trading/cfd/champion_scheduler.py` (the
+M30/H4/D1 loop itself, reusing `CfdRiskManager`/`classify_regime`/the
+same broker order/settlement calls `core_h1` uses) are built, tested (26
+new tests, full suite 542 passed), and wired to run right after
+`run_once()` in the same process every cycle -- but all three champions
+start **unassigned**: nothing has cleared TRAIN/TEST/walk-forward at
+M30/H4/D1 yet, so this is a standing NO TRADE everywhere until the
+promotion pipeline (reusing the existing `optimize_cfd_*.py` scripts,
+whose `YFINANCE_INTERVAL_BY_GRANULARITY` map was also missing 30m/4h
+entries -- fixed the same session) actually assigns each one its first
+validated strategy. No live trading; `CFD_ALLOW_LIVE_TRADING=false`
+unchanged; not live-smoke-tested yet.
+
 **Event Blackout (news-integration design in progress).** GitHub issues
 #4/#5 are a joint Claude/GPT design discussion on incorporating market/
 news context (the user asked for a second AI's independent input on
