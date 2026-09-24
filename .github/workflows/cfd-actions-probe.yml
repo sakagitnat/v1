@@ -7,6 +7,13 @@ name: CFD Actions Schedule Probe
 # cfd-trading.yml's matching comment). Hourly is still enough to notice
 # a real scheduling outage without adding to the load that likely
 # caused this one.
+#
+# 2026-09-24 (later same day): cron was "0 * * * *" -- exactly the top
+# of every hour, which GitHub's own docs single out: "High load times
+# include the start of each hour" for schedule: delivery delay. Offset
+# to :22 so this doesn't queue behind that spike, matching the same
+# reasoning already applied to cfd-trading.yml (3,18,33,48) and
+# cfd-trading-watchdog.yml (7,37) -- neither of which sits on :00/:30.
 on:
   workflow_dispatch: {}
   push:
@@ -15,7 +22,7 @@ on:
     paths:
       - state/cfd_probe_kick.txt
   schedule:
-    - cron: "0 * * * *"
+    - cron: "22 * * * *"
 
 permissions:
   contents: write
