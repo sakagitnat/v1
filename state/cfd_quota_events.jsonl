@@ -32,3 +32,10 @@
 {"timestamp": "2026-09-24T01:13:04.774748+00:00", "run_id": "35941877050", "outcome": "CLOSED", "account": "quota_h1_forward", "contract_id": 14174820839, "instrument": "frxEURUSD", "pnl": -0.07, "window_id": 497281, "holding_seconds": 8.765819}
 {"timestamp": "2026-09-24T01:13:04.775324+00:00", "run_id": "35941877050", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124320}
 {"timestamp": "2026-09-24T01:13:04.775886+00:00", "run_id": "35941877050", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20720}
+{"timestamp": "2026-09-24T04:27:33.244008+00:00", "run_id": "35955684856", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 14188396079, "instrument": "frxXAUUSD", "window_id": 994568}
+{"timestamp": "2026-09-24T04:27:41.478355+00:00", "run_id": "35955684856", "outcome": "CLOSED", "account": "quota_30m_forward", "contract_id": 14188396079, "instrument": "frxXAUUSD", "pnl": -0.02, "window_id": 994568, "holding_seconds": 8.751088}
+{"timestamp": "2026-09-24T04:27:42.110120+00:00", "run_id": "35955684856", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14188406419, "instrument": "frxXAUUSD", "window_id": 497284}
+{"timestamp": "2026-09-24T04:27:50.413625+00:00", "run_id": "35955684856", "outcome": "CLOSED", "account": "quota_h1_forward", "contract_id": 14188406419, "instrument": "frxXAUUSD", "pnl": -0.02, "window_id": 497284, "holding_seconds": 8.650333}
+{"timestamp": "2026-09-24T04:27:51.123727+00:00", "run_id": "35955684856", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 14188418839, "instrument": "frxEURUSD", "window_id": 124321}
+{"timestamp": "2026-09-24T04:27:59.413622+00:00", "run_id": "35955684856", "outcome": "CLOSED", "account": "quota_h4_forward", "contract_id": 14188418839, "instrument": "frxEURUSD", "pnl": -0.07, "window_id": 124321, "holding_seconds": 8.684701}
+{"timestamp": "2026-09-24T04:27:59.414367+00:00", "run_id": "35955684856", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20720}
