@@ -240,26 +240,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m5|frxGBPUSD": {
-      "contract_id": -43,
-      "side": "short",
-      "entry_price": 1.32498,
-      "stop_price": 1.3256440043166882,
-      "target_price": 1.3244819967624841,
-      "stake": 102.44,
-      "multiplier": 20,
-      "risk_amount": 1.03,
-      "entry_time": "2026-09-24T06:12:00.788211+00:00",
-      "equity_before": 102.67,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
     "virtual:iso_trend_m15|frxGBPUSD": {
       "contract_id": -44,
       "side": "long",
@@ -339,6 +319,26 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_trend_m15|frxEURUSD": {
+      "contract_id": -48,
+      "side": "long",
+      "entry_price": 1.13889,
+      "stop_price": 1.1379546378904672,
+      "target_price": 1.1398253621095327,
+      "stake": 60.27,
+      "multiplier": 20,
+      "risk_amount": 0.99,
+      "entry_time": "2026-09-24T06:32:00.738033+00:00",
+      "equity_before": 99.0,
+      "regime": "ranging",
+      "virtual_account_id": "iso_trend_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
     }
   },
   "paper_equity": {
@@ -347,18 +347,18 @@
     "virtual:breakout_h1": 102.39,
     "virtual:iso_trend_h1": 101.0,
     "virtual:iso_meanrev_m15": 96.98,
-    "virtual:iso_meanrev_m5": 103.36,
+    "virtual:iso_meanrev_m5": 104.13,
     "virtual:iso_trend_m15": 99.0,
     "virtual:iso_trend_m5": 99.99
   },
-  "paper_trade_counter": 47,
+  "paper_trade_counter": 48,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 121.36000000000058,
+  "smoothed_equity": 121.29000000000087,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -694,11 +694,11 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 103.36,
-      "high_water_mark": 103.36,
-      "realized_pnl": 3.36,
-      "closed_trades": 11,
-      "wins": 9,
+      "equity": 104.13,
+      "high_water_mark": 104.13,
+      "realized_pnl": 4.13,
+      "closed_trades": 12,
+      "wins": 10,
       "losses": 2,
       "drawdown_from_start_pct": 0.0
     },
@@ -1159,15 +1159,15 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "M30 experimental timeframe quota",
+      "label": "30-minute forced-quota forward research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "M30",
+      "entry_timeframe": "TICK",
       "context_timeframes": [
-        "M30"
+        "TICK"
       ],
-      "strategy_tag": "quota_30m_forward@timeframe_v2",
+      "strategy_tag": "quota_30m@v0",
       "equity": 99.58,
       "high_water_mark": 100.0,
       "realized_pnl": -0.42,
