@@ -1,1 +1,1 @@
-2026-09-23T20:59:12Z safe recovery kick after >70m stale persisted heartbeat; no CFD Trading run observed in progress; demo-only
+2026-09-24T00:01:24Z safe recovery kick after >70m stale persisted heartbeat; no workflow run observed in progress; demo-only
