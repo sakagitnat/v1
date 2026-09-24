@@ -1,4 +1,4 @@
-from trading.cfd.scheduler import _legs_by_strategy, _reconcile_closed_trades, _reconcile_unknown_positions, _reserved_stake_for_open_ids
+from trading.cfd.scheduler import _legs_by_strategy, _owned_by, _reconcile_closed_trades, _reconcile_unknown_positions, _reserved_stake_for_open_ids
 
 
 def _meta(**overrides):
@@ -175,3 +175,20 @@ def test_reserved_stake_restores_cash_equity_after_entry():
     broker_cash = 9999.0
     reconstructed = broker_cash + _reserved_stake_for_open_ids(tracked, {123})
     assert reconstructed == 10000.0
+
+
+# _owned_by keeps each isolated $100 account's positions invisible to every
+# other account's exit/entry/risk accounting -- without it, run_once() would
+# adopt a champion/research account's unrecognized strategy tag under its
+# own "sole ACTIVE strategy" fallback and mismanage a position it doesn't own.
+
+def test_owned_by_is_true_for_a_matching_virtual_account():
+    assert _owned_by(_meta(virtual_account_id="core_h1"), "core_h1") is True
+
+
+def test_owned_by_is_true_for_legacy_metadata_with_no_virtual_account_tag():
+    assert _owned_by(_meta(), "core_h1") is True
+
+
+def test_owned_by_is_false_for_a_different_virtual_account():
+    assert _owned_by(_meta(virtual_account_id="champion_m30"), "core_h1") is False

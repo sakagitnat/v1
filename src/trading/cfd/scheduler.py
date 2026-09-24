@@ -207,6 +207,31 @@ def _reconcile_unknown_positions(
     return adoptions, foreign
 
 
+def _owned_by(meta: dict, owner_account_id: str) -> bool:
+    """True if a tracked_open leg's metadata belongs to owner_account_id
+    (or predates the virtual-account laboratory, meta.get("virtual_account_id")
+    is None -- treated as this scheduler's own, same as always). False for
+    any OTHER isolated $100 account's position (a timeframe champion,
+    trading.cfd.timeframe_champion; a GPT research/quota account,
+    trading.cfd.virtual_accounts) sharing the same Deriv demo account and
+    the same tracked_open dict.
+
+    Without this filter, a champion's own open position on an instrument
+    run_once() also trades would be invisible in tracked_open's DIRECT
+    sense but NOT invisible to positions_by_instrument (built straight
+    from the broker's raw open_positions_list()) -- _resolve_exit_strategy_
+    entry() would then fail to resolve its unrecognized strategy tag,
+    fall back to "the sole ACTIVE strategy" (ema_crossover@v1, currently),
+    and this scheduler would wrongly evaluate ema_crossover's exit signal
+    against a position it never opened and doesn't own -- silently
+    mismanaging another account's trade and double-counting it into this
+    account's own Portfolio Risk Governor snapshot and occupied-slot
+    count. Each isolated account must stay invisible to every other
+    account's exit/entry/risk accounting, the same way two different
+    human traders sharing one broker login would be."""
+    return meta.get("virtual_account_id") in (None, owner_account_id)
+
+
 def _legs_by_strategy(legs: list[dict], tracked_open: dict) -> dict[str, list[dict]]:
     """Splits one instrument's open legs into groups sharing the same
     strategy tag ("name@version") -- Revision 3 gap #3 (docs/
@@ -615,6 +640,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # one of. See broker.py's docstrings on both methods.
         positions_by_instrument: dict[str, list[dict]] = {}
         for p in await broker.open_positions_list():
+            if not _owned_by(tracked_open.get(str(p["contract_id"]), {}), "core_h1"):
+                continue  # another isolated $100 account's position -- see _owned_by's docstring
             positions_by_instrument.setdefault(p["instrument"], []).append(p)
 
         # Idempotency / attribution recovery + foreign-position detection
@@ -678,7 +705,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 notional=meta.get("stake", 0.0) * meta.get("multiplier", 0.0),
             )
             for cid, meta in tracked_open.items()
-            if int(cid) not in reconciled_ids
+            if int(cid) not in reconciled_ids and _owned_by(meta, "core_h1")
         ]
         risk_ceilings = PortfolioRiskCeilings(
             max_thesis_risk_pct=settings.cfd_max_thesis_risk_pct,
