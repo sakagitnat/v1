@@ -31,6 +31,32 @@
       "close_at": 1790229480,
       "entry_reason": "experimental direction of last two completed timeframe candles",
       "buy_price": 1.0
+    },
+    "14193657919": {
+      "instrument": "frxUSDJPY",
+      "strategy": "quota_30m_forward@timeframe_v2",
+      "side": "long",
+      "entry_time": "2026-09-24T05:30:55.441997+00:00",
+      "entry_price": 157.96,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 99.57,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M30"
+      ],
+      "quota_window": 994571,
+      "close_at": 1790229480,
+      "entry_reason": "experimental direction of last two completed timeframe candles",
+      "buy_price": 1.0
     }
   },
   "operating_mode": "normal",
@@ -952,15 +978,15 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "30-minute forced-quota forward research",
+      "label": "M30 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "TICK",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "TICK"
+        "M30"
       ],
-      "strategy_tag": "quota_30m@v0",
+      "strategy_tag": "quota_30m_forward@timeframe_v2",
       "equity": 99.57,
       "high_water_mark": 100.0,
       "realized_pnl": -0.43,
@@ -1539,7 +1565,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994570,
+    "quota_30m_forward": 994571,
     "quota_h1_forward": 497285,
     "quota_h4_forward": 124321,
     "quota_d1_forward": 20720
