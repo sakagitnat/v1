@@ -768,3 +768,8 @@
 {"timestamp": "2026-09-24T07:45:55.161597+00:00", "run_id": "35957074348", "outcome": "ALREADY_COMPLETED", "account": "quota_h1_forward", "window_id": 497287}
 {"timestamp": "2026-09-24T07:45:55.164627+00:00", "run_id": "35957074348", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124321}
 {"timestamp": "2026-09-24T07:45:55.167381+00:00", "run_id": "35957074348", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20720}
+{"timestamp": "2026-09-24T08:28:30.557977+00:00", "run_id": "35975399314", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14204031599, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 994575, "holding_seconds": 3455.424942}
+{"timestamp": "2026-09-24T08:28:30.624897+00:00", "run_id": "35975399314", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994576}
+{"timestamp": "2026-09-24T08:28:31.443922+00:00", "run_id": "35975399314", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14209176459, "instrument": "frxXAUUSD", "window_id": 497288, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790240280}
+{"timestamp": "2026-09-24T08:28:32.040189+00:00", "run_id": "35975399314", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 14209177379, "instrument": "frxGBPUSD", "window_id": 124322, "timeframe": "H4", "strategy": "quota_h4_forward@timeframe_v2", "close_at": 1790251080}
+{"timestamp": "2026-09-24T08:28:32.044716+00:00", "run_id": "35975399314", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20720}
