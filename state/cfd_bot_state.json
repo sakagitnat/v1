@@ -159,6 +159,106 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_trend_m5|frxXAUUSD": {
+      "contract_id": -28,
+      "side": "short",
+      "entry_price": 4282.66,
+      "stop_price": 4289.66053560226,
+      "target_price": 4275.65946439774,
+      "stake": 30.28,
+      "multiplier": 20,
+      "risk_amount": 0.99,
+      "entry_time": "2026-09-24T05:42:00.292714+00:00",
+      "equity_before": 99.0,
+      "regime": "ranging",
+      "virtual_account_id": "iso_trend_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_trend_m5|frxUSDJPY": {
+      "contract_id": -29,
+      "side": "long",
+      "entry_price": 158.119,
+      "stop_price": 158.01983375076122,
+      "target_price": 158.21816624923878,
+      "stake": 78.93,
+      "multiplier": 20,
+      "risk_amount": 0.99,
+      "entry_time": "2026-09-24T05:42:00.348585+00:00",
+      "equity_before": 99.0,
+      "regime": "ranging",
+      "virtual_account_id": "iso_trend_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxUSDJPY": {
+      "contract_id": -30,
+      "side": "long",
+      "entry_price": 158.119,
+      "stop_price": 157.99504218845155,
+      "target_price": 158.31733249847753,
+      "stake": 64.82,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-09-24T05:42:00.487776+00:00",
+      "equity_before": 101.63,
+      "regime": "ranging",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_meanrev_m15|frxUSDJPY": {
+      "contract_id": -31,
+      "side": "short",
+      "entry_price": 158.118,
+      "stop_price": 158.325607387611,
+      "target_price": 157.96229445929174,
+      "stake": 37.3,
+      "multiplier": 20,
+      "risk_amount": 0.98,
+      "entry_time": "2026-09-24T05:42:00.595145+00:00",
+      "equity_before": 97.96,
+      "regime": "trending",
+      "virtual_account_id": "iso_meanrev_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_meanrev_m5|frxUSDJPY": {
+      "contract_id": -32,
+      "side": "short",
+      "entry_price": 158.119,
+      "stop_price": 158.21816624923878,
+      "target_price": 158.04462531307092,
+      "stake": 81.21,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-09-24T05:42:00.659728+00:00",
+      "equity_before": 101.86,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -171,7 +271,7 @@
     "virtual:iso_trend_m15": 100.0,
     "virtual:iso_trend_m5": 99.0
   },
-  "paper_trade_counter": 27,
+  "paper_trade_counter": 32,
   "daily_risk_tracking": {
     "date": "2026-09-24",
     "start_equity": 121.36000000000058,
