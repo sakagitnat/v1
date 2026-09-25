@@ -209,6 +209,26 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_meanrev_m15|frxUSDJPY": {
+      "contract_id": -121,
+      "side": "long",
+      "entry_price": 158.422,
+      "stop_price": 158.25990222532815,
+      "target_price": 158.54357333100387,
+      "stake": 48.79,
+      "multiplier": 20,
+      "risk_amount": 1.0,
+      "entry_time": "2026-09-25T02:15:25.980088+00:00",
+      "equity_before": 99.84,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
     }
   },
   "paper_equity": {
@@ -222,7 +242,7 @@
     "virtual:iso_trend_m5": 99.5,
     "donchian_breakout@v2": 100.93
   },
-  "paper_trade_counter": 120,
+  "paper_trade_counter": 121,
   "daily_risk_tracking": {
     "date": "2026-09-25",
     "start_equity": 118.8700000000008,
