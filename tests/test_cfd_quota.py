@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from trading.cfd import quota, state, trade_log
+from trading.cfd.broker import DerivRequestError
 from trading.config import settings
 
 
@@ -14,6 +15,7 @@ class Broker:
         self.opened = set()
         self.buys = 0
         self.fail_sell = False
+        self.fail_order_stage = None  # None | "proposal" | "buy"
     async def connect(self):
         return {"account_type": "demo", "currency": "USD"}
     async def close(self):
@@ -30,6 +32,8 @@ class Broker:
         end = pd.Timestamp("2026-09-23T12:05:00Z").floor(f"{granularity}s")
         return pd.DataFrame({"close": range(2000, 2080)}, index=pd.date_range(end=end, periods=80, freq=f"{granularity}s"))
     async def submit_multiplier_order(self, *args):
+        if self.fail_order_stage is not None:
+            raise DerivRequestError(self.fail_order_stage, "simulated failure")
         self.buys += 1
         self.opened.add(self.buys)
         return {"buy": {"contract_id": self.buys, "buy_price": 1}}
@@ -111,6 +115,41 @@ def test_pending_buy_blocks_new_orders(setup):
     state.set_pending_entry("frxXAUUSD", {"quota_intent": True, "legs": []})
     assert all(r["outcome"] == "RECOVERY_OR_PAUSE_BLOCKED" for r in asyncio.run(quota.run_quotas()))
     assert setup.buys == 0
+
+
+def test_price_request_failure_clears_its_own_pending_and_does_not_block_other_accounts(setup):
+    """Regression test for the production incident: a proposal-stage
+    rejection (Deriv refuses before any buy is even attempted, e.g. the
+    symbol's market is closed) must never leave a stuck pending entry --
+    that stuck entry is exactly what blocked all four quota accounts
+    (RECOVERY_OR_PAUSE_BLOCKED, see the test above) for hours."""
+    setup.fail_order_stage = "proposal"
+    result = asyncio.run(quota.run_quotas())
+    assert [r["outcome"] for r in result] == ["PRICE_REQUEST_FAILED"] * 4
+    assert setup.buys == 0
+    assert state.get_pending_entries() == {}
+
+    # And, critically, it must not have left anything behind to block a
+    # later run either -- this is the actual production symptom.
+    setup.fail_order_stage = None
+    result = asyncio.run(quota.run_quotas())
+    assert [r["outcome"] for r in result] == ["OPENED"] * 4
+
+
+def test_buy_result_unknown_leaves_pending_entry_for_reconciliation(setup):
+    """A buy-stage failure is genuinely ambiguous -- Deriv may have
+    processed the order before the error/timeout reached us -- so unlike a
+    proposal-stage failure, the pending entry must NOT be cleared here."""
+    setup.fail_order_stage = "buy"
+    result = asyncio.run(quota.run_quotas())
+    assert result[0]["outcome"] == "BUY_RESULT_UNKNOWN"
+    assert setup.buys == 0
+    # Only the first account gets as far as attempting an order this run --
+    # its still-unresolved pending entry blocks the other three up front,
+    # same as test_pending_buy_blocks_new_orders. That's the deliberately
+    # conservative existing behavior; this test is about the pending entry
+    # itself surviving a buy-stage failure, not the blocking rule per se.
+    assert list(state.get_pending_entries().keys()) == ["frxXAUUSD"]
 
 
 def test_thirty_minute_deadline_closes_without_closing_longer_horizons(setup, monkeypatch):

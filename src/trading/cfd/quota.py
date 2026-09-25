@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from trading.cfd import state
-from trading.cfd.broker import DerivBroker
+from trading.cfd.broker import DerivBroker, DerivRequestError
 from trading.cfd.capital import equity_for_account
 from trading.cfd.portfolio_risk import OpenRiskPosition, PortfolioRiskCeilings, check_new_position
 from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
@@ -215,7 +215,29 @@ async def run_quotas():
                        strategy_tag=meta["strategy"], label=timeframe+" experimental timeframe quota")
             state._write_state(s)
             state.set_pending_entry(symbol, {"legs": [meta], "quota_intent": True})
-            bought = await broker.submit_multiplier_order(symbol, side, STAKE, MULTIPLIER, STOP, TARGET)
+            try:
+                bought = await broker.submit_multiplier_order(symbol, side, STAKE, MULTIPLIER, STOP, TARGET)
+            except DerivRequestError as exc:
+                if exc.stage == "proposal":
+                    # Rejected before any buy was even attempted (e.g.
+                    # market closed for this symbol) -- nothing was risked,
+                    # so it's safe to fully undo the pending marker right
+                    # here instead of leaving it stuck for a future run (or
+                    # every other quota account this same run, via the
+                    # blanket `pending_entries` check above) to puzzle over.
+                    state.clear_pending_entry(symbol)
+                    results.append(event("PRICE_REQUEST_FAILED", account=aid, instrument=symbol,
+                                         window_id=window, error=str(exc)))
+                else:
+                    # stage == "buy" (or unknown): genuinely ambiguous --
+                    # Deriv may have processed the buy before the error/
+                    # timeout reached us. Never guess: leave the pending
+                    # entry in place for the scheduler's own
+                    # _reconcile_unknown_positions to resolve against the
+                    # broker's actual open positions next run.
+                    results.append(event("BUY_RESULT_UNKNOWN", account=aid, instrument=symbol,
+                                         window_id=window, error=str(exc)))
+                continue  # this account's failure must never abort the other quota accounts' turns
             cid = int(bought["buy"]["contract_id"])
             meta["buy_price"] = float(bought["buy"].get("buy_price", STAKE))
             state.record_open_trade(cid, meta)

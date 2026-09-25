@@ -10,6 +10,24 @@ from trading.config import settings
 OPTIONS_API_BASE = "https://api.derivws.com/trading/v1/options"
 
 
+class DerivRequestError(RuntimeError):
+    """Same RuntimeError callers already catch, plus which request stage
+    failed (`stage`, the payload's own top-level key: "proposal", "buy",
+    "sell", ...) -- lets a caller that submits an order in two stages
+    (request a price, then buy it) tell "the price request itself failed,
+    nothing was risked" (stage == "proposal") apart from "the buy request
+    failed or its result is unknown" (stage == "buy", genuinely ambiguous:
+    Deriv may have processed it before the error/timeout). See quota.py's
+    run_quotas() for why that distinction matters -- treating both the
+    same way either leaves a stuck pending-entry marker after a definitely-
+    safe proposal rejection, or (worse) silently discards genuinely
+    unresolved order state."""
+
+    def __init__(self, stage: str, message: str):
+        self.stage = stage
+        super().__init__(f"Deriv API error ({stage}): {message}")
+
+
 class DerivBroker:
     """Thin async wrapper around Deriv's WebSocket API for Multipliers
     (leveraged forex/gold/commodity) trading.
@@ -184,7 +202,7 @@ class DerivBroker:
             if resp.get("req_id") != req_id:
                 continue  # a message for a different in-flight request; keep waiting
             if "error" in resp:
-                raise RuntimeError(f"Deriv API error ({list(payload)[0]}): {resp['error'].get('message')}")
+                raise DerivRequestError(list(payload)[0], resp["error"].get("message"))
             return resp
 
     async def account_equity(self) -> float:
