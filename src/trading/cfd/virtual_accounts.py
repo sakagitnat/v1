@@ -18,7 +18,12 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from trading.cfd import state as _state
 from trading.cfd.state import load_state, set_virtual_accounts
+from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
+from trading.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 ACTIVE_DEMO = "ACTIVE_DEMO"
@@ -142,12 +147,14 @@ def account_for_strategy(strategy_tag: str) -> Optional[str]:
     return None
 
 
-def record_virtual_close(account_id: str, pnl: float) -> dict:
-    """Apply an attributable closed-trade P&L to one logical $100 ledger."""
-    accounts = ensure_virtual_accounts()
-    if account_id not in accounts:
-        raise KeyError(f"Unknown virtual account: {account_id}")
-    row = dict(accounts[account_id])
+def _apply_close_to_row(row: dict, account_id: str, pnl: float) -> dict:
+    """Pure P&L application to one already-loaded account row -- no I/O of
+    its own, so a caller that needs this bundled atomically with OTHER
+    state mutations (trade_settlements' dedup outbox and open_trades'
+    pop, see commit_trade_settlement below) can do so in one load/write,
+    while record_virtual_close (an existing, simpler caller that doesn't
+    need that) still gets identical accounting."""
+    row = dict(row)
     row["realized_pnl"] = round(float(row.get("realized_pnl", 0.0)) + pnl, 2)
     row["equity"] = round(float(row.get("equity", row["starting_equity"])) + pnl, 2)
     row["high_water_mark"] = max(float(row.get("high_water_mark", row["starting_equity"])), row["equity"])
@@ -180,6 +187,113 @@ def record_virtual_close(account_id: str, pnl: float) -> dict:
                 "drawdown_from_start_pct": row["drawdown_from_start_pct"],
                 "reason": "virtual account equity fell to <=25% of starting equity"
             }) + "\n")
+    return row
+
+
+def record_virtual_close(account_id: str, pnl: float) -> dict:
+    """Apply an attributable closed-trade P&L to one logical $100 ledger."""
+    accounts = ensure_virtual_accounts()
+    if account_id not in accounts:
+        raise KeyError(f"Unknown virtual account: {account_id}")
+    row = _apply_close_to_row(accounts[account_id], account_id, pnl)
     accounts[account_id] = row
     set_virtual_accounts(accounts)
     return row
+
+
+def flush_trade_settlements() -> None:
+    """Replay trade_settlements' outbox into the Trade Database without
+    ever re-touching equity -- same replay-without-double-credit shape as
+    quota.py's own flush_settlements, generalized so every close path can
+    share it. Safe to call any time (e.g. speculatively, at the start of
+    a run) since it's a no-op for any contract_id already in the log."""
+    known = {int(r["contract_id"]) for r in load_trades()}
+    for cid, row in _state.load_state().get("trade_settlements", {}).items():
+        if int(cid) not in known:
+            record_trade(TradeRecord(**row))
+            known.add(int(cid))
+
+
+def commit_trade_settlement(record: TradeRecord) -> Optional[dict]:
+    """Atomically settles one closed contract: applies its P&L to the
+    owning virtual account (if any), queues it for the Trade Database, and
+    removes it from open_trades tracking -- as ONE state write, keyed by
+    contract_id, so a retry after a partial failure can never double-apply
+    the same contract's P&L.
+
+    This generalizes quota.py's own commit_close/flush_settlements
+    pattern (the one place in this codebase that already got this right)
+    to every other close path. Before this existed, scheduler.py's two
+    close paths and champion_scheduler.py's own each called
+    record_virtual_close() and record_trade() as separate, non-atomic
+    steps ("pop_open_trade last" only prevented losing track of a contract
+    on failure -- it did NOT prevent double-applying its P&L if
+    record_virtual_close succeeded but record_trade then raised: the
+    contract stayed in open_trades, un-popped, so the NEXT run's retry
+    walked through record_virtual_close again for the exact same pnl).
+    Confirmed reproducible: a single $4.50 win applied twice took a $100
+    account to $109.
+
+    Returns the updated virtual account row (or None if this record has no
+    virtual_account_id -- nothing to apply, but the settlement + open_trades
+    pop still happen), or None without any mutation at all if this exact
+    contract_id was already settled by an earlier, successful call (verified
+    against the outbox for a conflicting pnl/account, which raises instead
+    of silently accepting different evidence for the same contract).
+
+    The Trade Database append itself (flush_trade_settlements, a separate
+    file from the state this function's own write is atomic against) is
+    attempted opportunistically before returning, but a failure there is
+    swallowed (logged, not raised): by that point the equity mutation and
+    dedup outbox entry are already durably committed, so there is nothing
+    left to roll back, and nothing would be gained by making this call
+    (or its caller, e.g. mid-run in scheduler.py) fail over a lagging log
+    line that a later flush_trade_settlements() call -- explicit, or the
+    next run's own speculative one -- will pick up and complete without
+    ever re-touching equity."""
+    s = _state.load_state()
+    key = str(record.contract_id)
+    outbox = s.setdefault("trade_settlements", {})
+    if key in outbox:
+        prior = outbox[key]
+        if prior["pnl"] != record.pnl or prior.get("virtual_account_id") != record.virtual_account_id:
+            raise RuntimeError(
+                f"Conflicting settlement evidence for contract {record.contract_id}: "
+                f"already settled as pnl={prior['pnl']} account={prior.get('virtual_account_id')!r}, "
+                f"now given pnl={record.pnl} account={record.virtual_account_id!r}"
+            )
+        _try_flush_trade_settlements()
+        return None
+    row = None
+    if record.virtual_account_id and record.pnl is not None:
+        # pnl is None for a real exit whose P&L simply isn't attributable
+        # (see TradeRecord.pnl's own docstring) -- never coerced to 0.0,
+        # which would silently apply a fabricated break-even close.
+        accounts = dict(s.get("virtual_accounts") or {})
+        if record.virtual_account_id not in accounts:
+            raise KeyError(f"Unknown virtual account: {record.virtual_account_id}")
+        row = _apply_close_to_row(accounts[record.virtual_account_id], record.virtual_account_id, record.pnl)
+        accounts[record.virtual_account_id] = row
+        s["virtual_accounts"] = accounts
+        # Deliberately NOT setting record.equity_after here: it already
+        # means different things to different callers (this isolated sub-
+        # account's own equity for quota.py's callers; the shared CORE
+        # account's overall equity snapshot for scheduler.py's) -- the
+        # caller sets whichever is correct for it before calling this.
+    outbox[key] = asdict(record)
+    s.setdefault("open_trades", {}).pop(key, None)
+    _state._write_state(s)
+    _try_flush_trade_settlements()
+    return row
+
+
+def _try_flush_trade_settlements() -> None:
+    try:
+        flush_trade_settlements()
+    except Exception:
+        logger.warning(
+            "flush_trade_settlements failed after a settlement was already durably committed to state -- "
+            "the Trade Database append will be retried by a later flush_trade_settlements() call "
+            "(explicit, or the next run's own speculative one). Equity was NOT affected.",
+            exc_info=True,
+        )

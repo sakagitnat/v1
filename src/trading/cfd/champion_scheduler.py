@@ -62,8 +62,8 @@ from trading.cfd.state import (
 )
 from trading.cfd.strategy_registry import STRATEGY_CLASSES
 from trading.cfd.timeframe_champion import CHAMPION_SPECS, MANAGED_CHAMPIONS, get_assignment
-from trading.cfd.trade_log import TradeRecord, record_trade
-from trading.cfd.virtual_accounts import ensure_virtual_accounts, record_virtual_close
+from trading.cfd.trade_log import TradeRecord
+from trading.cfd.virtual_accounts import commit_trade_settlement, ensure_virtual_accounts
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -200,16 +200,18 @@ async def _run_one_champion(broker: DerivBroker, account_id: str) -> list[dict]:
                 summary.append({"instrument": instrument, "outcome": "ERROR", "reason": f"{account_id}: settlement not yet confirmed ({exc})"})
                 continue
 
-            # Persist the durable records (virtual ledger, Trade Database)
-            # BEFORE removing this contract's open_trades tracking entry.
-            # pop_open_trade is the last step, not the first: if
-            # record_virtual_close/record_trade below ever raises, this
-            # contract stays tracked as open for the next run to retry,
-            # instead of silently losing the only local record that ties
-            # this settled contract back to an account/strategy/thesis.
-            record_virtual_close(account_id, pnl)
+            # One atomic settlement (equity mutation, Trade Database queue,
+            # and open_trades removal together, keyed by contract_id) --
+            # not three separate calls. The old comment here ("pop_open_
+            # trade is the last step, not the first") only protected
+            # against losing track of a contract on failure; it did NOT
+            # protect against double-applying its P&L when
+            # record_virtual_close succeeded but record_trade then raised
+            # -- the contract stayed tracked open, un-popped, so the next
+            # run's retry walked through record_virtual_close again for
+            # the same pnl. See commit_trade_settlement's own docstring.
             equity_before = meta.get("equity_before")
-            record_trade(
+            commit_trade_settlement(
                 TradeRecord(
                     contract_id=contract_id,
                     instrument=instrument,
@@ -232,7 +234,6 @@ async def _run_one_champion(broker: DerivBroker, account_id: str) -> list[dict]:
                     context_timeframes=meta.get("context_timeframes"),
                 )
             )
-            pop_open_trade(contract_id)
             risk.register_close(pnl)
             summary.append({"instrument": instrument, "outcome": "TRADE", "reason": f"{account_id}: closed, pnl={pnl:+.2f}"})
             continue

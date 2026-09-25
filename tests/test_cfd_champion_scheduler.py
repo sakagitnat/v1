@@ -306,13 +306,24 @@ def test_champion_pending_entries_are_never_touched_by_run_once(monkeypatch):
     assert "champion_m30:frxXAUUSD" in state.get_champion_pending_entries()
 
 
-# 2026-09-24 review fix -- P1: durable records (virtual ledger, Trade
-# Database) are now persisted before this contract's open_trades
-# tracking entry is removed, not after -- a failure in between used to
-# silently lose the only local record tying a settled contract back to
-# an account/strategy/thesis.
+# 2026-09-25 review fix -- P1 superseded: the original fix here (record
+# durable records before popping open_trades) prevented LOSING the only
+# local record on a partial failure, but it didn't prevent DOUBLE-COUNTING
+# it either -- if record_virtual_close succeeded but record_trade then
+# raised, the contract stayed tracked open for a next-run retry, which
+# walked through record_virtual_close a second time for the same pnl
+# (confirmed reproducible: one $4.50 win applied twice took $100 to $109).
+# commit_trade_settlement (trading.cfd.virtual_accounts) replaces the
+# three separate calls with one atomic settlement: equity + a
+# contract_id-keyed dedup outbox + the open_trades pop all happen in a
+# single state write. Only the SEPARATE Trade Database append (a
+# different file, trade_log.jsonl) can still fail and lag behind -- and
+# when it does, the contract is correctly no longer tracked as open
+# (equity was already, correctly, applied exactly once), so this test
+# now verifies that lagging append gets retried and completed on the next
+# run instead of ever being retried against equity again.
 
-def test_open_trade_stays_tracked_if_persisting_the_close_fails(monkeypatch):
+def test_trade_log_append_failure_does_not_lose_or_double_count_pnl(monkeypatch):
     state.record_open_trade(42, {
         "instrument": "frxXAUUSD", "strategy": "ema_crossover", "side": "long",
         "entry_time": "2026-01-01T00:00:00Z", "entry_price": 2000.0, "stake": 10.0,
@@ -322,12 +333,33 @@ def test_open_trade_stays_tracked_if_persisting_the_close_fails(monkeypatch):
     broker = _broker(open_positions_list=AsyncMock(return_value=[]))
     broker.settled_profit = AsyncMock(return_value=4.5)
     _stub_strategy(monkeypatch, Signal("frxXAUUSD", Action.HOLD, 2000.0, reason="n/a"))
-    monkeypatch.setattr(champion_scheduler, "record_trade", Mock(side_effect=RuntimeError("disk full")))
 
-    with pytest.raises(RuntimeError):
-        asyncio.run(champion_scheduler._run_one_champion(broker, "champion_m30"))
+    # commit_trade_settlement itself does not raise: the Trade Database
+    # append it attempts via flush_trade_settlements is best-effort and
+    # retried later, never allowed to roll back (or repeat) the equity
+    # mutation that already landed in the same atomic state write. Scoped
+    # to a nested context so only this one patch is undone afterward --
+    # not the outer isolated_state fixture's own monkeypatches.
+    with monkeypatch.context() as m:
+        m.setattr(virtual_accounts, "record_trade", Mock(side_effect=RuntimeError("disk full")))
+        summary = asyncio.run(champion_scheduler._run_one_champion(broker, "champion_m30"))
+    assert summary[0]["outcome"] == "TRADE"
 
-    assert "42" in state.list_open_trades()
+    # Equity applied exactly once, contract no longer tracked as open --
+    # unlike the old behavior, there is nothing left to "retry" against
+    # equity, because nothing was left half-done.
+    assert "42" not in state.list_open_trades()
+    assert state.load_state()["virtual_accounts"]["champion_m30"]["equity"] == 104.5
+    assert trade_log.load_trades() == []  # the append genuinely hasn't landed yet
+
+    # A later run (or any explicit flush) retries only the missing log
+    # line -- never re-touches equity.
+    virtual_accounts.flush_trade_settlements()
+    trades = trade_log.load_trades()
+    assert len(trades) == 1
+    assert trades[0]["contract_id"] == 42
+    assert trades[0]["pnl"] == 4.5
+    assert state.load_state()["virtual_accounts"]["champion_m30"]["equity"] == 104.5
 
 
 # 2026-09-24 review fix -- P2: the exit-side strategy is rebuilt with the

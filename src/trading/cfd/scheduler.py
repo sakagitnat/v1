@@ -57,8 +57,8 @@ from trading.cfd.state import (
     set_operating_mode,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
-from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
-from trading.cfd.virtual_accounts import account_for_strategy, ensure_virtual_accounts, record_virtual_close
+from trading.cfd.trade_log import TradeRecord, load_trades
+from trading.cfd.virtual_accounts import account_for_strategy, commit_trade_settlement, ensure_virtual_accounts, flush_trade_settlements
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -450,6 +450,13 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     if bridge_command_id:
         logger.info("Bridge-triggered run (command_id=%s)", bridge_command_id)
 
+    # Retry any trade_settlements outbox entry from a prior run whose
+    # equity/dedup write succeeded but whose separate Trade Database
+    # append then failed (see commit_trade_settlement's docstring) --
+    # never re-touches equity, only replays the missing log line. Same
+    # first-thing-in-the-run placement as quota.py's own flush_settlements.
+    flush_trade_settlements()
+
     trades = load_trades()
 
     # Autonomous demotion (docs/VISION.md's "Autonomy boundaries"): any
@@ -623,10 +630,14 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 commit_quota_close(record, meta["quota_window"])
                 reconciled_ids.add(record.contract_id)
                 continue
-            record_trade(record)
-            if record.pnl is not None and record.virtual_account_id:
-                record_virtual_close(record.virtual_account_id, record.pnl)
-            pop_open_trade(record.contract_id)
+            # One atomic settlement (equity mutation, Trade Database queue,
+            # and open_trades removal together, keyed by contract_id) --
+            # not three separate calls. Those three used to be able to
+            # apply this contract's P&L twice: if record_virtual_close
+            # succeeded but record_trade then raised, the contract stayed
+            # in open_trades un-popped, so the next run's retry walked
+            # through record_virtual_close again for the same pnl.
+            commit_trade_settlement(record)
             reconciled_ids.add(record.contract_id)
             logger.info(
                 "%s: reconciled externally-closed contract %d (pnl=%s)",
@@ -863,7 +874,16 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     risk.register_close(pnl)
                     equity = new_equity
                     if meta:
-                        record_trade(
+                        # One atomic settlement (equity mutation, Trade
+                        # Database queue, and open_trades removal together,
+                        # keyed by contract_id) instead of three separate
+                        # calls -- see commit_trade_settlement's docstring
+                        # for the double-counting bug this replaces (a
+                        # confirmed $4.50 win applied twice took a $100
+                        # account to $109 when record_virtual_close
+                        # succeeded but record_trade then raised, leaving
+                        # this contract un-popped for a next-run retry).
+                        commit_trade_settlement(
                             TradeRecord(
                                 contract_id=contract_id,
                                 instrument=instrument,
@@ -888,18 +908,18 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                                 context_timeframes=meta.get("context_timeframes"),
                             )
                         )
-                        if meta.get("virtual_account_id") and pnl is not None:
-                            record_virtual_close(meta["virtual_account_id"], pnl)
                     else:
                         logger.warning(
                             "%s: closed contract %d with no tracked entry metadata "
                             "(opened before trade logging existed) -- pnl not logged to the trade database.",
                             instrument, contract_id,
                         )
-                    # Retain recovery metadata until broker confirmation and
-                    # local accounting finish. A timeout must never orphan a
-                    # position or release its risk budget for a new entry.
-                    pop_open_trade(contract_id)
+                        # No tracked metadata means commit_trade_settlement
+                        # (which needs meta to build a TradeRecord) never
+                        # ran to pop this -- do it directly so a
+                        # metadata-less contract doesn't stay tracked open
+                        # forever.
+                        pop_open_trade(contract_id)
                     open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
 
                 if group_still_open:
