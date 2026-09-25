@@ -2872,3 +2872,7 @@
 {"timestamp": "2026-09-25T01:16:04.472971+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
 {"timestamp": "2026-09-25T01:16:04.476511+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-09-25T01:16:04.480091+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-25T01:17:04.074559+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_30m_forward"}
+{"timestamp": "2026-09-25T01:17:04.078328+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-09-25T01:17:04.081968+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-09-25T01:17:04.085603+00:00", "run_id": "36081195953", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
