@@ -48,7 +48,7 @@ from trading.cfd.state import (
     set_paper_equity,
     set_paper_position,
 )
-from trading.cfd.strategy_registry import LifecycleState, list_by_state
+from trading.cfd.strategy_registry import LifecycleState, get as get_registry_entry, list_by_state
 from trading.cfd.trade_log import TradeRecord, record_trade
 from trading.cfd.virtual_accounts import account_for_strategy, ensure_virtual_accounts, record_virtual_close
 from trading.config import settings
@@ -250,6 +250,19 @@ def run_virtual_account_paper(account_id: str, instrument: str, bars: pd.DataFra
             ), path=PAPER_LOG_PATH,
         )
         logger.info("PAPER-FORWARD %s: closed %s %s pnl=%.2f", account_id, instrument, side, pnl)
+        return
+
+    # 2026-09-25: found via live paper data (iso_meanrev_m15: 4/5 losses on
+    # trades fired in "trending" regime, vs 7/18 losses in its suited
+    # "ranging" regime) that this isolated-lab entry point never applied
+    # run_paper_trading()'s own suited_regimes gate -- it opened a new
+    # position on any regime the moment the strategy signalled, unlike the
+    # registry-driven PAPER path a few functions above. Same registry data,
+    # same gate, so the isolated accounts stop taking trades a strategy was
+    # never meant to take instead of just recording the loss afterward.
+    strategy_name, _, strategy_version = strategy_tag.partition("@")
+    registry_entry = get_registry_entry(strategy_name, strategy_version) if strategy_version else None
+    if registry_entry and registry_entry.suited_regimes and regime not in registry_entry.suited_regimes:
         return
 
     signal = strategy.signal_for_row(instrument, row, prev_row, None)

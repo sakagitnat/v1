@@ -145,6 +145,99 @@ def test_existing_position_closes_on_opposite_signal(tmp_path, monkeypatch):
     assert trades[0]["pnl"] == 6.0
 
 
+def _isolated_account(strategy_tag, **overrides):
+    account = {
+        "account_id": "iso_test", "execution_tier": "PAPER", "strategy_tag": strategy_tag,
+        "equity": 100.0, "starting_equity": 100.0, "horizon": "isolated",
+        "entry_timeframe": "M15", "context_timeframes": ["H1", "M15"],
+    }
+    account.update(overrides)
+    return account
+
+
+def test_isolated_account_skips_new_entry_when_regime_not_suited(tmp_path, monkeypatch):
+    """iso_meanrev_m15 in production: 4/5 real losses came from trades
+    opened while the regime was "trending", even though mean_reversion@v1
+    is only ever registered as suited to "ranging" -- run_virtual_account_paper
+    never checked suited_regimes before opening a new position, unlike its
+    sibling run_paper_trading(). This is the regression test for that gate."""
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(pt, "PAPER_LOG_PATH", tmp_path / "cfd_paper_trades.jsonl")
+    account = _isolated_account("meanrev_test@v1")
+    monkeypatch.setattr(pt, "ensure_virtual_accounts", lambda: {"iso_test": account})
+    monkeypatch.setattr(pt, "get_registry_entry", lambda name, version: _FakeEntry(name, version, ["ranging"], None))
+
+    strategy = _ScriptedStrategy({0: Signal("frxXAUUSD", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=110.0)})
+    pt.run_virtual_account_paper("iso_test", "frxXAUUSD", _bars([100, 100]), "trending", strategy)
+
+    assert state.get_paper_position("virtual:iso_test", "frxXAUUSD") is None
+
+
+def test_isolated_account_opens_new_entry_when_regime_suited(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(pt, "PAPER_LOG_PATH", tmp_path / "cfd_paper_trades.jsonl")
+    account = _isolated_account("meanrev_test@v1")
+    monkeypatch.setattr(pt, "ensure_virtual_accounts", lambda: {"iso_test": account})
+    monkeypatch.setattr(pt, "get_registry_entry", lambda name, version: _FakeEntry(name, version, ["ranging"], None))
+
+    strategy = _ScriptedStrategy({0: Signal("frxXAUUSD", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=110.0)})
+    pt.run_virtual_account_paper("iso_test", "frxXAUUSD", _bars([100, 100]), "ranging", strategy)
+
+    position = state.get_paper_position("virtual:iso_test", "frxXAUUSD")
+    assert position is not None
+    assert position["side"] == "long"
+
+
+def test_isolated_account_opens_regardless_when_strategy_not_in_registry(tmp_path, monkeypatch):
+    """Fail open, not closed: an isolated account whose strategy_tag has no
+    matching registry entry (e.g. conceptual labels like hybrid_balanced@v0
+    with no real algorithm/registration) must keep behaving exactly as
+    before this gate was added, not silently go dead."""
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(pt, "PAPER_LOG_PATH", tmp_path / "cfd_paper_trades.jsonl")
+    account = _isolated_account("unregistered_tag@v0")
+    monkeypatch.setattr(pt, "ensure_virtual_accounts", lambda: {"iso_test": account})
+    monkeypatch.setattr(pt, "get_registry_entry", lambda name, version: None)
+
+    strategy = _ScriptedStrategy({0: Signal("frxXAUUSD", Action.BUY, price=100.0, stop_price=95.0, take_profit_price=110.0)})
+    pt.run_virtual_account_paper("iso_test", "frxXAUUSD", _bars([100, 100]), "trending", strategy)
+
+    assert state.get_paper_position("virtual:iso_test", "frxXAUUSD") is not None
+
+
+def test_isolated_account_manages_existing_exit_regardless_of_regime(tmp_path, monkeypatch):
+    """An open position isn't abandoned just because the regime shifted --
+    same principle run_paper_trading already documents for the registry-
+    driven PAPER path. The new gate must only apply to new entries."""
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(pt, "PAPER_LOG_PATH", tmp_path / "cfd_paper_trades.jsonl")
+    account = _isolated_account("meanrev_test@v1")
+    # record_virtual_close() (called on exit) reads/writes virtual accounts
+    # through its own module-level state, not pt's -- seed real state
+    # instead of monkeypatching pt.ensure_virtual_accounts here so that
+    # write path sees "iso_test" too.
+    state.set_virtual_accounts({"iso_test": account})
+    monkeypatch.setattr(pt, "get_registry_entry", lambda name, version: _FakeEntry(name, version, ["ranging"], None))
+    state.set_paper_position(
+        "virtual:iso_test", "frxXAUUSD",
+        {
+            "contract_id": -1, "side": "long", "entry_price": 100.0,
+            "stop_price": 95.0, "target_price": 110.0, "stake": 10.0,
+            "multiplier": 20, "risk_amount": 1.0, "entry_time": "2026-01-01T00:00:00+00:00",
+            "equity_before": 100.0, "regime": "ranging",
+        },
+    )
+
+    strategy = _ScriptedStrategy({})  # HOLD -- exit driven by price, not signal
+    bars = _bars(closes=[97, 96], lows=[97, 94], highs=[97, 96])  # low=94 pierces stop=95
+    pt.run_virtual_account_paper("iso_test", "frxXAUUSD", bars, "trending", strategy)
+
+    assert state.get_paper_position("virtual:iso_test", "frxXAUUSD") is None
+    trades = load_trades(tmp_path / "cfd_paper_trades.jsonl")
+    assert len(trades) == 1
+    assert trades[0]["exit_reason"] == "paper-forward: stop_loss"
+
+
 def test_stake_below_min_stake_skips_the_trade(tmp_path, monkeypatch):
     from trading.config import settings
 
