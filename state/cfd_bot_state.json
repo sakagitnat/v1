@@ -382,8 +382,8 @@
   },
   "paper_trade_counter": 98,
   "daily_risk_tracking": {
-    "date": "2026-09-24",
-    "start_equity": 121.36000000000058,
+    "date": "2026-09-25",
+    "start_equity": 118.8700000000008,
     "halted": false
   },
   "pending_entries": {
@@ -2796,17 +2796,17 @@
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
     "champion_m30": {
-      "date": "2026-09-24",
+      "date": "2026-09-25",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_h4": {
-      "date": "2026-09-24",
+      "date": "2026-09-25",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_d1": {
-      "date": "2026-09-24",
+      "date": "2026-09-25",
       "start_equity": 100.0,
       "halted": false
     }
