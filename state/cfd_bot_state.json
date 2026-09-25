@@ -309,26 +309,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m15|frxGBPUSD": {
-      "contract_id": -117,
-      "side": "short",
-      "entry_price": 1.32213,
-      "stop_price": 1.323063060749808,
-      "target_price": 1.321430204437644,
-      "stake": 70.91,
-      "multiplier": 20,
-      "risk_amount": 1.0,
-      "entry_time": "2026-09-25T01:13:38.908931+00:00",
-      "equity_before": 100.08,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_meanrev_m5|frxXAUUSD": {
       "contract_id": -119,
       "side": "short",
@@ -355,7 +335,7 @@
     "virtual:iso_breakout_m5": 99.26,
     "virtual:breakout_h1": 103.38,
     "virtual:iso_trend_h1": 101.0,
-    "virtual:iso_meanrev_m15": 100.08,
+    "virtual:iso_meanrev_m15": 100.83,
     "virtual:iso_meanrev_m5": 107.09,
     "virtual:iso_trend_m15": 98.65,
     "virtual:iso_trend_m5": 99.5,
@@ -715,11 +695,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 100.08,
-      "high_water_mark": 100.08,
-      "realized_pnl": 0.08,
-      "closed_trades": 15,
-      "wins": 9,
+      "equity": 100.83,
+      "high_water_mark": 100.83,
+      "realized_pnl": 0.83,
+      "closed_trades": 16,
+      "wins": 10,
       "losses": 6,
       "drawdown_from_start_pct": 0.0
     },
