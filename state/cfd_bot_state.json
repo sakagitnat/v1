@@ -30,26 +30,6 @@
         "H1"
       ]
     },
-    "virtual:breakout_h1|frxUSDJPY": {
-      "contract_id": -49,
-      "side": "long",
-      "entry_price": 158.485,
-      "stop_price": 157.94386928976104,
-      "target_price": 159.3508091363824,
-      "stake": 14.99,
-      "multiplier": 20,
-      "risk_amount": 1.02,
-      "entry_time": "2026-09-24T06:42:00.031805+00:00",
-      "equity_before": 102.39,
-      "regime": "ranging",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "donchian_breakout@v2|frxUSDJPY": {
       "contract_id": -65,
       "side": "long",
@@ -333,7 +313,7 @@
   "paper_equity": {
     "virtual:iso_breakout_m15": 102.64,
     "virtual:iso_breakout_m5": 99.26,
-    "virtual:breakout_h1": 103.38,
+    "virtual:breakout_h1": 103.15,
     "virtual:iso_trend_h1": 101.0,
     "virtual:iso_meanrev_m15": 100.83,
     "virtual:iso_meanrev_m5": 107.09,
@@ -413,11 +393,11 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 102.89,
+      "equity": 103.15,
       "high_water_mark": 104.1,
-      "realized_pnl": 2.89,
-      "closed_trades": 6,
-      "wins": 3,
+      "realized_pnl": 3.15,
+      "closed_trades": 7,
+      "wins": 4,
       "losses": 3,
       "drawdown_from_start_pct": 0.0
     },
