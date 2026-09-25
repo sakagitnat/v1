@@ -65,15 +65,17 @@ def _leg(contract_id, instrument="frxXAUUSD", side="long"):
 def test_a_known_tracked_contract_is_neither_adopted_nor_foreign():
     positions = {"frxXAUUSD": [_leg(1)]}
     tracked_open = {"1": _meta()}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending_entries={})
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open, pending_entries={})
     assert adoptions == []
     assert foreign == []
+    assert ambiguous == []
 
 
 def test_unknown_contract_with_no_pending_entry_is_foreign():
     positions = {"frxXAUUSD": [_leg(1)]}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries={})
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries={})
     assert adoptions == []
+    assert ambiguous == []
     assert len(foreign) == 1
     assert foreign[0] == {"contract_id": 1, "instrument": "frxXAUUSD", "side": "long"}
 
@@ -81,20 +83,57 @@ def test_unknown_contract_with_no_pending_entry_is_foreign():
 def test_unknown_contract_matching_a_pending_entry_is_adopted():
     positions = {"frxXAUUSD": [_leg(1)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert foreign == []
+    assert ambiguous == []
     assert len(adoptions) == 1
     assert adoptions[0][0] == 1
     assert adoptions[0][1]["leg"] == "runner"
 
 
-def test_both_legs_of_a_split_entry_are_adopted_in_order():
+# 2026-09-25 review fix (issue #4): matching used to be by instrument
+# alone, popping whichever pending leg happened to be first in the list
+# -- so a pending Long leg could silently absorb a broker-reported Short
+# position (or vice versa) as long as they shared an instrument. Matching
+# is now gated on side too, and refuses to guess when side alone can't
+# uniquely identify the leg.
+
+def test_side_mismatch_is_never_blindly_adopted():
+    """The exact production bug this closes: a pending Long leg must
+    never absorb a broker-reported Short contract just because they share
+    an instrument."""
+    positions = {"frxXAUUSD": [_leg(1, side="short")]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner", side="long")]}}
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert adoptions == []
+    assert foreign == []
+    assert ambiguous == [{"contract_id": 1, "instrument": "frxXAUUSD", "side": "short"}]
+
+
+def test_opposite_side_legs_are_each_confidently_matched_to_the_correct_one():
+    """When sides DO differ, each unknown leg is matched to the pending
+    leg that actually agrees with it -- not by list position."""
+    positions = {"frxXAUUSD": [_leg(1, side="short"), _leg(2, side="long")]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="long_leg", side="long"), _meta(leg="short_leg", side="short")]}}
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert foreign == []
+    assert ambiguous == []
+    by_contract = {contract_id: leg["leg"] for contract_id, leg in adoptions}
+    assert by_contract == {1: "short_leg", 2: "long_leg"}
+
+
+def test_split_entry_legs_sharing_the_same_side_are_ambiguous_not_guessed():
+    """A scalp+runner split shares one side by construction -- side alone
+    can't tell the two contracts apart (broker.py doesn't currently parse
+    stake or purchase_time either, see its open_positions_list
+    docstring), so both must be left unresolved rather than guessed at in
+    list order."""
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="scalp"), _meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert adoptions == []
     assert foreign == []
-    assert [a[1]["leg"] for a in adoptions] == ["scalp", "runner"]
-    assert [a[0] for a in adoptions] == [1, 2]
+    assert {a["contract_id"] for a in ambiguous} == {1, 2}
 
 
 def test_more_unknown_contracts_than_pending_legs_are_partly_foreign():
@@ -102,16 +141,18 @@ def test_more_unknown_contracts_than_pending_legs_are_partly_foreign():
     # turned up -- the extra one is never assumed to be ours too.
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert len(adoptions) == 1
     assert len(foreign) == 1
+    assert ambiguous == []
 
 
 def test_pending_entry_for_a_different_instrument_does_not_cover_this_one():
     positions = {"frxEURUSD": [_leg(1, instrument="frxEURUSD")]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert adoptions == []
+    assert ambiguous == []
     assert len(foreign) == 1
     assert foreign[0]["instrument"] == "frxEURUSD"
 
@@ -120,10 +161,11 @@ def test_mixed_known_and_unknown_legs_on_the_same_instrument():
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     tracked_open = {"1": _meta()}  # contract 1 already known
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open, pending)
     assert len(adoptions) == 1
     assert adoptions[0][0] == 2
     assert foreign == []
+    assert ambiguous == []
 
 
 # Revision 3 gap #3 (docs/ARCHITECTURE_AUDIT.md): an instrument can now

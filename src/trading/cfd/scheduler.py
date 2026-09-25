@@ -168,12 +168,12 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
 
 def _reconcile_unknown_positions(
     positions_by_instrument: dict[str, list[dict]], tracked_open: dict, pending_entries: dict
-) -> tuple[list[tuple[int, dict]], list[dict]]:
+) -> tuple[list[tuple[int, dict]], list[dict], list[dict]]:
     """Splits every currently-open contract with no local metadata
-    (`tracked_open`) into two buckets:
+    (`tracked_open`) into three buckets:
 
     adoptions: (contract_id, leg_meta) pairs to record_open_trade() --
-    contracts matching a *pending* entry (trading.cfd.state.
+    contracts matched to a *pending* entry (trading.cfd.state.
     set_pending_entry, written right before this bot's own
     submit_multiplier_order calls) from a run that crashed between
     submitting the order and its state-file commit ever landing (each
@@ -182,29 +182,55 @@ def _reconcile_unknown_positions(
     recovers the strategy/thesis/risk_amount attribution that would
     otherwise be lost, closing Revision 3 gap #9's attribution window.
 
-    foreign: contracts with NO matching pending entry either -- never
-    opened by this bot's own tracked intent at all (a manual trade, or
-    an unrelated script hitting the same account). Never silently
-    absorbed into this bot's own strategy/thesis attribution -- closes
-    Revision 3 gap #8. The caller logs these loudly and excludes the
-    instrument from new entries until a human investigates; their
-    balance impact still reaches virtual equity (which is derived from
-    the raw broker balance delta, not per-trade attribution -- see
-    docs/ARCHITECTURE_AUDIT.md for why that part isn't solvable without
-    a deeper per-trade balance API this project doesn't have)."""
+    Matched by (instrument, side) -- 2026-09-25 review fix: this used to
+    match by instrument alone, popping whichever pending leg happened to
+    be first in the list, with no check that its side even agreed with
+    the broker-reported contract it was being attributed to. A pending
+    Long leg could silently absorb a broker-reported Short position (or
+    vice versa) as long as they shared an instrument. side is the one
+    field broker.py's open_positions_list() already reliably parses from
+    Deriv for every open contract (unlike stake or purchase_time, which
+    it doesn't currently parse at all -- see that method's own docstring
+    for the confirmed-vs-assumed field names this project trusts); using
+    it to gate adoption closes the wrong-leg misattribution this review
+    found, without inventing an unverified new API field.
+
+    foreign: contracts with NO pending entry on this instrument at all --
+    never opened by this bot's own tracked intent (a manual trade, or an
+    unrelated script hitting the same account). Never silently absorbed
+    into this bot's own strategy/thesis attribution -- closes Revision 3
+    gap #8.
+
+    ambiguous: contracts where a pending entry DOES exist on this
+    instrument, but side alone can't identify which specific leg this
+    is -- either none of the pending legs share this contract's side, or
+    more than one does (e.g. a "scalp"+"runner" split, both the same
+    direction; broker.py doesn't currently parse stake to tell those
+    apart either). Genuinely unresolvable with the fields this project
+    currently trusts from Deriv -- never guessed at. The caller treats
+    this the same way as foreign for risk purposes (the instrument is
+    excluded until a human investigates) but logs it distinctly: this
+    might still be one of this bot's own positions, just not one this
+    function could safely identify -- not necessarily a rogue trade."""
     adoptions: list[tuple[int, dict]] = []
     foreign: list[dict] = []
+    ambiguous: list[dict] = []
     for instrument, legs in positions_by_instrument.items():
         unknown_legs = [leg for leg in legs if str(leg["contract_id"]) not in tracked_open]
         if not unknown_legs:
             continue
         pending_legs = list(pending_entries.get(instrument, {}).get("legs", []))
         for leg in unknown_legs:
-            if pending_legs:
-                adoptions.append((leg["contract_id"], pending_legs.pop(0)))
+            side_matches = [pl for pl in pending_legs if pl.get("side") == leg["side"]]
+            if len(side_matches) == 1:
+                matched = side_matches[0]
+                pending_legs.remove(matched)
+                adoptions.append((leg["contract_id"], matched))
+            elif pending_legs:
+                ambiguous.append({"contract_id": leg["contract_id"], "instrument": instrument, "side": leg["side"]})
             else:
                 foreign.append({"contract_id": leg["contract_id"], "instrument": instrument, "side": leg["side"]})
-    return adoptions, foreign
+    return adoptions, foreign, ambiguous
 
 
 def _owned_by(meta: dict, owner_account_id: str) -> bool:
@@ -669,7 +695,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # risk-reducing action, no human approval needed) until a human
         # investigates and runs `cfd_cli.py include-instrument` again.
         pending_entries = get_pending_entries()
-        adoptions, foreign = _reconcile_unknown_positions(positions_by_instrument, tracked_open, pending_entries)
+        adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions_by_instrument, tracked_open, pending_entries)
         for contract_id, leg_meta in adoptions:
             record_open_trade(contract_id, leg_meta)
             tracked_open[str(contract_id)] = leg_meta
@@ -697,6 +723,21 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 "Virtual equity still reflects its balance impact (derived from the raw broker balance delta, "
                 "not per-trade attribution). Investigate manually.",
                 f["instrument"], f["contract_id"],
+            )
+        for a in ambiguous:
+            reason = (
+                f"unresolved position attribution: contract {a['contract_id']} ({a['side']}) has a pending entry "
+                "on this instrument, but its side didn't uniquely identify which pending leg it is -- never "
+                "guessed. Investigate, then `include-instrument` to resume"
+            )
+            exclude_instrument(a["instrument"], reason)
+            excluded[a["instrument"]] = reason
+            logger.warning(
+                "UNRESOLVED ATTRIBUTION: %s contract %d (%s) matches a pending entry's instrument but not "
+                "uniquely by side -- likely one of this bot's own positions (not necessarily foreign), but "
+                "not safely attributable to a specific pending leg. Instrument auto-excluded from new "
+                "entries pending investigation.",
+                a["instrument"], a["contract_id"], a["side"],
             )
 
         # Portfolio Risk Governor snapshot: every position this system
