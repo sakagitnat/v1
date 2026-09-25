@@ -10,14 +10,14 @@ on:
     paths: [.github/workflows/cfd-trading.yml]
   schedule:
     # Sunday open: XAUUSD published open is 22:10 GMT.
-    - cron: "15,30,45 22 * * 0"
-    - cron: "*/15 23 * * 0"
+    - cron: "15,45 22 * * 0"
+    - cron: "*/30 23 * * 0"
     # Monday-Thursday, excluding the XAUUSD daily break around 20:59-22:05 GMT.
-    - cron: "3,18,33,48 0-20 * * 1-4"
-    - cron: "15,30,45 22 * * 1-4"
-    - cron: "3,18,33,48 23 * * 1-4"
+    - cron: "3,33 0-20 * * 1-4"
+    - cron: "15,45 22 * * 1-4"
+    - cron: "3,33 23 * * 1-4"
     # Friday through the published 20:45 GMT close.
-    - cron: "3,18,33,48 0-20 * * 5"
+    - cron: "3,33 0-20 * * 5"
 
 permissions:
   contents: write
@@ -73,6 +73,12 @@ jobs:
       # enough to look like another multi-tick backlog to GitHub. 8 minutes
       # leaves a much wider real margin so an occasional overlap no longer
       # chains into that pattern.
+      #
+      # 2026-09-25 (later): root cause was actually account-level Actions
+      # minutes/spending-limit exhaustion (runner_id: 0 on every failed job,
+      # confirmed via billing). Cron cadence above was halved (~15min ->
+      # ~30min ticks) to reduce minutes consumption independent of the
+      # repo-visibility fix.
       - name: Run checkpointed DEMO service
         id: trade
         env:
