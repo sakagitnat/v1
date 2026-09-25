@@ -208,26 +208,6 @@
         "M15"
       ]
     },
-    "virtual:iso_trend_m15|frxEURUSD": {
-      "contract_id": -85,
-      "side": "long",
-      "entry_price": 1.13783,
-      "stop_price": 1.1366842108458908,
-      "target_price": 1.138975789154109,
-      "stake": 49.77,
-      "multiplier": 20,
-      "risk_amount": 1.0,
-      "entry_time": "2026-09-24T20:48:46.880919+00:00",
-      "equity_before": 100.24,
-      "regime": "ranging",
-      "virtual_account_id": "iso_trend_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_meanrev_m5|frxXAUUSD": {
       "contract_id": -92,
       "side": "long",
@@ -241,26 +221,6 @@
       "equity_before": 108.91,
       "regime": "ranging",
       "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
-    "virtual:iso_trend_m5|frxEURUSD": {
-      "contract_id": -95,
-      "side": "short",
-      "entry_price": 1.13737,
-      "stop_price": 1.1375929090666714,
-      "target_price": 1.1371470909333286,
-      "stake": 98.8,
-      "multiplier": 20,
-      "risk_amount": 0.99,
-      "entry_time": "2026-09-24T23:59:52.800852+00:00",
-      "equity_before": 98.8,
-      "regime": "ranging",
-      "virtual_account_id": "iso_trend_m5",
       "horizon": "isolated",
       "entry_timeframe": "M5",
       "context_timeframes": [
@@ -328,26 +288,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m5|frxEURUSD": {
-      "contract_id": -99,
-      "side": "long",
-      "entry_price": 1.13736,
-      "stop_price": 1.1371125615091682,
-      "target_price": 1.137545578868124,
-      "stake": 108.03,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-09-25T00:12:44.057974+00:00",
-      "equity_before": 108.03,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
     "virtual:iso_trend_m15|frxUSDJPY": {
       "contract_id": -100,
       "side": "short",
@@ -395,9 +335,9 @@
     "virtual:breakout_h1": 102.39,
     "virtual:iso_trend_h1": 101.0,
     "virtual:iso_meanrev_m15": 98.23,
-    "virtual:iso_meanrev_m5": 108.03,
-    "virtual:iso_trend_m15": 100.24,
-    "virtual:iso_trend_m5": 98.8,
+    "virtual:iso_meanrev_m5": 107.56,
+    "virtual:iso_trend_m15": 99.65,
+    "virtual:iso_trend_m5": 99.19,
     "donchian_breakout@v2": 101.71
   },
   "paper_trade_counter": 101,
@@ -655,13 +595,13 @@
         "M15"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 100.24,
+      "equity": 99.65,
       "high_water_mark": 100.24,
-      "realized_pnl": 0.24,
-      "closed_trades": 6,
+      "realized_pnl": -0.35,
+      "closed_trades": 7,
       "wins": 3,
-      "losses": 3,
-      "drawdown_from_start_pct": 0.0
+      "losses": 4,
+      "drawdown_from_start_pct": 0.35
     },
     "iso_trend_m5": {
       "account_id": "iso_trend_m5",
@@ -675,13 +615,13 @@
         "M5"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 98.8,
+      "equity": 99.19,
       "high_water_mark": 101.99,
-      "realized_pnl": -1.2,
-      "closed_trades": 10,
-      "wins": 4,
+      "realized_pnl": -0.81,
+      "closed_trades": 11,
+      "wins": 5,
       "losses": 6,
-      "drawdown_from_start_pct": 1.2
+      "drawdown_from_start_pct": 0.81
     },
     "iso_breakout_m15": {
       "account_id": "iso_breakout_m15",
@@ -774,12 +714,12 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 108.03,
+      "equity": 107.56,
       "high_water_mark": 108.91,
-      "realized_pnl": 8.03,
-      "closed_trades": 25,
+      "realized_pnl": 7.56,
+      "closed_trades": 26,
       "wins": 19,
-      "losses": 6,
+      "losses": 7,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m1": {
