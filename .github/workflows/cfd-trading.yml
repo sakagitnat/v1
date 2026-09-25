@@ -32,7 +32,7 @@ env:
 jobs:
   trade:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,10 +59,20 @@ jobs:
       # scheduled events (this workflow, the watchdog, and the probe) went
       # silent for ~4.5 hours while push/workflow_dispatch kept working
       # normally, consistent with GitHub deprioritizing a workflow that
-      # looks perpetually busy. 12 minutes leaves headroom under the
-      # 15-minute cadence so a run finishes and frees the concurrency slot
-      # before the next tick, instead of relying on the queue to serialize
-      # an ever-growing backlog.
+      # looks perpetually busy.
+      #
+      # 2026-09-25: 12 minutes (the first fix) turned out to still be too
+      # tight. The job itself reliably finishes in its budget (confirmed via
+      # the jobs API: exactly 12m00s of "Run checkpointed DEMO service"),
+      # but the *run* was repeatedly observed sitting queued for up to ~10
+      # minutes before a runner started it, because a workflow_dispatch
+      # pulse (used as a stopgap while schedule: was silent) and the
+      # schedule: cron share this same concurrency group. With only ~2.5
+      # minutes of margin under the 15-minute cadence, any overlapping
+      # dispatch reliably pushed the next tick into a queued wait long
+      # enough to look like another multi-tick backlog to GitHub. 8 minutes
+      # leaves a much wider real margin so an occasional overlap no longer
+      # chains into that pattern.
       - name: Run checkpointed DEMO service
         id: trade
         env:
@@ -70,7 +80,7 @@ jobs:
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
           CFD_MAX_OPEN_POSITIONS: "5"
-        run: python scripts/run_cfd_service.py --minutes 12
+        run: python scripts/run_cfd_service.py --minutes 8
 
       # IMPORTANT: persist local state even when the Python scheduler fails.
       # set_pending_entry() writes before broker submission; skipping this
