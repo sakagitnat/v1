@@ -44,7 +44,7 @@
   },
   "paper_trade_counter": 148,
   "daily_risk_tracking": {
-    "date": "2026-09-25",
+    "date": "2026-09-26",
     "start_equity": 118.8700000000008,
     "halted": false
   },
@@ -2450,25 +2450,25 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994653,
-    "quota_h1_forward": 497326,
-    "quota_h4_forward": 124331,
-    "quota_d1_forward": 20721
+    "quota_30m_forward": 994656,
+    "quota_h1_forward": 497328,
+    "quota_h4_forward": 124332,
+    "quota_d1_forward": 20722
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
     "champion_m30": {
-      "date": "2026-09-25",
+      "date": "2026-09-26",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_h4": {
-      "date": "2026-09-25",
+      "date": "2026-09-26",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_d1": {
-      "date": "2026-09-25",
+      "date": "2026-09-26",
       "start_equity": 100.0,
       "halted": false
     }
