@@ -1272,6 +1272,35 @@ not crypto's different volatility profile, so `cryBTCUSD`/`cryETHUSD`
 still need their own backtest before joining `CFD_INSTRUMENTS`, even
 though their order mechanism works.)
 
+**Update 2026-09-26: crypto research accounts (`crypto_btc_h1`,
+`crypto_eth_h1`), SHADOW tier, live forward data collection.** The
+backtest above is still unrun (needs the "CFD Manual Command" workflow's
+network access, which this environment doesn't have), but crypto trades
+24/7 unlike forex/gold, which sits idle every weekend -- so rather than
+wait on that one historical backtest, two new SHADOW virtual accounts
+now collect **live forward** signal/regime observations on `cryBTCUSD`/
+`cryETHUSD` every scheduler run, same mechanism `intraday_m15`/
+`intraday_m5` already use for forex: real candles, all three built-in
+strategies' signals logged to `state/cfd_lab_observations.jsonl`, no
+simulated fills (SHADOW, not PAPER) and no broker orders -- see
+`paper_trading.run_virtual_account_paper`'s own docstring for why only
+PAPER tier ever reaches the broker at all. `VirtualAccountSpec` gained an
+`instruments` field (default `None` on every pre-existing spec, meaning
+"scan `CFD_INSTRUMENTS` as before") so these two accounts can declare
+their own instrument instead of widening the global list --
+`trading/cfd/lab_collector.py`'s fetch loop now scans `spec.instruments
+or instruments` per account rather than one flat list for everyone. This
+was a deliberate scoping choice: `CFD_INSTRUMENTS` is also read directly
+by `scheduler.py`'s, `champion_scheduler.py`'s, and `quota.py`'s real
+(ACTIVE_DEMO) order-placing loops, all of which only ever run
+forex/gold-validated strategies -- adding crypto there would have put
+unvalidated params in the real order path, exactly what the backtest
+above exists to gate against. This way stays strictly additive: nothing
+about the existing 41 accounts or `CFD_INSTRUMENTS` changed, crypto data
+accumulates in parallel, and the eventual TRAIN/TEST backtest (once
+network access allows running it) gets real Deriv forward data to
+cross-check against yfinance's, not just yfinance alone.
+
 **Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
 in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s
 TRAIN/TEST discipline for `EmaCrossoverStrategy`, with two gates the

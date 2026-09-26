@@ -82,7 +82,7 @@ async def collect_lab_observations(broker, instruments, run_id=None):
     cache = {}
 
     streams = list(_research_streams())
-    needed = sorted({(tf, instrument) for _, tf in streams for instrument in instruments})
+    needed = sorted({(tf, instrument) for spec, tf in streams for instrument in (spec.instruments or instruments)})
     for tf, instrument in needed:
         try:
             candles = await broker.get_candles(instrument, _GRANULARITY[tf], _COUNT[tf])
@@ -96,7 +96,7 @@ async def collect_lab_observations(broker, instruments, run_id=None):
             cache[(tf, instrument)] = exc
 
     for spec, tf in streams:
-        for instrument in instruments:
+        for instrument in (spec.instruments or instruments):
             cached = cache.get((tf, instrument))
             try:
                 if isinstance(cached, Exception):

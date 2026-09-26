@@ -42,6 +42,16 @@ class VirtualAccountSpec:
     entry_timeframe: str
     context_timeframes: tuple[str, ...]
     strategy_tag: Optional[str] = None
+    instruments: Optional[tuple[str, ...]] = None
+    """Overrides trading.cfd.lab_collector's default of scanning every
+    globally-configured CFD_INSTRUMENTS symbol for this account. None (the
+    default, every pre-existing spec) means "use CFD_INSTRUMENTS as
+    normal" -- unchanged behavior. Set explicitly to scope an account to
+    instruments CFD_INSTRUMENTS deliberately does NOT include (e.g.
+    crypto), so adding a research account for a new instrument class never
+    requires -- and never risks -- touching the forex/gold instrument list
+    that scheduler.py's, champion_scheduler.py's, and quota.py's real
+    (ACTIVE_DEMO) order-placing loops all read directly."""
 
 
 DEFAULT_VIRTUAL_ACCOUNTS = (
@@ -100,6 +110,19 @@ DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("news_breakout", "News event breakout lab", 100.0, SHADOW, "news", "EVENT", ("M15","M5","M1"), "news_breakout@v0"),
     VirtualAccountSpec("news_momentum", "News event momentum lab", 100.0, SHADOW, "news", "EVENT", ("M15","M5","M1"), "news_momentum@v0"),
     VirtualAccountSpec("news_control", "News no-entry counterfactual control", 100.0, SHADOW, "news", "EVENT", ("M15","M5","M1"), "news_control@v0"),
+    # 2026-09-26: crypto trades 24/7 on Deriv (no weekend close like
+    # forex/gold), but EmaCrossoverStrategy/DonchianBreakoutStrategy/
+    # MeanReversionStrategy were only ever validated against forex/gold
+    # history (see README "Order placement is now confirmed end-to-end...").
+    # SHADOW tier + no strategy_tag mirrors intraday_m15/intraday_m5 below:
+    # pure signal/regime observation on real crypto candles, no simulated
+    # fills and no broker orders (see paper_trading.run_virtual_account_paper's
+    # own docstring -- only PAPER tier ever calls that), so this collects
+    # exactly the dataset scripts/backtest_crypto.py's docstring says is
+    # needed before cryBTCUSD/cryETHUSD could ever be considered for
+    # CFD_INSTRUMENTS, without committing a single unit of capital to do it.
+    VirtualAccountSpec("crypto_btc_h1", "Crypto BTC/USD H1 research (SHADOW, 24/7 market)", 100.0, SHADOW, "crypto", "H1", ("H1",), None, instruments=("cryBTCUSD",)),
+    VirtualAccountSpec("crypto_eth_h1", "Crypto ETH/USD H1 research (SHADOW, 24/7 market)", 100.0, SHADOW, "crypto", "H1", ("H1",), None, instruments=("cryETHUSD",)),
 )
 
 
@@ -111,13 +134,14 @@ def ensure_virtual_accounts() -> dict:
     for spec in DEFAULT_VIRTUAL_ACCOUNTS:
         spec_row = asdict(spec)
         spec_row["context_timeframes"] = list(spec.context_timeframes)
+        spec_row["instruments"] = list(spec.instruments) if spec.instruments else None
         if spec.account_id in accounts:
             # Keep accumulated P&L/statistics, but reconcile descriptive
             # metadata/execution tier with the current lab configuration.
             row = dict(accounts[spec.account_id])
             for key in (
                 "label", "starting_equity", "execution_tier", "horizon",
-                "entry_timeframe", "context_timeframes", "strategy_tag",
+                "entry_timeframe", "context_timeframes", "strategy_tag", "instruments",
             ):
                 if row.get(key) != spec_row.get(key):
                     row[key] = spec_row.get(key)
