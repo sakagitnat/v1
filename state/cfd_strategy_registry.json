@@ -6,10 +6,10 @@
       "fast_span": 15,
       "slow_span": 34,
       "atr_window": 14,
-      "atr_stop_mult": 2.0,
-      "atr_target_mult": 2.0,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 2,
       "adx_window": 14,
-      "adx_threshold": 0.0
+      "adx_threshold": 0
     },
     "state": "ACTIVE",
     "created_at": "2026-09-19T14:58:57.511512+00:00",
@@ -34,7 +34,7 @@
       "exit_window": 10,
       "atr_window": 14,
       "atr_stop_mult": 2.5,
-      "atr_target_mult": 4.0
+      "atr_target_mult": 4
     },
     "state": "RETIRED",
     "created_at": "2026-09-19T14:58:57.512109+00:00",
@@ -65,17 +65,23 @@
       "exit_window": 15,
       "atr_window": 14,
       "atr_stop_mult": 3.5,
-      "atr_target_mult": 6.0
+      "atr_target_mult": 6
     },
-    "state": "VALIDATED",
+    "state": "PAPER",
     "created_at": "2026-09-19T16:41:49.591752+00:00",
-    "updated_at": "2026-09-19T16:41:49.591789+00:00",
+    "updated_at": "2026-09-21T02:31:00+00:00",
     "history": [
       {
         "from": null,
         "to": "VALIDATED",
         "reason": "The actual robust candidate found by optimize_cfd_breakout.py's grid search (TRAIN cagr=7.9% maxdd=-22.4%, TEST cagr=9.8% maxdd=-17.6% -- the first candidate all session, breakout or EMA crossover, where TRAIN and TEST agreed in both sign and rough magnitude; see scripts/sweep_cfd_risk_breakout.py's docstring and git commit d1a86d4 for the full numbers). Not yet run through trading.cfd.research_lab's walk-forward/Monte Carlo gate specifically -- registered as VALIDATED on the strength of this real TRAIN/TEST result, same grandfathering basis as ema_crossover@v1 above, not a claim that every later gate has been checked too.",
         "at": "2026-09-19T16:41:49.591792+00:00"
+      },
+      {
+        "from": "VALIDATED",
+        "to": "PAPER",
+        "reason": "User-approved forward-data collection to expand opportunity coverage without risking demo capital; keep ACTIVE promotion human-gated.",
+        "at": "2026-09-21T02:31:00+00:00"
       }
     ],
     "suited_regimes": [
@@ -87,9 +93,9 @@
     "version": "v1",
     "params": {
       "band_window": 20,
-      "band_std": 2.0,
+      "band_std": 2,
       "atr_window": 14,
-      "atr_stop_mult": 2.0,
+      "atr_stop_mult": 2,
       "atr_target_mult": 1.5
     },
     "state": "RETIRED",
@@ -118,12 +124,12 @@
     "version": "v1",
     "params": {
       "rsi_window": 14,
-      "rsi_oversold": 25.0,
-      "rsi_overbought": 75.0,
+      "rsi_oversold": 25,
+      "rsi_overbought": 75,
       "adx_window": 14,
-      "adx_flat_threshold": 15.0,
+      "adx_flat_threshold": 15,
       "atr_window": 14,
-      "atr_stop_mult": 2.0,
+      "atr_stop_mult": 2,
       "atr_target_mult": 1.5
     },
     "state": "RETIRED",
@@ -176,6 +182,64 @@
     ],
     "suited_regimes": [
       "ranging"
+    ]
+  },
+  "volatility_expansion@v1": {
+    "name": "volatility_expansion",
+    "version": "v1",
+    "params": {
+      "channel_window": 20,
+      "bb_window": 20,
+      "bb_std": 2,
+      "compression_lookback": 100,
+      "compression_quantile": 0.25,
+      "atr_window": 14,
+      "atr_expansion_mult": 1.1,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 3
+    },
+    "state": "RESEARCH",
+    "created_at": "2026-09-21T02:34:00+00:00",
+    "updated_at": "2026-09-21T02:34:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "RESEARCH",
+        "reason": "New structurally distinct candidate to expand opportunity coverage: waits for volatility compression then requires ATR expansion plus channel breakout. Parameters are placeholders until TRAIN/TEST/OOS validation.",
+        "at": "2026-09-21T02:34:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging",
+      "trending"
+    ]
+  },
+  "trend_pullback@v1": {
+    "name": "trend_pullback",
+    "version": "v1",
+    "params": {
+      "fast_span": 20,
+      "slow_span": 50,
+      "adx_window": 14,
+      "adx_threshold": 20,
+      "atr_window": 14,
+      "pullback_atr_tolerance": 0.5,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 3
+    },
+    "state": "RESEARCH",
+    "created_at": "2026-09-21T03:05:00+00:00",
+    "updated_at": "2026-09-21T03:05:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "RESEARCH",
+        "reason": "Structurally distinct established-trend pullback candidate; waits for retracement and fast-EMA reclaim instead of a fresh EMA crossover. Parameters unvalidated.",
+        "at": "2026-09-21T03:05:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
     ]
   }
 }

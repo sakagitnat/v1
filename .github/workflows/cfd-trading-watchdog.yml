@@ -1,0 +1,36 @@
+name: CFD Trading Watchdog (Deriv)
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "7,37 * * * *"
+permissions:
+  contents: read
+  actions: write
+env:
+  CFD_RUNTIME_REF: gpt/autonomous-demo-runner
+jobs:
+  health-and-recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check scheduler heartbeat
+        id: health
+        continue-on-error: true
+        run: python scripts/cfd_runner_health.py --max-age-minutes 10
+      - name: Dispatch authoritative trading workflow
+        if: steps.health.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          active=$(gh run list --repo "${{ github.repository }}" --workflow cfd-trading.yml --limit 100 --json status --jq '[.[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting" or .status == "pending")] | length')
+          if [ "$active" = "0" ]; then
+            gh workflow run cfd-trading.yml --repo "${{ github.repository }}" --ref main
+          else
+            echo "Trading run already active or pending; no duplicate dispatch."
+          fi

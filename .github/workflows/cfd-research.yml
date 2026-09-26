@@ -46,7 +46,7 @@ jobs:
       # on that default branch instead of this actively-developed one.
       - uses: actions/checkout@v4
         with:
-          ref: claude/ai-trading-manager-deriv-pmay2v
+          ref: gpt/autonomous-demo-runner
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
