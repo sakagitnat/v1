@@ -3,9 +3,7 @@
   "pause_reason": "",
   "capital_floor": null,
   "initial_floor": 100,
-  "excluded_instruments": {
-    "frxEURUSD": "unresolved quota buy intent"
-  },
+  "excluded_instruments": {},
   "broker_baseline": 10000,
   "open_trades": {},
   "operating_mode": "normal",
@@ -48,38 +46,7 @@
     "start_equity": 118.8700000000008,
     "halted": false
   },
-  "pending_entries": {
-    "frxEURUSD": {
-      "legs": [
-        {
-          "instrument": "frxEURUSD",
-          "strategy": "quota_30m_forward@timeframe_v2",
-          "side": "long",
-          "entry_time": "2026-09-24T21:05:25.159539+00:00",
-          "entry_price": 1.13802,
-          "stake": 1.0,
-          "risk_amount": 0.25,
-          "multiplier": 100,
-          "equity_before": 98.51,
-          "regime": "forced_quota_research",
-          "leg": "quota",
-          "broker_managed_only": true,
-          "forced_quota": true,
-          "experimental": true,
-          "virtual_account_id": "quota_30m_forward",
-          "horizon": "1800s_window",
-          "entry_timeframe": "M30",
-          "context_timeframes": [
-            "M30"
-          ],
-          "quota_window": 994602,
-          "close_at": 1790285280,
-          "entry_reason": "experimental direction of last two completed timeframe candles"
-        }
-      ],
-      "quota_intent": true
-    }
-  },
+  "pending_entries": {},
   "smoothed_equity": 118.8700000000008,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
