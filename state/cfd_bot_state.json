@@ -2417,9 +2417,9 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994679,
-    "quota_h1_forward": 497339,
-    "quota_h4_forward": 124334,
+    "quota_30m_forward": 994680,
+    "quota_h1_forward": 497340,
+    "quota_h4_forward": 124335,
     "quota_d1_forward": 20722
   },
   "timeframe_champions": {},
