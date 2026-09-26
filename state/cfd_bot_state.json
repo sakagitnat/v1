@@ -1010,6 +1010,48 @@
       "closed_trades": 0,
       "wins": 0,
       "losses": 0
+    },
+    "crypto_btc_h1": {
+      "account_id": "crypto_btc_h1",
+      "label": "Crypto BTC/USD H1 research (SHADOW, 24/7 market)",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "crypto",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H1"
+      ],
+      "strategy_tag": null,
+      "instruments": [
+        "cryBTCUSD"
+      ],
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
+    },
+    "crypto_eth_h1": {
+      "account_id": "crypto_eth_h1",
+      "label": "Crypto ETH/USD H1 research (SHADOW, 24/7 market)",
+      "starting_equity": 100.0,
+      "execution_tier": "SHADOW",
+      "horizon": "crypto",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H1"
+      ],
+      "strategy_tag": null,
+      "instruments": [
+        "cryETHUSD"
+      ],
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0
     }
   },
   "quota_settlements": {
@@ -2437,8 +2479,8 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994689,
-    "quota_h1_forward": 497344,
+    "quota_30m_forward": 994690,
+    "quota_h1_forward": 497345,
     "quota_h4_forward": 124336,
     "quota_d1_forward": 20722
   },
