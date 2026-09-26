@@ -27,6 +27,26 @@
         "H4",
         "H1"
       ]
+    },
+    "virtual:iso_breakout_m5|frxUSDJPY": {
+      "contract_id": -149,
+      "side": "long",
+      "entry_price": 157.332,
+      "stop_price": 157.2435673639082,
+      "target_price": 157.47349221774687,
+      "stake": 91.01,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-09-26T15:29:04.523479+00:00",
+      "equity_before": 102.31,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -40,7 +60,7 @@
     "virtual:iso_trend_m5": 100.49,
     "donchian_breakout@v2": 100.93
   },
-  "paper_trade_counter": 148,
+  "paper_trade_counter": 149,
   "daily_risk_tracking": {
     "date": "2026-09-26",
     "start_equity": 118.8700000000008,
@@ -2417,8 +2437,8 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994685,
-    "quota_h1_forward": 497342,
+    "quota_30m_forward": 994686,
+    "quota_h1_forward": 497343,
     "quota_h4_forward": 124335,
     "quota_d1_forward": 20722
   },
