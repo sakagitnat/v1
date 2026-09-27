@@ -5157,3 +5157,7 @@
 {"timestamp": "2026-09-27T19:29:08.699968+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_h1_forward"}
 {"timestamp": "2026-09-27T19:29:08.702952+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_h4_forward"}
 {"timestamp": "2026-09-27T19:29:08.705833+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-27T19:30:08.766581+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_30m_forward"}
+{"timestamp": "2026-09-27T19:30:08.769863+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_h1_forward"}
+{"timestamp": "2026-09-27T19:30:08.772837+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_h4_forward"}
+{"timestamp": "2026-09-27T19:30:08.775797+00:00", "run_id": "36344422720", "outcome": "MARKET_CLOSED_OR_EXCLUDED", "account": "quota_d1_forward"}
