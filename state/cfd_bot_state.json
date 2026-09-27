@@ -884,7 +884,7 @@
       "wins": 4,
       "losses": 24,
       "quota_daily": {
-        "date": "2026-09-26",
+        "date": "2026-09-27",
         "start_equity": 98.51
       }
     },
@@ -2479,7 +2479,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994704,
+    "quota_30m_forward": 994705,
     "quota_h1_forward": 497352,
     "quota_h4_forward": 124338,
     "quota_d1_forward": 20723
