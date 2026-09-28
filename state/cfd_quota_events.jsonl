@@ -6157,3 +6157,11 @@
 {"timestamp": "2026-09-28T20:35:54.830962+00:00", "run_id": "36479411230", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124349}
 {"timestamp": "2026-09-28T20:35:54.963811+00:00", "run_id": "36479411230", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
 {"timestamp": "2026-09-28T21:28:06.731911+00:00", "run_id": "36486211553", "outcome": "ERROR", "error": "DerivRequestError"}
+{"timestamp": "2026-09-28T22:28:57.072089+00:00", "run_id": "36492575017", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 14811481299, "instrument": "frxXAUUSD", "pnl": -0.23, "window_id": 497396, "holding_seconds": 7201.136516}
+{"timestamp": "2026-09-28T22:28:57.630804+00:00", "run_id": "36492575017", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14811717499, "instrument": "frxEURUSD", "pnl": -0.03, "window_id": 994793, "holding_seconds": 7082.537835}
+{"timestamp": "2026-09-28T22:28:57.727813+00:00", "run_id": "36492575017", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 994793, "current_window": 994796, "unobserved_windows": 2}
+{"timestamp": "2026-09-28T22:28:57.731633+00:00", "run_id": "36492575017", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994796}
+{"timestamp": "2026-09-28T22:28:57.732640+00:00", "run_id": "36492575017", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497396, "current_window": 497398, "unobserved_windows": 1}
+{"timestamp": "2026-09-28T22:28:58.751023+00:00", "run_id": "36492575017", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14823023919, "instrument": "frxGBPUSD", "window_id": 497398, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790636280}
+{"timestamp": "2026-09-28T22:28:58.755014+00:00", "run_id": "36492575017", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124349}
+{"timestamp": "2026-09-28T22:28:58.884174+00:00", "run_id": "36492575017", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
