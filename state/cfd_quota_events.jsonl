@@ -5917,3 +5917,10 @@
 {"timestamp": "2026-09-28T14:35:15.767467+00:00", "run_id": "36436137732", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497390}
 {"timestamp": "2026-09-28T14:35:15.771293+00:00", "run_id": "36436137732", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124347}
 {"timestamp": "2026-09-28T14:35:15.881004+00:00", "run_id": "36436137732", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-28T15:21:29.751248+00:00", "run_id": "36442872599", "outcome": "CLOSED", "account": "quota_h4_forward", "contract_id": 14757098859, "instrument": "frxUSDJPY", "pnl": -0.25, "window_id": 124347, "holding_seconds": 10278.972903}
+{"timestamp": "2026-09-28T15:21:30.002124+00:00", "run_id": "36442872599", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 14769989539, "instrument": "frxGBPUSD", "pnl": -0.14, "window_id": 497390, "holding_seconds": 3193.514131}
+{"timestamp": "2026-09-28T15:21:30.146880+00:00", "run_id": "36442872599", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14770202339, "instrument": "frxEURUSD", "pnl": -0.02, "window_id": 994781, "holding_seconds": 3074.224015}
+{"timestamp": "2026-09-28T15:21:31.096105+00:00", "run_id": "36442872599", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 14775861239, "instrument": "frxGBPUSD", "window_id": 994782, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_v2", "close_at": 1790609280}
+{"timestamp": "2026-09-28T15:21:31.763675+00:00", "run_id": "36442872599", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14775862379, "instrument": "frxUSDJPY", "window_id": 497391, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790611080}
+{"timestamp": "2026-09-28T15:21:31.767499+00:00", "run_id": "36442872599", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124347}
+{"timestamp": "2026-09-28T15:21:31.840991+00:00", "run_id": "36442872599", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
