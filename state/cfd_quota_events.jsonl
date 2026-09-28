@@ -6156,3 +6156,4 @@
 {"timestamp": "2026-09-28T20:35:54.825791+00:00", "run_id": "36479411230", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497396}
 {"timestamp": "2026-09-28T20:35:54.830962+00:00", "run_id": "36479411230", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124349}
 {"timestamp": "2026-09-28T20:35:54.963811+00:00", "run_id": "36479411230", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-28T21:28:06.731911+00:00", "run_id": "36486211553", "outcome": "ERROR", "error": "DerivRequestError"}
