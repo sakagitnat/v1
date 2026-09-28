@@ -5678,3 +5678,9 @@
 {"timestamp": "2026-09-28T08:35:17.796589+00:00", "run_id": "36397487192", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497384}
 {"timestamp": "2026-09-28T08:35:17.799996+00:00", "run_id": "36397487192", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124346}
 {"timestamp": "2026-09-28T08:35:17.946086+00:00", "run_id": "36397487192", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-28T09:28:42.739074+00:00", "run_id": "36403681236", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 14732977459, "instrument": "frxXAUUSD", "pnl": -0.03, "window_id": 497384, "holding_seconds": 3623.914257}
+{"timestamp": "2026-09-28T09:28:43.067411+00:00", "run_id": "36403681236", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14733152359, "instrument": "frxEURUSD", "pnl": -0.06, "window_id": 994769, "holding_seconds": 3505.329635}
+{"timestamp": "2026-09-28T09:28:43.106586+00:00", "run_id": "36403681236", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994770}
+{"timestamp": "2026-09-28T09:28:43.654155+00:00", "run_id": "36403681236", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14738707539, "instrument": "frxEURUSD", "window_id": 497385, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790589480}
+{"timestamp": "2026-09-28T09:28:43.657599+00:00", "run_id": "36403681236", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124346}
+{"timestamp": "2026-09-28T09:28:43.733406+00:00", "run_id": "36403681236", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
