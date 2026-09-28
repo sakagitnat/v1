@@ -5,6 +5,7 @@
   "pause_reason": "",
   "milestone_reached": false,
   "excluded_symbols": {
-    "GOOGL": "New antitrust lawsuit targeting AI business practices (filed ~Sep 23 2026); stock fell ~3.7% same day amid legal + AI-capex overhang"
+    "GOOGL": "New antitrust lawsuit targeting AI business practices (filed ~Sep 23 2026); stock fell ~3.7% same day amid legal + AI-capex overhang",
+    "AAPL": "US jury awarded Taction Technology $5.7B against Apple for Taptic Engine patent infringement (verdict Sep 26 2026) -- largest patent infringement verdict in US history; Apple to appeal"
   }
 }
