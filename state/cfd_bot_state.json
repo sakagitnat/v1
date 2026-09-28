@@ -166,6 +166,65 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:breakout_h1|frxXAUUSD": {
+      "contract_id": -159,
+      "side": "short",
+      "entry_price": 4185.56,
+      "stop_price": 4229.557330030972,
+      "target_price": 4115.164271950446,
+      "stake": 4.86,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-09-28T05:33:53.042914+00:00",
+      "equity_before": 102.19,
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxXAUUSD": {
+      "contract_id": -160,
+      "side": "short",
+      "entry_price": 4185.37,
+      "stop_price": 4195.315764665662,
+      "target_price": 4169.456776534941,
+      "stake": 22.57,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-09-28T05:33:53.604665+00:00",
+      "equity_before": 107.28,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "donchian_breakout@v2|frxXAUUSD": {
+      "contract_id": -161,
+      "side": "short",
+      "entry_price": 4184.88,
+      "stop_price": 4246.485456338843,
+      "target_price": 4079.270646276271,
+      "stake": 3.43,
+      "multiplier": 20,
+      "risk_amount": 1.01,
+      "entry_time": "2026-09-28T05:33:55.868729+00:00",
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
     }
   },
   "paper_equity": {
@@ -179,7 +238,7 @@
     "virtual:iso_trend_m5": 100.49,
     "donchian_breakout@v2": 100.93
   },
-  "paper_trade_counter": 158,
+  "paper_trade_counter": 161,
   "daily_risk_tracking": {
     "date": "2026-09-28",
     "start_equity": 118.8700000000008,
