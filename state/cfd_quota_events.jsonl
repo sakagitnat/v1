@@ -5752,3 +5752,7 @@
 {"timestamp": "2026-09-28T11:09:25.492834+00:00", "run_id": "36413880848", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14748847179, "instrument": "frxUSDJPY", "window_id": 497387, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790596680}
 {"timestamp": "2026-09-28T11:09:25.496528+00:00", "run_id": "36413880848", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124346}
 {"timestamp": "2026-09-28T11:09:25.671948+00:00", "run_id": "36413880848", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
+{"timestamp": "2026-09-28T11:10:21.955331+00:00", "run_id": "36413880848", "outcome": "HOLDING", "account": "quota_30m_forward", "window_id": 994774}
+{"timestamp": "2026-09-28T11:10:21.958947+00:00", "run_id": "36413880848", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497387}
+{"timestamp": "2026-09-28T11:10:21.962447+00:00", "run_id": "36413880848", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124346}
+{"timestamp": "2026-09-28T11:10:22.082022+00:00", "run_id": "36413880848", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_d1_forward"}
