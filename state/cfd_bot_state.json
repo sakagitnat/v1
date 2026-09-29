@@ -151,6 +151,66 @@
         "H4",
         "H1"
       ]
+    },
+    "virtual:iso_meanrev_m5|frxXAUUSD": {
+      "contract_id": -190,
+      "side": "long",
+      "entry_price": 4123.37,
+      "stop_price": 4116.417264593123,
+      "target_price": 4128.584551555157,
+      "stake": 31.74,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-09-29T05:33:28.811497+00:00",
+      "equity_before": 107.03,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_meanrev_m5|frxEURUSD": {
+      "contract_id": -191,
+      "side": "long",
+      "entry_price": 1.13579,
+      "stop_price": 1.1354976775427037,
+      "target_price": 1.1360092418429724,
+      "stake": 107.03,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-09-29T05:33:28.843338+00:00",
+      "equity_before": 107.03,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_meanrev_m5|frxGBPUSD": {
+      "contract_id": -192,
+      "side": "long",
+      "entry_price": 1.32344,
+      "stop_price": 1.3229728192621952,
+      "target_price": 1.3237903855533535,
+      "stake": 107.03,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-09-29T05:33:28.876506+00:00",
+      "equity_before": 107.03,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -164,7 +224,7 @@
     "virtual:iso_trend_m5": 103.51,
     "donchian_breakout@v2": 102.64
   },
-  "paper_trade_counter": 189,
+  "paper_trade_counter": 192,
   "daily_risk_tracking": {
     "date": "2026-09-29",
     "start_equity": 116.70000000000073,
