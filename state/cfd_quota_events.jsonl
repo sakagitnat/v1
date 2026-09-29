@@ -6394,3 +6394,8 @@
 {"timestamp": "2026-09-29T02:07:36.838192+00:00", "run_id": "36510510151", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497402}
 {"timestamp": "2026-09-29T02:07:36.842413+00:00", "run_id": "36510510151", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124350}
 {"timestamp": "2026-09-29T02:07:36.846538+00:00", "run_id": "36510510151", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
+{"timestamp": "2026-09-29T02:33:17.616466+00:00", "run_id": "36513087959", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14838110559, "instrument": "frxXAUUSD", "pnl": 0.0, "window_id": 994804, "holding_seconds": 1959.920658}
+{"timestamp": "2026-09-29T02:33:18.408574+00:00", "run_id": "36513087959", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 14840297499, "instrument": "frxEURUSD", "window_id": 994805, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_v2", "close_at": 1790650680}
+{"timestamp": "2026-09-29T02:33:18.413224+00:00", "run_id": "36513087959", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497402}
+{"timestamp": "2026-09-29T02:33:18.417629+00:00", "run_id": "36513087959", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124350}
+{"timestamp": "2026-09-29T02:33:18.421908+00:00", "run_id": "36513087959", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
