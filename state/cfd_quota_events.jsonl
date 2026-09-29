@@ -7143,3 +7143,8 @@
 {"timestamp": "2026-09-29T22:29:05.582346+00:00", "run_id": "36639765617", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
 {"timestamp": "2026-09-29T22:29:05.583078+00:00", "run_id": "36639765617", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497420, "current_window": 497422, "unobserved_windows": 1}
 {"timestamp": "2026-09-29T22:29:05.706840+00:00", "run_id": "36639765617", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497422, "reason": "no crossover"}
+{"timestamp": "2026-09-29T22:30:04.650810+00:00", "run_id": "36639765617", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 14955559299, "instrument": "frxEURUSD", "window_id": 994845, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_vote_v3", "close_at": 1790722680}
+{"timestamp": "2026-09-29T22:30:04.655263+00:00", "run_id": "36639765617", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497422}
+{"timestamp": "2026-09-29T22:30:04.673846+00:00", "run_id": "36639765617", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124355}
+{"timestamp": "2026-09-29T22:30:04.680713+00:00", "run_id": "36639765617", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
+{"timestamp": "2026-09-29T22:30:04.829007+00:00", "run_id": "36639765617", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497422, "reason": "no crossover"}
