@@ -6461,3 +6461,10 @@
 {"timestamp": "2026-09-29T03:35:37.099317+00:00", "run_id": "36517251739", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497403}
 {"timestamp": "2026-09-29T03:35:37.103522+00:00", "run_id": "36517251739", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124350}
 {"timestamp": "2026-09-29T03:35:37.107928+00:00", "run_id": "36517251739", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
+{"timestamp": "2026-09-29T04:28:12.874274+00:00", "run_id": "36521719709", "outcome": "CLOSED_LATE", "account": "quota_h4_forward", "contract_id": 14831523559, "instrument": "frxGBPUSD", "pnl": -0.06, "window_id": 124350, "holding_seconds": 14388.873752}
+{"timestamp": "2026-09-29T04:28:13.326153+00:00", "run_id": "36521719709", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 14843897139, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 497403, "holding_seconds": 3575.298629}
+{"timestamp": "2026-09-29T04:28:13.562175+00:00", "run_id": "36521719709", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14844021479, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 994807, "holding_seconds": 3456.243698}
+{"timestamp": "2026-09-29T04:28:13.638429+00:00", "run_id": "36521719709", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994808}
+{"timestamp": "2026-09-29T04:28:14.836284+00:00", "run_id": "36521719709", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 14847909179, "instrument": "frxXAUUSD", "window_id": 497404, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_v2", "close_at": 1790657880}
+{"timestamp": "2026-09-29T04:28:15.553374+00:00", "run_id": "36521719709", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 14847910239, "instrument": "frxUSDJPY", "window_id": 124351, "timeframe": "H4", "strategy": "quota_h4_forward@timeframe_v2", "close_at": 1790668680}
+{"timestamp": "2026-09-29T04:28:15.557531+00:00", "run_id": "36521719709", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
