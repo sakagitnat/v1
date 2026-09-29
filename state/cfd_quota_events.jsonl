@@ -7132,3 +7132,5 @@
 {"timestamp": "2026-09-29T20:49:49.436668+00:00", "run_id": "36628209993", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124355}
 {"timestamp": "2026-09-29T20:49:49.441784+00:00", "run_id": "36628209993", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20725}
 {"timestamp": "2026-09-29T20:49:49.508308+00:00", "run_id": "36628209993", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497420, "reason": "no crossover"}
+{"timestamp": "2026-09-29T21:17:55.629296+00:00", "run_id": "36632250248", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14945316419, "instrument": "frxEURUSD", "pnl": -0.06, "window_id": 994841, "holding_seconds": 2105.06272}
+{"timestamp": "2026-09-29T21:17:55.889688+00:00", "run_id": "36632250248", "outcome": "ERROR", "error": "DerivRequestError"}
