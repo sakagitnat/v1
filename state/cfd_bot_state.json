@@ -1216,6 +1216,31 @@
       "closed_trades": 0,
       "wins": 0,
       "losses": 0
+    },
+    "quota_h1_signal": {
+      "account_id": "quota_h1_signal",
+      "label": "Hourly signal-gated quota research (ema_crossover@v1)",
+      "starting_equity": 100.0,
+      "execution_tier": "ACTIVE_DEMO",
+      "horizon": "quota_signal",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "M30",
+        "H1",
+        "H4"
+      ],
+      "strategy_tag": "quota_h1_signal@ema_crossover_v1",
+      "instruments": null,
+      "equity": 100.0,
+      "high_water_mark": 100.0,
+      "realized_pnl": 0.0,
+      "closed_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "quota_daily": {
+        "date": "2026-09-29",
+        "start_equity": 100.0
+      }
     }
   },
   "quota_settlements": {
@@ -4946,7 +4971,8 @@
     "quota_30m_forward": 994837,
     "quota_h1_forward": 497418,
     "quota_h4_forward": 124354,
-    "quota_d1_forward": 20725
+    "quota_d1_forward": 20725,
+    "quota_h1_signal": 497418
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
