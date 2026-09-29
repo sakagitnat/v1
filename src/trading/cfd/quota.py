@@ -1,6 +1,22 @@
 """Experimental DEMO timeframe quotas, closed before the UTC window ends.
 
-The simple candle-direction baseline is not a qualified profitable strategy.
+quota_h1_forward's entries use ema_crossover@v1 -- the only strategy in
+state/cfd_strategy_registry.json that is both ACTIVE and validated
+specifically on H1 bars (TRAIN cagr=3.4% maxdd=-19.9%, TEST cagr=4.8%
+maxdd=-13.9%, win_rate=47.6% both periods -- see strategy.py's own
+docstring for the grid search). quota_h1_forward is the one quota
+account whose own timeframe actually matches that validation.
+
+The other three quota accounts (M30/H4/D1) have no validated strategy at
+their timeframe: mean_reversion@v1, rsi_reversion@v1 and
+support_resistance@v1 were each tried for the ranging regime these might
+otherwise suit, and all three were RETIRED on negative TRAIN/TEST
+grid-search results (see the registry's own history entries). Porting
+ema_crossover@v1's H1-tuned spans onto M30/H4/D1 would silently change
+what they mean -- exactly what strategy.py's docstring warns against --
+so those three keep the honest simple candle-direction baseline instead:
+it is NOT a qualified profitable strategy, just an execution-mechanism
+probe, and is not represented as anything more than that.
 All writers must share the cfd-trading workflow concurrency group.
 """
 import asyncio
@@ -15,9 +31,11 @@ from trading.cfd import state
 from trading.cfd.broker import DerivBroker, DerivRequestError
 from trading.cfd.capital import equity_for_account
 from trading.cfd.portfolio_risk import OpenRiskPosition, PortfolioRiskCeilings, check_new_position
+from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
 from trading.cfd.virtual_accounts import ensure_virtual_accounts
 from trading.config import settings
+from trading.strategy.base import Action
 
 SPECS = {
     "quota_30m_forward": (1800, "M30", 1800),
@@ -176,14 +194,28 @@ async def run_quotas():
             if granularity:
                 data = await broker.get_candles(symbol, granularity, 80)
                 data = data[data.index + __import__("pandas").Timedelta(seconds=granularity) <= current]
-                column = "close"
             else:
                 data = await broker.get_ticks(symbol, 80)
-                column = "price"
             if len(data) < 2 or (current-data.index[-1].to_pydatetime()).total_seconds() > max(120, granularity*2):
                 results.append(event("STALE_OR_MISSING_DATA", account=aid)); continue
-            prices = data[column].astype(float)
-            side = "long" if prices.iloc[-1] >= prices.iloc[-2] else "short"
+            if timeframe == "H1":
+                ema_strategy = EmaCrossoverStrategy()
+                prepared = ema_strategy.prepare(data)
+                bar_row, bar_prev_row = prepared.iloc[-1], prepared.iloc[-2]
+                signal = ema_strategy.signal_for_row(symbol, bar_row, bar_prev_row, None)
+                if signal.action == Action.HOLD:
+                    results.append(event("NO_SIGNAL", account=aid, window_id=window, reason=signal.reason)); continue
+                side = "long" if signal.action == Action.BUY else "short"
+                entry_price = float(signal.price)
+                strategy_tag = aid + "@ema_crossover_v1"
+                entry_reason = signal.reason
+            else:
+                column = "close" if granularity else "price"
+                prices = data[column].astype(float)
+                side = "long" if prices.iloc[-1] >= prices.iloc[-2] else "short"
+                entry_price = float(prices.iloc[-1])
+                strategy_tag = aid + "@timeframe_v2"
+                entry_reason = "experimental direction of last two completed timeframe candles"
             tracked = state.list_open_trades()
             actual = await broker.open_contract_ids()
             if actual != {int(cid) for cid in tracked}:
@@ -202,15 +234,15 @@ async def run_quotas():
             reason = check_new_position(positions, symbol, side, STOP, STAKE*MULTIPLIER, equity, ceilings)
             if reason or sum(p.risk_amount for p in positions)+STOP > 1.50:
                 results.append(event("RISK_BLOCKED", account=aid, reason=reason or "research risk budget")); continue
-            meta = dict(instrument=symbol, strategy=aid+"@timeframe_v2", side=side,
-                        entry_time=now().isoformat(), entry_price=float(prices.iloc[-1]),
+            meta = dict(instrument=symbol, strategy=strategy_tag, side=side,
+                        entry_time=now().isoformat(), entry_price=entry_price,
                         stake=STAKE, risk_amount=STOP, multiplier=MULTIPLIER,
                         equity_before=row["equity"], regime="forced_quota_research", leg="quota",
                         broker_managed_only=True, forced_quota=True, experimental=True,
                         virtual_account_id=aid, horizon=str(period)+"s_window",
                         entry_timeframe=timeframe, context_timeframes=[timeframe], quota_window=window,
                         close_at=(window+1)*period-120,
-                        entry_reason="experimental direction of last two completed timeframe candles")
+                        entry_reason=entry_reason)
             row.update(entry_timeframe=timeframe, context_timeframes=[timeframe],
                        strategy_tag=meta["strategy"], label=timeframe+" experimental timeframe quota")
             state._write_state(s)

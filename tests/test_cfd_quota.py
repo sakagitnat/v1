@@ -8,6 +8,7 @@ import pytest
 from trading.cfd import quota, state, trade_log
 from trading.cfd.broker import DerivRequestError
 from trading.config import settings
+from trading.strategy.base import Action, Signal
 
 
 class Broker:
@@ -46,6 +47,24 @@ class Broker:
         return -0.01
 
 
+class _AlwaysBuyEmaStrategy:
+    """Stands in for the real EmaCrossoverStrategy in every lifecycle test
+    below that isn't specifically testing the ema_crossover@v1 signal
+    itself -- those tests exercise the quota state machine (settlement,
+    reconciliation, pending-entry recovery, deadlines...), not EMA math,
+    and the shared Broker.get_candles mock only fabricates a "close"
+    column (no open/high/low), which the real strategy's prepare() needs
+    for ATR/ADX. Mirrors the pre-ema_crossover baseline's "always has a
+    direction" behavior so those tests' OPENED-every-window assertions
+    stay meaningful. See test_h1_quota_uses_ema_crossover_signal and
+    test_h1_quota_skips_the_window_when_ema_crossover_has_no_signal below
+    for coverage of the real strategy wired in for real."""
+    def prepare(self, bars):
+        return bars
+    def signal_for_row(self, instrument, row, prev_row, in_position):
+        return Signal(instrument, Action.BUY, float(row["close"]), reason="test double: always BUY")
+
+
 @pytest.fixture
 def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "state.json")
@@ -56,6 +75,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "cfd_allow_live_trading", False)
     monkeypatch.setattr(settings, "cfd_instruments", ["frxXAUUSD"])
     monkeypatch.setattr(settings, "cfd_max_open_positions", 5)
+    monkeypatch.setattr(quota, "EmaCrossoverStrategy", _AlwaysBuyEmaStrategy)
     state.set_broker_baseline(10000)
     broker = Broker()
     monkeypatch.setattr(quota, "DerivBroker", lambda: broker)
@@ -81,6 +101,54 @@ def test_timeframe_positions_survive_cycles_then_settle_once(setup):
     assert all(state.load_state()["virtual_accounts"][aid]["equity"] == 99.99 for aid in quota.SPECS)
     assert all(r["outcome"] == "ALREADY_COMPLETED" for r in asyncio.run(quota.run_quotas()))
     assert setup.buys == 4
+
+
+def test_h1_quota_skips_the_window_when_ema_crossover_has_no_signal(setup, monkeypatch):
+    """quota_h1_forward is the only quota account wired to a real,
+    validated strategy (ema_crossover@v1) instead of the honest
+    coin-flip baseline -- so unlike the other three, it must NOT force
+    an entry every window: a HOLD signal (no crossover) means NO_SIGNAL
+    and no order, while M30/H4/D1 (still on the baseline) are
+    unaffected -- confirms the two code paths this module now has are
+    genuinely independent per account, not just per timeframe string."""
+    class _AlwaysHoldEmaStrategy:
+        def prepare(self, bars):
+            return bars
+        def signal_for_row(self, instrument, row, prev_row, in_position):
+            return Signal(instrument, Action.HOLD, float(row["close"]), reason="no crossover")
+
+    monkeypatch.setattr(quota, "EmaCrossoverStrategy", _AlwaysHoldEmaStrategy)
+    result = asyncio.run(quota.run_quotas())
+    outcomes = {r["account"]: r["outcome"] for r in result}
+    assert outcomes["quota_h1_forward"] == "NO_SIGNAL"
+    assert outcomes["quota_30m_forward"] == "OPENED"
+    assert outcomes["quota_h4_forward"] == "OPENED"
+    assert outcomes["quota_d1_forward"] == "OPENED"
+    assert setup.buys == 3
+    assert "quota_h1_forward" not in {m["virtual_account_id"] for m in state.list_open_trades().values()}
+
+
+def test_h1_quota_uses_ema_crossover_signal(setup, monkeypatch):
+    """The entry meta quota.py records for quota_h1_forward must come
+    from the strategy's own Signal (price, side, reason), not the old
+    naive last-two-candle comparison -- proves the wiring, while
+    tests/test_cfd_strategy.py already covers EmaCrossoverStrategy's own
+    crossover math, so this doesn't need to reproduce a real crossover
+    from raw OHLC."""
+    class _FixedSignalEmaStrategy:
+        def prepare(self, bars):
+            return bars
+        def signal_for_row(self, instrument, row, prev_row, in_position):
+            return Signal(instrument, Action.SELL, 2024.5, reason="fast EMA crossed below slow EMA (short entry)")
+
+    monkeypatch.setattr(quota, "EmaCrossoverStrategy", _FixedSignalEmaStrategy)
+    result = asyncio.run(quota.run_quotas())
+    assert next(r for r in result if r["account"] == "quota_h1_forward")["outcome"] == "OPENED"
+    meta = next(m for m in state.list_open_trades().values() if m["virtual_account_id"] == "quota_h1_forward")
+    assert meta["side"] == "short"
+    assert meta["entry_price"] == 2024.5
+    assert meta["strategy"] == "quota_h1_forward@ema_crossover_v1"
+    assert meta["entry_reason"] == "fast EMA crossed below slow EMA (short entry)"
 
 
 def test_sell_timeout_preserves_position_and_recovery_does_not_rebuy(setup):
