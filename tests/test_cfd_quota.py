@@ -90,27 +90,45 @@ def expire_positions():
 
 def test_timeframe_positions_survive_cycles_then_settle_once(setup):
     result = asyncio.run(quota.run_quotas())
-    assert [r["outcome"] for r in result] == ["OPENED"] * 4
+    assert [r["outcome"] for r in result] == ["OPENED"] * 5
     assert {m["entry_timeframe"] for m in state.list_open_trades().values()} == {"M30", "H1", "H4", "D1"}
     assert all(r["outcome"] == "HOLDING" for r in asyncio.run(quota.run_quotas()))
-    assert setup.buys == 4
+    assert setup.buys == 5
     expire_positions()
     asyncio.run(quota.run_quotas())
     assert not setup.opened
-    assert len(trade_log.load_trades()) == 4
+    assert len(trade_log.load_trades()) == 5
     assert all(state.load_state()["virtual_accounts"][aid]["equity"] == 99.99 for aid in quota.SPECS)
     assert all(r["outcome"] == "ALREADY_COMPLETED" for r in asyncio.run(quota.run_quotas()))
-    assert setup.buys == 4
+    assert setup.buys == 5
 
 
-def test_h1_quota_skips_the_window_when_ema_crossover_has_no_signal(setup, monkeypatch):
-    """quota_h1_forward is the only quota account wired to a real,
-    validated strategy (ema_crossover@v1) instead of the honest
-    coin-flip baseline -- so unlike the other three, it must NOT force
-    an entry every window: a HOLD signal (no crossover) means NO_SIGNAL
-    and no order, while M30/H4/D1 (still on the baseline) are
-    unaffected -- confirms the two code paths this module now has are
-    genuinely independent per account, not just per timeframe string."""
+def test_forward_account_entry_uses_majority_vote_across_context_ladder(setup):
+    """The four mandatory-entry "_forward" accounts no longer decide
+    direction from just their own timeframe's last two candles -- they
+    vote across CONTEXT_LADDER. The shared Broker mock's close prices
+    are monotonically increasing on every timeframe, so every rung votes
+    "long" deterministically; this confirms the vote's result (and the
+    context_timeframes/strategy tag it gets recorded under) rather than
+    reproducing the tie-break math, which test_majority_vote_resolves_*
+    below already covers directly."""
+    asyncio.run(quota.run_quotas())
+    meta = next(m for m in state.list_open_trades().values() if m["virtual_account_id"] == "quota_h1_forward")
+    assert meta["side"] == "long"
+    assert meta["strategy"] == "quota_h1_forward@timeframe_vote_v3"
+    assert meta["context_timeframes"] == ["M30", "H1", "H4"]
+
+
+def test_h1_signal_quota_skips_the_window_when_ema_crossover_has_no_signal(setup, monkeypatch):
+    """quota_h1_signal is the only quota account wired to a real,
+    validated strategy (ema_crossover@v1) instead of the majority-vote
+    baseline the four "_forward" accounts use -- so unlike them, it must
+    NOT force an entry every window: a HOLD signal (no crossover) means
+    NO_SIGNAL and no order, while the four _forward accounts (on the
+    vote-based baseline, never touching EmaCrossoverStrategy at all) are
+    unaffected -- confirms SIGNAL_GATED genuinely gates per account, not
+    per timeframe string (quota_h1_forward and quota_h1_signal share the
+    H1 timeframe but not this gate)."""
     class _AlwaysHoldEmaStrategy:
         def prepare(self, bars):
             return bars
@@ -120,21 +138,22 @@ def test_h1_quota_skips_the_window_when_ema_crossover_has_no_signal(setup, monke
     monkeypatch.setattr(quota, "EmaCrossoverStrategy", _AlwaysHoldEmaStrategy)
     result = asyncio.run(quota.run_quotas())
     outcomes = {r["account"]: r["outcome"] for r in result}
-    assert outcomes["quota_h1_forward"] == "NO_SIGNAL"
+    assert outcomes["quota_h1_signal"] == "NO_SIGNAL"
     assert outcomes["quota_30m_forward"] == "OPENED"
+    assert outcomes["quota_h1_forward"] == "OPENED"
     assert outcomes["quota_h4_forward"] == "OPENED"
     assert outcomes["quota_d1_forward"] == "OPENED"
-    assert setup.buys == 3
-    assert "quota_h1_forward" not in {m["virtual_account_id"] for m in state.list_open_trades().values()}
+    assert setup.buys == 4
+    assert "quota_h1_signal" not in {m["virtual_account_id"] for m in state.list_open_trades().values()}
 
 
-def test_h1_quota_uses_ema_crossover_signal(setup, monkeypatch):
-    """The entry meta quota.py records for quota_h1_forward must come
-    from the strategy's own Signal (price, side, reason), not the old
-    naive last-two-candle comparison -- proves the wiring, while
-    tests/test_cfd_strategy.py already covers EmaCrossoverStrategy's own
-    crossover math, so this doesn't need to reproduce a real crossover
-    from raw OHLC."""
+def test_h1_signal_quota_uses_ema_crossover_signal(setup, monkeypatch):
+    """The entry meta quota.py records for quota_h1_signal must come
+    from the strategy's own Signal (price, side, reason), not the
+    majority-vote baseline the _forward accounts use -- proves the
+    wiring, while tests/test_cfd_strategy.py already covers
+    EmaCrossoverStrategy's own crossover math, so this doesn't need to
+    reproduce a real crossover from raw OHLC."""
     class _FixedSignalEmaStrategy:
         def prepare(self, bars):
             return bars
@@ -143,12 +162,56 @@ def test_h1_quota_uses_ema_crossover_signal(setup, monkeypatch):
 
     monkeypatch.setattr(quota, "EmaCrossoverStrategy", _FixedSignalEmaStrategy)
     result = asyncio.run(quota.run_quotas())
-    assert next(r for r in result if r["account"] == "quota_h1_forward")["outcome"] == "OPENED"
-    meta = next(m for m in state.list_open_trades().values() if m["virtual_account_id"] == "quota_h1_forward")
+    assert next(r for r in result if r["account"] == "quota_h1_signal")["outcome"] == "OPENED"
+    meta = next(m for m in state.list_open_trades().values() if m["virtual_account_id"] == "quota_h1_signal")
     assert meta["side"] == "short"
     assert meta["entry_price"] == 2024.5
-    assert meta["strategy"] == "quota_h1_forward@ema_crossover_v1"
+    assert meta["strategy"] == "quota_h1_signal@ema_crossover_v1"
     assert meta["entry_reason"] == "fast EMA crossed below slow EMA (short entry)"
+
+
+def test_majority_vote_resolves_by_count_and_ties_long():
+    assert quota._majority_vote(["long", "long", "short"]) == "long"
+    assert quota._majority_vote(["short", "short", "long"]) == "short"
+    assert quota._majority_vote(["long", "short"]) == "long"  # tie -> long, see _majority_vote's own docstring
+
+
+def test_weekly_closes_drops_the_in_progress_week():
+    """30 days of strictly increasing daily closes, ISO-week-resampled:
+    the still-in-progress final week must be excluded (never vote on an
+    unfinished bar, same principle as every native granularity's own
+    close_at/window filtering elsewhere in this module), while the
+    completed weeks' closes still increase in step with the underlying
+    daily data."""
+    idx = pd.date_range("2026-01-01", periods=30, freq="D", tz="UTC")
+    bars = pd.DataFrame({"close": range(100, 130)}, index=idx)
+    current = idx[-1].to_pydatetime() + pd.Timedelta(hours=1)
+    closes = quota._weekly_closes(bars, current)
+    assert len(closes) >= 3
+    assert closes == sorted(closes)
+    assert closes[-1] < 129  # the final (incomplete) week's own last close must be excluded
+
+
+def test_direction_for_timeframe_uses_last_two_completed_closes():
+    class _MiniBroker:
+        async def get_candles(self, symbol, granularity, count):
+            idx = pd.date_range("2026-09-23T09:00:00Z", periods=5, freq=f"{granularity}s")
+            return pd.DataFrame({"close": [10, 11, 12, 13, 14]}, index=idx)
+
+    current = datetime(2026, 9, 23, 14, 0, tzinfo=timezone.utc)
+    result = asyncio.run(quota._direction_for_timeframe(_MiniBroker(), "frxXAUUSD", "H1", current))
+    assert result == ("long", 14.0)
+
+
+def test_direction_for_timeframe_returns_none_when_not_enough_completed_bars():
+    class _MiniBroker:
+        async def get_candles(self, symbol, granularity, count):
+            idx = pd.date_range("2026-09-23T09:00:00Z", periods=5, freq=f"{granularity}s")
+            return pd.DataFrame({"close": [10, 11, 12, 13, 14]}, index=idx)
+
+    current = datetime(2026, 9, 23, 9, 30, tzinfo=timezone.utc)  # not even the first H1 bar has closed yet
+    result = asyncio.run(quota._direction_for_timeframe(_MiniBroker(), "frxXAUUSD", "H1", current))
+    assert result is None
 
 
 def test_sell_timeout_preserves_position_and_recovery_does_not_rebuy(setup):
@@ -160,8 +223,8 @@ def test_sell_timeout_preserves_position_and_recovery_does_not_rebuy(setup):
     assert "1" in state.list_open_trades()
     setup.fail_sell = False
     asyncio.run(quota.run_quotas())
-    assert setup.buys == 4
-    assert len(trade_log.load_trades()) == 4
+    assert setup.buys == 5
+    assert len(trade_log.load_trades()) == 5
 
 
 def test_outbox_replay_does_not_double_credit_after_log_failure(setup, monkeypatch):
@@ -174,8 +237,8 @@ def test_outbox_replay_does_not_double_credit_after_log_failure(setup, monkeypat
     assert state.load_state()["virtual_accounts"]["quota_30m_forward"]["equity"] == 99.99
     monkeypatch.setattr(quota, "record_trade", original)
     asyncio.run(quota.run_quotas())
-    assert setup.buys == 4
-    assert len(trade_log.load_trades()) == 4
+    assert setup.buys == 5
+    assert len(trade_log.load_trades()) == 5
     assert state.load_state()["virtual_accounts"]["quota_30m_forward"]["closed_trades"] == 1
 
 
@@ -189,11 +252,11 @@ def test_price_request_failure_clears_its_own_pending_and_does_not_block_other_a
     """Regression test for the production incident: a proposal-stage
     rejection (Deriv refuses before any buy is even attempted, e.g. the
     symbol's market is closed) must never leave a stuck pending entry --
-    that stuck entry is exactly what blocked all four quota accounts
+    that stuck entry is exactly what blocked all five quota accounts
     (RECOVERY_OR_PAUSE_BLOCKED, see the test above) for hours."""
     setup.fail_order_stage = "proposal"
     result = asyncio.run(quota.run_quotas())
-    assert [r["outcome"] for r in result] == ["PRICE_REQUEST_FAILED"] * 4
+    assert [r["outcome"] for r in result] == ["PRICE_REQUEST_FAILED"] * 5
     assert setup.buys == 0
     assert state.get_pending_entries() == {}
 
@@ -201,7 +264,7 @@ def test_price_request_failure_clears_its_own_pending_and_does_not_block_other_a
     # later run either -- this is the actual production symptom.
     setup.fail_order_stage = None
     result = asyncio.run(quota.run_quotas())
-    assert [r["outcome"] for r in result] == ["OPENED"] * 4
+    assert [r["outcome"] for r in result] == ["OPENED"] * 5
 
 
 def test_buy_result_unknown_leaves_pending_entry_for_reconciliation(setup):
@@ -213,7 +276,7 @@ def test_buy_result_unknown_leaves_pending_entry_for_reconciliation(setup):
     assert result[0]["outcome"] == "BUY_RESULT_UNKNOWN"
     assert setup.buys == 0
     # Only the first account gets as far as attempting an order this run --
-    # its still-unresolved pending entry blocks the other three up front,
+    # its still-unresolved pending entry blocks the other four up front,
     # same as test_pending_buy_blocks_new_orders. That's the deliberately
     # conservative existing behavior; this test is about the pending entry
     # itself surviving a buy-stage failure, not the blocking rule per se.
@@ -226,15 +289,15 @@ def test_thirty_minute_deadline_closes_without_closing_longer_horizons(setup, mo
     result = asyncio.run(quota.run_quotas())
     assert result[0]["outcome"] == "CLOSED"
     assert result[0]["account"] == "quota_30m_forward"
-    assert len(setup.opened) == 3
-    assert setup.buys == 4
+    assert len(setup.opened) == 4
+    assert setup.buys == 5
 
 
 def test_broker_stop_is_accounted_before_time_deadline(setup):
     asyncio.run(quota.run_quotas())
     setup.opened.remove(1)
     asyncio.run(quota.run_quotas())
-    assert setup.buys == 4
+    assert setup.buys == 5
     assert state.load_state()["virtual_accounts"]["quota_30m_forward"]["closed_trades"] == 1
 
 

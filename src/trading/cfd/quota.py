@@ -1,22 +1,35 @@
 """Experimental DEMO timeframe quotas, closed before the UTC window ends.
 
-quota_h1_forward's entries use ema_crossover@v1 -- the only strategy in
-state/cfd_strategy_registry.json that is both ACTIVE and validated
-specifically on H1 bars (TRAIN cagr=3.4% maxdd=-19.9%, TEST cagr=4.8%
-maxdd=-13.9%, win_rate=47.6% both periods -- see strategy.py's own
-docstring for the grid search). quota_h1_forward is the one quota
-account whose own timeframe actually matches that validation.
+Two kinds of quota account now exist side by side:
 
-The other three quota accounts (M30/H4/D1) have no validated strategy at
-their timeframe: mean_reversion@v1, rsi_reversion@v1 and
-support_resistance@v1 were each tried for the ranging regime these might
-otherwise suit, and all three were RETIRED on negative TRAIN/TEST
-grid-search results (see the registry's own history entries). Porting
-ema_crossover@v1's H1-tuned spans onto M30/H4/D1 would silently change
-what they mean -- exactly what strategy.py's docstring warns against --
-so those three keep the honest simple candle-direction baseline instead:
-it is NOT a qualified profitable strategy, just an execution-mechanism
-probe, and is not represented as anything more than that.
+- The four "_forward" accounts (quota_30m_forward/quota_h1_forward/
+  quota_h4_forward/quota_d1_forward) still trade every single window,
+  mandatory, no exceptions -- that's the point of them, an
+  execution-mechanism probe, not a profit-seeking strategy. Their entry
+  DIRECTION used to come from a plain two-candle comparison on their own
+  timeframe alone; it now comes from a majority vote across a small
+  ladder of neighboring timeframes (CONTEXT_LADDER below -- e.g.
+  quota_h1_forward votes across M30/H1/H4). This is still NOT a
+  qualified profitable strategy and is not represented as one anywhere
+  in its event log or trade records -- it is a smarter *baseline*, not a
+  validated strategy, because multi-timeframe voting has never been
+  through a TRAIN/TEST grid search the way ema_crossover@v1 has.
+
+- quota_h1_signal instead only enters when ema_crossover@v1 -- the one
+  strategy in state/cfd_strategy_registry.json that is both ACTIVE and
+  validated specifically on H1 bars (TRAIN cagr=3.4% maxdd=-19.9%, TEST
+  cagr=4.8% maxdd=-13.9%, win_rate=47.6% both periods -- see strategy.py's
+  own docstring) -- actually fires a crossover, and skips the window
+  (NO_SIGNAL) otherwise. There is no quota_30m_signal/quota_h4_signal/
+  quota_d1_signal yet: mean_reversion@v1, rsi_reversion@v1 and
+  support_resistance@v1 were each tried for the ranging regime those
+  timeframes might otherwise suit, and all three were RETIRED on
+  negative TRAIN/TEST grid-search results (see the registry's own
+  history entries) -- there is nothing validated to gate on for those
+  three timeframes yet, and porting ema_crossover@v1's H1-tuned spans
+  onto them would repeat exactly the mistake strategy.py's own docstring
+  warns against.
+
 All writers must share the cfd-trading workflow concurrency group.
 """
 import asyncio
@@ -26,6 +39,8 @@ import os
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pandas as pd
 
 from trading.cfd import state
 from trading.cfd.broker import DerivBroker, DerivRequestError
@@ -42,7 +57,29 @@ SPECS = {
     "quota_h1_forward": (3600, "H1", 3600),
     "quota_h4_forward": (14400, "H4", 14400),
     "quota_d1_forward": (86400, "D1", 86400),
+    "quota_h1_signal": (3600, "H1", 3600),
 }
+
+SIGNAL_GATED = {"quota_h1_signal"}
+"""Accounts in SPECS that skip a window (NO_SIGNAL) instead of always
+trading -- see the module docstring for why this is only ever H1 today."""
+
+CONTEXT_LADDER = {
+    "quota_30m_forward": ("M15", "M30", "H1"),
+    "quota_h1_forward": ("M30", "H1", "H4"),
+    "quota_h4_forward": ("H1", "H4", "D1"),
+    "quota_d1_forward": ("H4", "D1", "W1"),
+}
+"""Three-timeframe vote (own timeframe plus one rung down and one rung up
+the M15/M30/H1/H4/D1/W1 ladder) used to pick the mandatory _forward
+accounts' entry direction. Three-way by construction so a vote can never
+tie unless a rung's data is genuinely missing (see _majority_vote).
+W1 has no native Deriv granularity (broker.py's get_candles docstring
+caps out at D1/86400s), so quota_d1_forward's "week" vote is built by
+resampling daily candles instead -- see _weekly_closes."""
+
+_TF_GRANULARITY = {"M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
+
 STAKE, STOP, TARGET, MULTIPLIER = 1.0, 0.25, 0.50, 100
 LOG_PATH = Path(__file__).resolve().parents[3] / "state/cfd_quota_events.jsonl"
 
@@ -141,6 +178,59 @@ async def close_tracked(broker, cid, meta):
                  window_id=meta["quota_window"], holding_seconds=(now()-datetime.fromisoformat(meta["entry_time"])).total_seconds())
 
 
+def _weekly_closes(daily_candles, current):
+    """Resample daily candles into ISO-calendar-week closes -- Deriv has
+    no native weekly granularity (broker.py's get_candles docstring caps
+    out at 86400/D1), so quota_d1_forward's "week" vote is built here
+    instead of fetched directly. Only fully-elapsed weeks count -- the
+    still-in-progress current week is dropped, same principle as every
+    native granularity's own close_at/window filtering elsewhere in this
+    module: never vote on a bar that hasn't finished yet."""
+    if daily_candles.empty:
+        return []
+    iso = daily_candles.index.isocalendar()
+    current_year, current_week, _ = current.isocalendar()
+    closes = []
+    for (year, week), group in daily_candles.groupby([iso["year"], iso["week"]], sort=True):
+        if (year, week) >= (current_year, current_week):
+            continue
+        closes.append(float(group["close"].iloc[-1]))
+    return closes
+
+
+async def _direction_for_timeframe(broker, symbol, tf, current):
+    """One timeframe's vote for the CONTEXT_LADDER baseline: ("long" or
+    "short", latest_close) from that timeframe's own last two completed
+    bars, or None if there isn't enough completed history on this
+    particular rung yet -- the caller just drops that one vote rather
+    than failing the whole window over it."""
+    if tf == "W1":
+        daily = await broker.get_candles(symbol, _TF_GRANULARITY["D1"], 40)
+        daily = daily[daily.index + pd.Timedelta(seconds=_TF_GRANULARITY["D1"]) <= current]
+        closes = _weekly_closes(daily, current)
+        if len(closes) < 2:
+            return None
+        return ("long" if closes[-1] >= closes[-2] else "short", closes[-1])
+    granularity = _TF_GRANULARITY[tf]
+    data = await broker.get_candles(symbol, granularity, 5)
+    data = data[data.index + pd.Timedelta(seconds=granularity) <= current]
+    if len(data) < 2:
+        return None
+    closes = data["close"].astype(float)
+    return ("long" if closes.iloc[-1] >= closes.iloc[-2] else "short", float(closes.iloc[-1]))
+
+
+def _majority_vote(sides):
+    """"long" if at least as many votes are long as short, else "short".
+    An exact tie is only possible when one of CONTEXT_LADDER's three
+    rungs was dropped for missing data (three-way is otherwise
+    tie-proof); it resolves to "long" rather than raising or skipping --
+    the _forward accounts are committed to a mandatory entry every
+    window (see module docstring), so "abstain" was never on the table
+    the way it is for quota_h1_signal."""
+    return "long" if sides.count("long") >= sides.count("short") else "short"
+
+
 async def run_quotas():
     if settings.cfd_allow_live_trading:
         raise RuntimeError("Quota research requires DEMO mode")
@@ -191,14 +281,14 @@ async def run_quotas():
             if not symbols:
                 results.append(event("MARKET_CLOSED_OR_EXCLUDED", account=aid)); continue
             symbol = symbols[window % len(symbols)]
-            if granularity:
-                data = await broker.get_candles(symbol, granularity, 80)
-                data = data[data.index + __import__("pandas").Timedelta(seconds=granularity) <= current]
-            else:
-                data = await broker.get_ticks(symbol, 80)
-            if len(data) < 2 or (current-data.index[-1].to_pydatetime()).total_seconds() > max(120, granularity*2):
-                results.append(event("STALE_OR_MISSING_DATA", account=aid)); continue
-            if timeframe == "H1":
+            if aid in SIGNAL_GATED:
+                if granularity:
+                    data = await broker.get_candles(symbol, granularity, 80)
+                    data = data[data.index + pd.Timedelta(seconds=granularity) <= current]
+                else:
+                    data = await broker.get_ticks(symbol, 80)
+                if len(data) < 2 or (current-data.index[-1].to_pydatetime()).total_seconds() > max(120, granularity*2):
+                    results.append(event("STALE_OR_MISSING_DATA", account=aid)); continue
                 ema_strategy = EmaCrossoverStrategy()
                 prepared = ema_strategy.prepare(data)
                 bar_row, bar_prev_row = prepared.iloc[-1], prepared.iloc[-2]
@@ -210,12 +300,18 @@ async def run_quotas():
                 strategy_tag = aid + "@ema_crossover_v1"
                 entry_reason = signal.reason
             else:
-                column = "close" if granularity else "price"
-                prices = data[column].astype(float)
-                side = "long" if prices.iloc[-1] >= prices.iloc[-2] else "short"
-                entry_price = float(prices.iloc[-1])
-                strategy_tag = aid + "@timeframe_v2"
-                entry_reason = "experimental direction of last two completed timeframe candles"
+                votes = {}
+                for tf in CONTEXT_LADDER[aid]:
+                    vote = await _direction_for_timeframe(broker, symbol, tf, current)
+                    if vote is not None:
+                        votes[tf] = vote
+                if timeframe not in votes:
+                    results.append(event("STALE_OR_MISSING_DATA", account=aid)); continue
+                side = _majority_vote([v[0] for v in votes.values()])
+                entry_price = votes[timeframe][1]
+                strategy_tag = aid + "@timeframe_vote_v3"
+                entry_reason = ("majority direction vote across " + "/".join(CONTEXT_LADDER[aid]) +
+                                " (experimental baseline, not a qualified profitable strategy)")
             tracked = state.list_open_trades()
             actual = await broker.open_contract_ids()
             if actual != {int(cid) for cid in tracked}:
@@ -240,10 +336,11 @@ async def run_quotas():
                         equity_before=row["equity"], regime="forced_quota_research", leg="quota",
                         broker_managed_only=True, forced_quota=True, experimental=True,
                         virtual_account_id=aid, horizon=str(period)+"s_window",
-                        entry_timeframe=timeframe, context_timeframes=[timeframe], quota_window=window,
-                        close_at=(window+1)*period-120,
+                        entry_timeframe=timeframe,
+                        context_timeframes=list(CONTEXT_LADDER.get(aid, (timeframe,))),
+                        quota_window=window, close_at=(window+1)*period-120,
                         entry_reason=entry_reason)
-            row.update(entry_timeframe=timeframe, context_timeframes=[timeframe],
+            row.update(entry_timeframe=timeframe, context_timeframes=meta["context_timeframes"],
                        strategy_tag=meta["strategy"], label=timeframe+" experimental timeframe quota")
             state._write_state(s)
             state.set_pending_entry(symbol, {"legs": [meta], "quota_intent": True})

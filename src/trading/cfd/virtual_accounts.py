@@ -78,6 +78,14 @@ DEFAULT_VIRTUAL_ACCOUNTS = (
     VirtualAccountSpec("quota_h1_forward", "Hourly forced-quota forward research", 100.0, ACTIVE_DEMO, "quota_forward", "M1", ("M1",), "quota_h1@v0"),
     VirtualAccountSpec("quota_h4_forward", "Four-hour quota execution research", 100.0, ACTIVE_DEMO, "quota_forward", "H4", ("H4",), "quota_h4_forward@execution_v1"),
     VirtualAccountSpec("quota_d1_forward", "Daily quota execution research", 100.0, ACTIVE_DEMO, "quota_forward", "D1", ("D1",), "quota_d1_forward@execution_v1"),
+    # 2026-09-29: quota_h1_forward above always trades (mandatory every
+    # window, direction now a multi-timeframe majority vote -- see
+    # trading.cfd.quota's CONTEXT_LADDER); this sibling account instead
+    # only enters when ema_crossover@v1 itself fires a real H1 crossover,
+    # skipping the window otherwise (NO_SIGNAL). No quota_30m_signal/
+    # quota_h4_signal/quota_d1_signal exist yet -- see quota.py's module
+    # docstring for why (no validated strategy at those timeframes).
+    VirtualAccountSpec("quota_h1_signal", "Hourly signal-gated quota research (ema_crossover@v1)", 100.0, ACTIVE_DEMO, "quota_signal", "H1", ("M30", "H1", "H4"), "quota_h1_signal@ema_crossover_v1"),
     # Phase-1 controlled experiment expansion. Most new accounts are PAPER/SHADOW
     # so they collect attributable counterfactual evidence without multiplying broker exposure.
     VirtualAccountSpec("iso_trend_h1", "Isolated trend H1", 100.0, PAPER, "isolated", "H1", ("H4","H1"), "ema_crossover@v1"),
