@@ -7523,3 +7523,13 @@
 {"timestamp": "2026-09-30T06:45:55.885158+00:00", "run_id": "36679252214", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124357}
 {"timestamp": "2026-09-30T06:45:55.890475+00:00", "run_id": "36679252214", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20726}
 {"timestamp": "2026-09-30T06:45:55.965055+00:00", "run_id": "36679252214", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497430, "reason": "no crossover"}
+{"timestamp": "2026-09-30T08:29:08.881850+00:00", "run_id": "36689904125", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 14992498459, "instrument": "frxEURUSD", "pnl": 0.01, "window_id": 994861, "holding_seconds": 6610.920367}
+{"timestamp": "2026-09-30T08:29:09.180262+00:00", "run_id": "36689904125", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 14992499999, "instrument": "frxGBPUSD", "pnl": 0.13, "window_id": 497430, "holding_seconds": 6610.497197}
+{"timestamp": "2026-09-30T08:29:09.404519+00:00", "run_id": "36689904125", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 994861, "current_window": 994864, "unobserved_windows": 2}
+{"timestamp": "2026-09-30T08:29:09.409632+00:00", "run_id": "36689904125", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994864}
+{"timestamp": "2026-09-30T08:29:09.410897+00:00", "run_id": "36689904125", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497430, "current_window": 497432, "unobserved_windows": 1}
+{"timestamp": "2026-09-30T08:29:10.828973+00:00", "run_id": "36689904125", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15002363539, "instrument": "frxXAUUSD", "window_id": 497432, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1790758680}
+{"timestamp": "2026-09-30T08:29:12.015242+00:00", "run_id": "36689904125", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 15002365979, "instrument": "frxGBPUSD", "window_id": 124358, "timeframe": "H4", "strategy": "quota_h4_forward@timeframe_vote_v3", "close_at": 1790769480}
+{"timestamp": "2026-09-30T08:29:12.020915+00:00", "run_id": "36689904125", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20726}
+{"timestamp": "2026-09-30T08:29:12.021978+00:00", "run_id": "36689904125", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497430, "current_window": 497432, "unobserved_windows": 1}
+{"timestamp": "2026-09-30T08:29:12.159844+00:00", "run_id": "36689904125", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497432, "reason": "no crossover"}
