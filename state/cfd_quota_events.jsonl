@@ -8001,3 +8001,4 @@
 {"timestamp": "2026-09-30T20:36:13.440993+00:00", "run_id": "36772800623", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124361}
 {"timestamp": "2026-09-30T20:36:13.447020+00:00", "run_id": "36772800623", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20726}
 {"timestamp": "2026-09-30T20:36:13.592933+00:00", "run_id": "36772800623", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497444, "reason": "no crossover"}
+{"timestamp": "2026-09-30T21:17:52.837928+00:00", "run_id": "36778426174", "outcome": "ERROR", "error": "DerivRequestError"}
