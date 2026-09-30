@@ -152,6 +152,26 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_trend_m15|frxGBPUSD": {
+      "contract_id": -237,
+      "side": "short",
+      "entry_price": 1.32614,
+      "stop_price": 1.3281692803243674,
+      "target_price": 1.3241107196756328,
+      "stake": 32.55,
+      "multiplier": 20,
+      "risk_amount": 1.0,
+      "entry_time": "2026-09-30T16:33:55.308629+00:00",
+      "equity_before": 99.62,
+      "regime": "trending",
+      "virtual_account_id": "iso_trend_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
     }
   },
   "paper_equity": {
@@ -165,14 +185,14 @@
     "virtual:iso_trend_m5": 103.0,
     "donchian_breakout@v2": 101.54
   },
-  "paper_trade_counter": 236,
+  "paper_trade_counter": 237,
   "daily_risk_tracking": {
     "date": "2026-09-30",
     "start_equity": 115.34000000000015,
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 114.30397745100026,
+  "smoothed_equity": 114.33278421570007,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
