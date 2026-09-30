@@ -7664,3 +7664,8 @@
 {"timestamp": "2026-09-30T12:28:16.891650+00:00", "run_id": "36714844947", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20726}
 {"timestamp": "2026-09-30T12:28:16.892683+00:00", "run_id": "36714844947", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497434, "current_window": 497436, "unobserved_windows": 1}
 {"timestamp": "2026-09-30T12:28:17.006526+00:00", "run_id": "36714844947", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497436, "reason": "no crossover"}
+{"timestamp": "2026-09-30T12:29:13.476849+00:00", "run_id": "36714844947", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994872}
+{"timestamp": "2026-09-30T12:29:13.482593+00:00", "run_id": "36714844947", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497436}
+{"timestamp": "2026-09-30T12:29:13.487812+00:00", "run_id": "36714844947", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124359}
+{"timestamp": "2026-09-30T12:29:13.493072+00:00", "run_id": "36714844947", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20726}
+{"timestamp": "2026-09-30T12:29:13.601751+00:00", "run_id": "36714844947", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497436, "reason": "no crossover"}
