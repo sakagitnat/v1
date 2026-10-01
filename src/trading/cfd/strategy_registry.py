@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from trading.cfd.breakout import DonchianBreakoutStrategy
+from trading.cfd.london_breakout import LondonBreakoutStrategy
 from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.strategy import EmaCrossoverStrategy
@@ -70,6 +71,7 @@ STRATEGY_CLASSES = {
     "rsi_reversion": RsiReversionStrategy,
     "support_resistance": SupportResistanceReversionStrategy,
     "volatility_expansion": VolatilityExpansionBreakoutStrategy,
+    "london_breakout": LondonBreakoutStrategy,
 }
 
 
