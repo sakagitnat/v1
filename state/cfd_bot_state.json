@@ -144,6 +144,66 @@
         "H4",
         "H1"
       ]
+    },
+    "virtual:iso_breakout_m15|frxEURUSD": {
+      "contract_id": -266,
+      "side": "short",
+      "entry_price": 1.12362,
+      "stop_price": 1.1262596668840503,
+      "target_price": 1.1193965329855196,
+      "stake": 22.68,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-10-01T15:33:32.286744+00:00",
+      "equity_before": 106.55,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxEURUSD": {
+      "contract_id": -267,
+      "side": "short",
+      "entry_price": 1.12364,
+      "stop_price": 1.1254978034320373,
+      "target_price": 1.1206675145087401,
+      "stake": 33.24,
+      "multiplier": 20,
+      "risk_amount": 1.1,
+      "entry_time": "2026-10-01T15:33:32.384261+00:00",
+      "equity_before": 109.92,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    },
+    "virtual:iso_meanrev_m15|frxGBPUSD": {
+      "contract_id": -268,
+      "side": "long",
+      "entry_price": 1.3198,
+      "stop_price": 1.3174041135502348,
+      "target_price": 1.321596914837324,
+      "stake": 29.5,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-10-01T15:33:32.552821+00:00",
+      "equity_before": 107.09,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
     }
   },
   "paper_equity": {
@@ -157,7 +217,7 @@
     "virtual:iso_trend_m5": 102.73,
     "donchian_breakout@v2": 99.65
   },
-  "paper_trade_counter": 265,
+  "paper_trade_counter": 268,
   "daily_risk_tracking": {
     "date": "2026-10-01",
     "start_equity": 114.20000000000073,
