@@ -8944,3 +8944,10 @@
 {"timestamp": "2026-10-01T18:57:05.967080+00:00", "run_id": "36909809708", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124366}
 {"timestamp": "2026-10-01T18:57:05.974073+00:00", "run_id": "36909809708", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20727}
 {"timestamp": "2026-10-01T18:57:05.980983+00:00", "run_id": "36909809708", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_signal", "window_id": 497466}
+{"timestamp": "2026-10-01T18:58:06.391159+00:00", "run_id": "36909809708", "outcome": "CLOSED", "account": "quota_h1_forward", "contract_id": 15196980599, "instrument": "frxGBPUSD", "pnl": -0.06, "window_id": 497466, "holding_seconds": 1742.340993}
+{"timestamp": "2026-10-01T18:58:06.607574+00:00", "run_id": "36909809708", "outcome": "CLOSED", "account": "quota_30m_forward", "contract_id": 15197087639, "instrument": "frxEURUSD", "pnl": 0.01, "window_id": 994933, "holding_seconds": 1683.227646}
+{"timestamp": "2026-10-01T18:58:06.666131+00:00", "run_id": "36909809708", "outcome": "ALREADY_COMPLETED", "account": "quota_30m_forward", "window_id": 994933}
+{"timestamp": "2026-10-01T18:58:06.673277+00:00", "run_id": "36909809708", "outcome": "ALREADY_COMPLETED", "account": "quota_h1_forward", "window_id": 497466}
+{"timestamp": "2026-10-01T18:58:06.680447+00:00", "run_id": "36909809708", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124366}
+{"timestamp": "2026-10-01T18:58:06.687394+00:00", "run_id": "36909809708", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20727}
+{"timestamp": "2026-10-01T18:58:06.694264+00:00", "run_id": "36909809708", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_signal", "window_id": 497466}
