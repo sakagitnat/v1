@@ -60,6 +60,7 @@ Usage: python scripts/optimize_cfd_strategy.py [--granularity 900] [--source der
 import argparse
 import asyncio
 import itertools
+import statistics
 import sys
 from pathlib import Path
 
@@ -69,6 +70,7 @@ import pandas as pd
 
 from trading.cfd.backtest import CfdBacktestEngine
 from trading.cfd.broker import DerivBroker
+from trading.cfd.deflated_sharpe import annualized_to_per_period, deflated_sharpe_ratio
 from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.config import settings
 
@@ -182,7 +184,11 @@ def calmar(m: dict) -> float:
     return m["cagr_pct"] / dd if dd > 0 else float("-inf")
 
 
-def run_backtest(strategy_kwargs: dict, bars: dict) -> dict:
+def run_backtest_full(strategy_kwargs: dict, bars: dict) -> dict:
+    """Full engine output (equity_curve, trades, metrics) -- needed for
+    the Deflated Sharpe Ratio inputs (per-bar return distribution's
+    skew/kurtosis, observation count), not just the summary metrics the
+    grid search loop below cares about."""
     strategy = EmaCrossoverStrategy(**strategy_kwargs)
     engine = CfdBacktestEngine(
         strategy=strategy,
@@ -193,7 +199,70 @@ def run_backtest(strategy_kwargs: dict, bars: dict) -> dict:
         spread_pct=settings.cfd_backtest_spread_pct,
         daily_financing_pct=settings.cfd_backtest_daily_financing_pct,
     )
-    return engine.run(bars)["metrics"]
+    return engine.run(bars)
+
+
+def run_backtest(strategy_kwargs: dict, bars: dict) -> dict:
+    return run_backtest_full(strategy_kwargs, bars)["metrics"]
+
+
+def _periods_per_year(equity_curve: pd.Series) -> float:
+    """Mirrors trading.cfd.backtest.compute_cfd_metrics' own annualization
+    basis -- needed here to convert its annualized Sharpe back to the
+    per-period Sharpe deflated_sharpe_ratio() requires."""
+    if len(equity_curve) < 2:
+        return 0.0
+    elapsed_days = (equity_curve.index[-1] - equity_curve.index[0]).total_seconds() / 86400
+    years = max(elapsed_days / 365.25, 1e-9)
+    return len(equity_curve) / years
+
+
+def _return_distribution_stats(equity_curve: pd.Series) -> tuple[int, float, float]:
+    """(n_obs, skew, kurtosis) of the equity curve's per-bar returns --
+    kurtosis here is raw (normal == 3.0), not pandas' excess convention
+    (normal == 0.0), to match deflated_sharpe_ratio()'s expected input."""
+    returns = equity_curve.pct_change().dropna()
+    n_obs = len(returns)
+    if n_obs < 3:
+        return n_obs, 0.0, 3.0
+    skew = returns.skew()
+    kurt = returns.kurt() + 3.0
+    if pd.isna(skew) or pd.isna(kurt):
+        return n_obs, 0.0, 3.0
+    return n_obs, float(skew), float(kurt)
+
+
+def report_dsr(label: str, kwargs: dict, bars: dict, sr_std_per_period: float, n_trials: int) -> None:
+    """Prints the Deflated Sharpe Ratio for one specific, already-chosen
+    candidate (the recommended combo, or the untouched baseline when
+    nothing was recommended) -- never for every grid combo, which would
+    just be p-hacking the multiple-testing correction itself."""
+    full = run_backtest_full(kwargs, bars)
+    curve = full["equity_curve"]
+    ppy = _periods_per_year(curve)
+    n_obs, skew, kurt = _return_distribution_stats(curve)
+    per_period_sr = annualized_to_per_period(full["metrics"]["sharpe_ratio"], ppy)
+    dsr = deflated_sharpe_ratio(
+        observed_sr=per_period_sr,
+        sr_trials_std=sr_std_per_period,
+        n_trials=n_trials,
+        n_obs=n_obs,
+        skew=skew,
+        kurtosis=kurt,
+    )
+    verdict = "nan (degenerate skew/kurtosis for this SR)" if dsr != dsr else f"{dsr:.1%}"
+    print(
+        f"\nDeflated Sharpe Ratio ({label}, {n_trials} trials searched, "
+        f"TRAIN sharpe={full['metrics']['sharpe_ratio']:.2f} annualized): {verdict}"
+    )
+    print(
+        "  P(true Sharpe exceeds what the best of this many noisy parameter "
+        "combinations would be expected to produce by chance alone). "
+        "Below ~95% means this result doesn't clearly look like skill rather "
+        "than the winner of a multiple-testing lottery -- a separate check "
+        "from the TRAIN/TEST gate above, which this can fail even when "
+        "TRAIN/TEST passes."
+    )
 
 
 def split(bars: dict[str, pd.DataFrame]) -> tuple[dict, dict]:
@@ -235,11 +304,17 @@ async def main(granularity_seconds: int, source: str):
     train_end = max(df.index[-1] for df in train_bars.values() if not df.empty)
     print(f"\nTRAIN: {train_start} to {train_end} ({TRAIN_FRACTION:.0%} of fetched bars per instrument)")
 
-    baseline_train = run_backtest({}, train_bars)
+    baseline_train_full = run_backtest_full({}, train_bars)
+    baseline_train = baseline_train_full["metrics"]
     baseline_test = run_backtest({}, test_bars)
     print("\nBaseline (default EmaCrossoverStrategy params):")
     print(f"  TRAIN {fmt(baseline_train)}")
     print(f"  TEST  {fmt(baseline_test)}")
+
+    # Same TRAIN date range for every combo below (the grid search varies
+    # the strategy, not the bars), so this is a one-time computation --
+    # needed to de-annualize each combo's Sharpe for the DSR inputs below.
+    periods_per_year = _periods_per_year(baseline_train_full["equity_curve"])
 
     keys = list(PARAM_GRID.keys())
     combos = [
@@ -254,6 +329,17 @@ async def main(granularity_seconds: int, source: str):
             continue
         results.append((kwargs, m))
 
+    # Cross-sectional spread of this grid's own TRAIN Sharpe ratios --
+    # the "how noisy is a single trial" input the Deflated Sharpe Ratio
+    # needs to tell a genuinely good result apart from the best of many
+    # mediocre ones. Trials below MIN_TRADES are excluded here (no
+    # meaningful Sharpe to contribute) even though len(combos) -- the
+    # true trial count passed to report_dsr -- still counts them: they
+    # were still hypotheses this search tried, just ones estimated from
+    # too few trades to say anything.
+    trial_sharpes_per_period = [annualized_to_per_period(m["sharpe_ratio"], periods_per_year) for _, m in results]
+    sr_std_per_period = statistics.pstdev(trial_sharpes_per_period) if len(trial_sharpes_per_period) >= 2 else 0.0
+
     pool = [r for r in results if r[1]["cagr_pct"] > 0 and r[1]["max_drawdown_pct"] >= MAX_DRAWDOWN_CAP]
     pool.sort(key=lambda r: calmar(r[1]), reverse=True)
     print(
@@ -265,6 +351,7 @@ async def main(granularity_seconds: int, source: str):
 
     if not pool:
         print(f"\nNo combination qualified (min {MIN_TRADES} trades, CAGR>0, drawdown cap). Keeping current defaults.")
+        report_dsr("baseline (kept)", {}, train_bars, sr_std_per_period, len(combos))
         return
 
     # Ranking by TRAIN calmar alone picks whichever combo best fit TRAIN's
@@ -288,6 +375,7 @@ async def main(granularity_seconds: int, source: str):
             "\n  None of the top candidates hold up out-of-sample and beat the default params on TEST. "
             "NOT recommending any change -- keep the current defaults."
         )
+        report_dsr("baseline (kept)", {}, train_bars, sr_std_per_period, len(combos))
         return
 
     robust.sort(key=lambda r: calmar(r[2]), reverse=True)
@@ -296,6 +384,7 @@ async def main(granularity_seconds: int, source: str):
     print(f"  TRAIN {fmt(best_train)}")
     print(f"  TEST  {fmt(best_test)}")
     print("\n  Holds up out-of-sample and beats the default params on TEST -- recommended.")
+    report_dsr("recommended candidate", best_kwargs, train_bars, sr_std_per_period, len(combos))
 
 
 if __name__ == "__main__":

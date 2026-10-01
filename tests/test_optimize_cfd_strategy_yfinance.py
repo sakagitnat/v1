@@ -1,11 +1,19 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from optimize_cfd_strategy import YFINANCE_INTERVAL_BY_GRANULARITY, fetch_history_yfinance
+from optimize_cfd_strategy import (
+    YFINANCE_INTERVAL_BY_GRANULARITY,
+    _periods_per_year,
+    _return_distribution_stats,
+    fetch_history_yfinance,
+    report_dsr,
+    run_backtest_full,
+)
 
 
 def test_all_deriv_champion_granularities_are_mapped():
@@ -58,3 +66,45 @@ def test_30m_interval_fetches_native_30m_without_resampling(monkeypatch):
 
     assert calls == ["30m"]
     assert len(out) == 4
+
+
+def _synthetic_bars(n=500, seed=7):
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC")
+    price = 100 + np.cumsum(rng.normal(0, 0.3, n))
+    df = pd.DataFrame(
+        {
+            "open": price,
+            "high": price + np.abs(rng.normal(0, 0.2, n)),
+            "low": price - np.abs(rng.normal(0, 0.2, n)),
+            "close": price,
+        },
+        index=idx,
+    )
+    return {"frxEURUSD": df}
+
+
+def test_periods_per_year_matches_hourly_bar_spacing():
+    full = run_backtest_full({}, _synthetic_bars())
+    ppy = _periods_per_year(full["equity_curve"])
+    # ~500 hourly bars spans ~20.8 days -- annualizing that out should land
+    # close to the real "hours in a year" constant, not an arbitrary value.
+    assert 7000 < ppy < 9500
+
+
+def test_return_distribution_stats_shapes():
+    full = run_backtest_full({}, _synthetic_bars())
+    n_obs, skew, kurt = _return_distribution_stats(full["equity_curve"])
+    assert n_obs == len(full["equity_curve"]) - 1  # pct_change() drops the first bar
+    assert isinstance(skew, float) and isinstance(kurt, float)
+
+
+def test_report_dsr_runs_end_to_end_without_error(capsys):
+    # The integration this whole DSR addition exists for: a real
+    # CfdBacktestEngine run feeding real equity-curve statistics through
+    # to deflated_sharpe_ratio() without any shape/NaN surprises.
+    bars = _synthetic_bars()
+    report_dsr("synthetic baseline", {}, bars, sr_std_per_period=0.05, n_trials=243)
+    out = capsys.readouterr().out
+    assert "Deflated Sharpe Ratio" in out
+    assert "243 trials searched" in out
