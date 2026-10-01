@@ -8362,3 +8362,8 @@
 {"timestamp": "2026-10-01T04:45:31.388353+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124363}
 {"timestamp": "2026-10-01T04:45:31.394519+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20727}
 {"timestamp": "2026-10-01T04:45:31.635180+00:00", "run_id": "36816293814", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497452, "reason": "no crossover"}
+{"timestamp": "2026-10-01T04:46:31.338489+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_30m_forward", "window_id": 994905}
+{"timestamp": "2026-10-01T04:46:31.344916+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497452}
+{"timestamp": "2026-10-01T04:46:31.351129+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124363}
+{"timestamp": "2026-10-01T04:46:31.357390+00:00", "run_id": "36816293814", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20727}
+{"timestamp": "2026-10-01T04:46:31.493475+00:00", "run_id": "36816293814", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497452, "reason": "no crossover"}
