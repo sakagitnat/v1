@@ -35,6 +35,7 @@ import pandas as pd
 from trading.cfd.backtest import CfdBacktestEngine
 from trading.cfd.breakout import DonchianBreakoutStrategy
 from trading.cfd.broker import DerivBroker
+from trading.cfd.walk_forward import run_walk_forward
 from trading.config import settings
 
 from optimize_cfd_strategy import (
@@ -48,8 +49,13 @@ from optimize_cfd_strategy import (
     fetch_history,
     fetch_history_yfinance,
     fmt,
+    print_walk_forward_report,
+    select_best_on_train,
     split,
 )
+
+def _combo_filter(values: tuple) -> bool:
+    return values[0] > values[1]  # entry_window > exit_window, or entries would be easier to trigger than exits
 
 PARAM_GRID = {
     # Classic Turtle System values (20/55-day entry channels) as the
@@ -78,7 +84,7 @@ def run_backtest(strategy_kwargs: dict, bars: dict) -> dict:
     return engine.run(bars)["metrics"]
 
 
-async def main(granularity_seconds: int, source: str):
+async def main(granularity_seconds: int, source: str, walk_forward_folds: int = 0):
     bars = {}
     if source == "deriv":
         broker = DerivBroker()
@@ -101,6 +107,19 @@ async def main(granularity_seconds: int, source: str):
     bars = {sym: df for sym, df in bars.items() if not df.empty}
     if not bars:
         print("No history fetched for any instrument -- aborting.")
+        return
+
+    if walk_forward_folds > 0:
+        def select_fn(train_bars):
+            return select_best_on_train(train_bars, DonchianBreakoutStrategy, PARAM_GRID, _combo_filter)
+
+        report = run_walk_forward(
+            bars,
+            n_folds=walk_forward_folds,
+            select_fn=select_fn,
+            evaluate_fn=lambda kwargs, b: run_backtest(kwargs, b),
+        )
+        print_walk_forward_report(report)
         return
 
     train_bars, test_bars = split(bars)
@@ -173,5 +192,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--granularity", type=int, default=3600)
     parser.add_argument("--source", choices=["deriv", "yfinance"], default="yfinance")
+    parser.add_argument("--walk-forward", type=int, default=0, metavar="N_FOLDS")
     args = parser.parse_args()
-    asyncio.run(main(args.granularity, args.source))
+    asyncio.run(main(args.granularity, args.source, args.walk_forward))

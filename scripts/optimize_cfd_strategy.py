@@ -55,7 +55,14 @@ Needs a live network connection (this sandbox has no general internet
 access) -- run via the "CFD Manual Command" GitHub Actions workflow
 (command=optimize-strategy) and read its job logs.
 
-Usage: python scripts/optimize_cfd_strategy.py [--granularity 900] [--source deriv|yfinance]
+--walk-forward N_FOLDS replaces the single TRAIN/TEST split above with
+N_FOLDS of anchored walk-forward validation instead (see
+trading.cfd.walk_forward's module docstring for the full methodology
+and why a single split can't catch what this catches) -- costs several
+times longer to run (the same grid search repeats once per fold on a
+growing TRAIN window), which is why it's opt-in, not the default.
+
+Usage: python scripts/optimize_cfd_strategy.py [--granularity 900] [--source deriv|yfinance] [--walk-forward N_FOLDS]
 """
 import argparse
 import asyncio
@@ -72,6 +79,7 @@ from trading.cfd.backtest import CfdBacktestEngine
 from trading.cfd.broker import DerivBroker
 from trading.cfd.deflated_sharpe import annualized_to_per_period, deflated_sharpe_ratio
 from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.walk_forward import run_walk_forward
 from trading.config import settings
 
 CHUNK_COUNT = 5000  # Deriv's approx per-request cap for ticks_history
@@ -276,6 +284,91 @@ def report_dsr(
     )
 
 
+def _default_ema_combo_filter(values: tuple) -> bool:
+    return values[0] < values[1]  # fast_span < slow_span, or the "crossover" is meaningless
+
+
+def select_best_on_train(
+    train_bars: dict,
+    strategy_cls=EmaCrossoverStrategy,
+    param_grid: dict = None,
+    combo_filter=_default_ema_combo_filter,
+) -> tuple[dict, dict]:
+    """One TRAIN-only grid search and selection -- the half of main()'s
+    logic that doesn't need a TEST split at all (TRAIN-side MIN_TRADES/
+    CAGR>0/drawdown-cap filter, ranked by TRAIN calmar). Used both as
+    part of main()'s own single-split flow conceptually, and directly
+    as the select_fn walk-forward validation needs per fold (see
+    trading.cfd.walk_forward's module docstring) -- each fold's own
+    held-out TEST slice is what stands in for the single-split version's
+    TEST-side robustness check, not a second check inside this
+    function. Falls back to the untouched defaults ({}, baseline
+    metrics) when nothing qualifies, same as main()'s own "keep current
+    defaults" path.
+
+    param_grid/combo_filter default to this module's own EmaCrossoverStrategy
+    grid/constraint, but every sibling optimize_cfd_*.py script reuses this
+    function for its own strategy by passing its own PARAM_GRID and combo
+    constraint (e.g. optimize_cfd_breakout.py's entry_window > exit_window)
+    rather than re-implementing this same TRAIN-only selection loop."""
+    param_grid = PARAM_GRID if param_grid is None else param_grid
+    keys = list(param_grid.keys())
+    combos = [dict(zip(keys, values)) for values in itertools.product(*param_grid.values()) if combo_filter(values)]
+
+    results = []
+    for kwargs in combos:
+        m = run_backtest(kwargs, train_bars, strategy_cls)
+        if m["num_trades"] < MIN_TRADES:
+            continue
+        results.append((kwargs, m))
+
+    pool = [r for r in results if r[1]["cagr_pct"] > 0 and r[1]["max_drawdown_pct"] >= MAX_DRAWDOWN_CAP]
+    if not pool:
+        return {}, run_backtest({}, train_bars, strategy_cls)
+
+    pool.sort(key=lambda r: calmar(r[1]), reverse=True)
+    return pool[0]
+
+
+def print_walk_forward_report(report, strategy_cls=EmaCrossoverStrategy) -> None:
+    print(f"\n=== Walk-forward validation: {report.n_folds} folds (anchored/expanding TRAIN) ===")
+    for f in report.folds:
+        verdict = "beat baseline" if f.beat_baseline else "did not beat baseline"
+        print(f"  Fold {f.fold}: {f.kwargs}")
+        print(f"    TRAIN {fmt(f.train_metrics)}")
+        print(f"    TEST  {fmt(f.test_metrics)}  [{verdict}]")
+
+    print(f"\nAcross all {report.n_folds} folds' TEST windows:")
+    print(f"  mean CAGR:   {report.mean_test('cagr_pct'):.1f}%")
+    print(f"  mean Sharpe: {report.mean_test('sharpe_ratio'):.2f}")
+    print(f"  worst CAGR:  {report.worst_test('cagr_pct'):.1f}%")
+    print(f"  worst drawdown: {report.worst_test('max_drawdown_pct'):.1f}%")
+    print(f"  fraction of folds beating baseline: {report.fraction_beating_baseline():.0%}")
+
+    stability = report.param_stability()
+    stable = {k: v for k, v in stability.items() if len(v) == 1}
+    unstable = {k: v for k, v in stability.items() if len(v) > 1}
+    if unstable:
+        print(
+            f"  UNSTABLE parameters across folds (different value won each fold -- a red flag "
+            f"a single TRAIN/TEST split can't see): {unstable}"
+        )
+    if stable:
+        print(f"  Stable parameters (same value won every fold): { {k: next(iter(v)) for k, v in stable.items()} }")
+
+    if report.fraction_beating_baseline() >= 0.7 and not unstable:
+        print(
+            "\n  Consistently beats baseline across folds with stable winning parameters -- "
+            "genuine evidence of an edge, not a single-split artifact."
+        )
+    else:
+        print(
+            "\n  Does not consistently beat baseline and/or its winning parameters aren't stable "
+            "across folds -- the single-split version's result (if any) looks more like this "
+            "fold sequence's noise than a robust edge."
+        )
+
+
 def split(bars: dict[str, pd.DataFrame]) -> tuple[dict, dict]:
     train, test = {}, {}
     for sym, df in bars.items():
@@ -285,7 +378,7 @@ def split(bars: dict[str, pd.DataFrame]) -> tuple[dict, dict]:
     return train, test
 
 
-async def main(granularity_seconds: int, source: str):
+async def main(granularity_seconds: int, source: str, walk_forward_folds: int = 0):
     bars = {}
     if source == "deriv":
         broker = DerivBroker()
@@ -308,6 +401,16 @@ async def main(granularity_seconds: int, source: str):
     bars = {sym: df for sym, df in bars.items() if not df.empty}
     if not bars:
         print("No history fetched for any instrument -- aborting.")
+        return
+
+    if walk_forward_folds > 0:
+        report = run_walk_forward(
+            bars,
+            n_folds=walk_forward_folds,
+            select_fn=select_best_on_train,
+            evaluate_fn=run_backtest,
+        )
+        print_walk_forward_report(report)
         return
 
     train_bars, test_bars = split(bars)
@@ -414,5 +517,14 @@ if __name__ == "__main__":
         help="deriv: the real feed the bot trades on, capped at ~3 months for M15. "
         "yfinance: Yahoo Finance proxy feed, longer history available -- see module docstring.",
     )
+    parser.add_argument(
+        "--walk-forward",
+        type=int,
+        default=0,
+        metavar="N_FOLDS",
+        help="Run N_FOLDS of anchored walk-forward validation (see trading.cfd.walk_forward's module "
+        "docstring) instead of the default single TRAIN/TEST split. 0 (default) keeps the single-split "
+        "behavior.",
+    )
     args = parser.parse_args()
-    asyncio.run(main(args.granularity, args.source))
+    asyncio.run(main(args.granularity, args.source, args.walk_forward))
