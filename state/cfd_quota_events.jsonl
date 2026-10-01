@@ -8951,3 +8951,12 @@
 {"timestamp": "2026-10-01T18:58:06.680447+00:00", "run_id": "36909809708", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124366}
 {"timestamp": "2026-10-01T18:58:06.687394+00:00", "run_id": "36909809708", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20727}
 {"timestamp": "2026-10-01T18:58:06.694264+00:00", "run_id": "36909809708", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_signal", "window_id": 497466}
+{"timestamp": "2026-10-01T21:28:31.012057+00:00", "run_id": "36928835236", "outcome": "CLOSED_LATE", "account": "quota_h4_forward", "contract_id": 15183872099, "instrument": "frxGBPUSD", "pnl": 0.0, "window_id": 124366, "holding_seconds": 17992.012978}
+{"timestamp": "2026-10-01T21:28:31.073537+00:00", "run_id": "36928835236", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 994933, "current_window": 994938, "unobserved_windows": 4}
+{"timestamp": "2026-10-01T21:28:31.081391+00:00", "run_id": "36928835236", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994938}
+{"timestamp": "2026-10-01T21:28:31.082466+00:00", "run_id": "36928835236", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497466, "current_window": 497469, "unobserved_windows": 2}
+{"timestamp": "2026-10-01T21:28:31.715744+00:00", "run_id": "36928835236", "outcome": "PRICE_REQUEST_FAILED", "account": "quota_h1_forward", "instrument": "frxEURUSD", "window_id": 497469, "error": "Deriv API error (proposal): Trading is not available from 20:55:00 to 21:30:00."}
+{"timestamp": "2026-10-01T21:28:31.999072+00:00", "run_id": "36928835236", "outcome": "PRICE_REQUEST_FAILED", "account": "quota_h4_forward", "instrument": "frxUSDJPY", "window_id": 124367, "error": "Deriv API error (proposal): Trading is not available from 20:55:00 to 21:30:00."}
+{"timestamp": "2026-10-01T21:28:32.004645+00:00", "run_id": "36928835236", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20727}
+{"timestamp": "2026-10-01T21:28:32.005755+00:00", "run_id": "36928835236", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497466, "current_window": 497469, "unobserved_windows": 2}
+{"timestamp": "2026-10-01T21:28:32.153503+00:00", "run_id": "36928835236", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497469, "reason": "no crossover"}
