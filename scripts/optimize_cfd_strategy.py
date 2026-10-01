@@ -184,12 +184,16 @@ def calmar(m: dict) -> float:
     return m["cagr_pct"] / dd if dd > 0 else float("-inf")
 
 
-def run_backtest_full(strategy_kwargs: dict, bars: dict) -> dict:
+def run_backtest_full(strategy_kwargs: dict, bars: dict, strategy_cls=EmaCrossoverStrategy) -> dict:
     """Full engine output (equity_curve, trades, metrics) -- needed for
     the Deflated Sharpe Ratio inputs (per-bar return distribution's
     skew/kurtosis, observation count), not just the summary metrics the
-    grid search loop below cares about."""
-    strategy = EmaCrossoverStrategy(**strategy_kwargs)
+    grid search loop below cares about. strategy_cls defaults to
+    EmaCrossoverStrategy for this module's own callers, but every
+    sibling optimize_cfd_*.py script reuses this (and report_dsr below)
+    for its own strategy class via the strategy_cls argument, rather
+    than re-implementing the same engine-wiring/DSR plumbing per file."""
+    strategy = strategy_cls(**strategy_kwargs)
     engine = CfdBacktestEngine(
         strategy=strategy,
         starting_equity=10_000.0,
@@ -202,8 +206,8 @@ def run_backtest_full(strategy_kwargs: dict, bars: dict) -> dict:
     return engine.run(bars)
 
 
-def run_backtest(strategy_kwargs: dict, bars: dict) -> dict:
-    return run_backtest_full(strategy_kwargs, bars)["metrics"]
+def run_backtest(strategy_kwargs: dict, bars: dict, strategy_cls=EmaCrossoverStrategy) -> dict:
+    return run_backtest_full(strategy_kwargs, bars, strategy_cls)["metrics"]
 
 
 def _periods_per_year(equity_curve: pd.Series) -> float:
@@ -232,12 +236,19 @@ def _return_distribution_stats(equity_curve: pd.Series) -> tuple[int, float, flo
     return n_obs, float(skew), float(kurt)
 
 
-def report_dsr(label: str, kwargs: dict, bars: dict, sr_std_per_period: float, n_trials: int) -> None:
+def report_dsr(
+    label: str,
+    kwargs: dict,
+    bars: dict,
+    sr_std_per_period: float,
+    n_trials: int,
+    strategy_cls=EmaCrossoverStrategy,
+) -> None:
     """Prints the Deflated Sharpe Ratio for one specific, already-chosen
     candidate (the recommended combo, or the untouched baseline when
     nothing was recommended) -- never for every grid combo, which would
     just be p-hacking the multiple-testing correction itself."""
-    full = run_backtest_full(kwargs, bars)
+    full = run_backtest_full(kwargs, bars, strategy_cls)
     curve = full["equity_curve"]
     ppy = _periods_per_year(curve)
     n_obs, skew, kurt = _return_distribution_stats(curve)
