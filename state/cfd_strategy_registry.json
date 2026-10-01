@@ -11,9 +11,9 @@
       "adx_window": 14,
       "adx_threshold": 0
     },
-    "state": "PAUSED",
+    "state": "ACTIVE",
     "created_at": "2026-09-19T14:58:57.511512+00:00",
-    "updated_at": "2026-10-01T10:21:29.698215+00:00",
+    "updated_at": "2026-10-01T11:29:34.504816+00:00",
     "history": [
       {
         "from": null,
@@ -26,6 +26,12 @@
         "to": "PAUSED",
         "reason": "DSR=0% on fresh H1 yfinance data (TRAIN cagr=-46.9% maxdd=-74.3%, TEST cagr=-53.9% maxdd=-49.8%, 0/243 grid combos even cleared CAGR>0+drawdown cap on TRAIN) -- market regime has shifted decisively since original validation (TRAIN cagr=3.4%, TEST cagr=4.8%); no longer credible evidence of edge. Pausing new entries pending re-validation; existing open positions still managed to exit as usual.",
         "at": "2026-10-01T10:21:29.698197+00:00"
+      },
+      {
+        "from": "PAUSED",
+        "to": "ACTIVE",
+        "reason": "Emergency revert: pausing this was the only ACTIVE strategy, and scheduler.py hard-fails (\"No strategy is registered as ACTIVE -- nothing to trade\") when none exist -- confirmed by cfd-trading.yml run 36855246560 crashing on exactly this. Restoring ACTIVE to keep the system functional while donchian_breakout@v2 (currently PAPER) completes walk-forward/DSR validation before being considered as a replacement. The DSR=0% finding against this strategy still stands -- this is an operational necessity, not new evidence of credibility.",
+        "at": "2026-10-01T11:29:34.504795+00:00"
       }
     ],
     "suited_regimes": [
