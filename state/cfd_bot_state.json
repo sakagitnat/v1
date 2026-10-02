@@ -937,15 +937,17 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "30-minute forced-quota forward research",
+      "label": "M30 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "TICK",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "TICK"
+        "M15",
+        "M30",
+        "H1"
       ],
-      "strategy_tag": "quota_30m@v0",
+      "strategy_tag": "quota_30m_forward@timeframe_vote_v3",
       "equity": 95.76,
       "high_water_mark": 100.0,
       "realized_pnl": -4.24,
@@ -8513,7 +8515,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 994970,
+    "quota_30m_forward": 994971,
     "quota_h1_forward": 497485,
     "quota_h4_forward": 124371,
     "quota_d1_forward": 20728,

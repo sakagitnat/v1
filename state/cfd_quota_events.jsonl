@@ -9650,3 +9650,8 @@
 {"timestamp": "2026-10-02T13:29:59.869900+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124371}
 {"timestamp": "2026-10-02T13:29:59.879201+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
 {"timestamp": "2026-10-02T13:29:59.987762+00:00", "run_id": "37013182084", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497485, "reason": "no crossover"}
+{"timestamp": "2026-10-02T13:31:00.346022+00:00", "run_id": "37013182084", "outcome": "PRICE_REQUEST_FAILED", "account": "quota_30m_forward", "instrument": "frxUSDJPY", "window_id": 994971, "error": "Deriv API error (proposal): Trading is suspended due to missing market (old) data."}
+{"timestamp": "2026-10-02T13:31:00.354098+00:00", "run_id": "37013182084", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497485}
+{"timestamp": "2026-10-02T13:31:00.361469+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124371}
+{"timestamp": "2026-10-02T13:31:00.369196+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
+{"timestamp": "2026-10-02T13:31:00.543907+00:00", "run_id": "37013182084", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497485, "reason": "no crossover"}
