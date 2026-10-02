@@ -9896,3 +9896,4 @@
 {"timestamp": "2026-10-02T19:35:27.685765+00:00", "run_id": "37054246983", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124372}
 {"timestamp": "2026-10-02T19:35:27.693571+00:00", "run_id": "37054246983", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
 {"timestamp": "2026-10-02T19:35:27.796549+00:00", "run_id": "37054246983", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497491, "reason": "no crossover"}
+{"timestamp": "2026-10-02T20:56:38.122374+00:00", "run_id": "37063689257", "outcome": "ERROR", "error": "DerivRequestError"}
