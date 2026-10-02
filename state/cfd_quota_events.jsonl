@@ -9680,3 +9680,13 @@
 {"timestamp": "2026-10-02T13:35:59.765455+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124371}
 {"timestamp": "2026-10-02T13:35:59.772999+00:00", "run_id": "37013182084", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
 {"timestamp": "2026-10-02T13:35:59.882746+00:00", "run_id": "37013182084", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497485, "reason": "no crossover"}
+{"timestamp": "2026-10-02T15:28:47.878547+00:00", "run_id": "37027146636", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15295909579, "instrument": "frxEURUSD", "pnl": 0.07, "window_id": 497485, "holding_seconds": 7186.915346}
+{"timestamp": "2026-10-02T15:28:48.035231+00:00", "run_id": "37027146636", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15296219519, "instrument": "frxUSDJPY", "pnl": 0.13, "window_id": 994971, "holding_seconds": 7007.814458}
+{"timestamp": "2026-10-02T15:28:48.075144+00:00", "run_id": "37027146636", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 994971, "current_window": 994974, "unobserved_windows": 2}
+{"timestamp": "2026-10-02T15:28:48.082985+00:00", "run_id": "37027146636", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 994974}
+{"timestamp": "2026-10-02T15:28:48.085447+00:00", "run_id": "37027146636", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497485, "current_window": 497487, "unobserved_windows": 1}
+{"timestamp": "2026-10-02T15:28:48.962111+00:00", "run_id": "37027146636", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15309084919, "instrument": "frxUSDJPY", "window_id": 497487, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1790956680}
+{"timestamp": "2026-10-02T15:28:48.972070+00:00", "run_id": "37027146636", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124371}
+{"timestamp": "2026-10-02T15:28:48.981096+00:00", "run_id": "37027146636", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
+{"timestamp": "2026-10-02T15:28:48.982886+00:00", "run_id": "37027146636", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497485, "current_window": 497487, "unobserved_windows": 1}
+{"timestamp": "2026-10-02T15:28:49.071890+00:00", "run_id": "37027146636", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497487, "reason": "no crossover"}
