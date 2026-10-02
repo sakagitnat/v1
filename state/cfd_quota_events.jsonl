@@ -9169,3 +9169,10 @@
 {"timestamp": "2026-10-02T01:49:51.348373+00:00", "run_id": "36952184890", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124368}
 {"timestamp": "2026-10-02T01:49:51.356785+00:00", "run_id": "36952184890", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
 {"timestamp": "2026-10-02T01:49:51.522305+00:00", "run_id": "36952184890", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497473, "reason": "no crossover"}
+{"timestamp": "2026-10-02T02:07:02.203386+00:00", "run_id": "36954061627", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15233340499, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 994947, "holding_seconds": 1449.389309}
+{"timestamp": "2026-10-02T02:07:02.700674+00:00", "run_id": "36954061627", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15233340919, "instrument": "frxEURUSD", "pnl": -0.09, "window_id": 497473, "holding_seconds": 1449.303609}
+{"timestamp": "2026-10-02T02:07:03.773198+00:00", "run_id": "36954061627", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 15234860699, "instrument": "frxXAUUSD", "window_id": 994948, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_vote_v3", "close_at": 1790908080}
+{"timestamp": "2026-10-02T02:07:04.738617+00:00", "run_id": "36954061627", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15234861639, "instrument": "frxGBPUSD", "window_id": 497474, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1790909880}
+{"timestamp": "2026-10-02T02:07:04.746005+00:00", "run_id": "36954061627", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124368}
+{"timestamp": "2026-10-02T02:07:04.753295+00:00", "run_id": "36954061627", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
+{"timestamp": "2026-10-02T02:07:04.888310+00:00", "run_id": "36954061627", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497474, "reason": "no crossover"}
