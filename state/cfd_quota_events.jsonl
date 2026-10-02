@@ -9810,3 +9810,10 @@
 {"timestamp": "2026-10-02T17:36:37.868666+00:00", "run_id": "37040978311", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124372}
 {"timestamp": "2026-10-02T17:36:37.876414+00:00", "run_id": "37040978311", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
 {"timestamp": "2026-10-02T17:36:37.984721+00:00", "run_id": "37040978311", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497489, "reason": "no crossover"}
+{"timestamp": "2026-10-02T18:22:31.020085+00:00", "run_id": "37046896447", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15322454379, "instrument": "frxEURUSD", "pnl": -0.02, "window_id": 497489, "holding_seconds": 3172.07467}
+{"timestamp": "2026-10-02T18:22:31.366251+00:00", "run_id": "37046896447", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15322564879, "instrument": "frxUSDJPY", "pnl": -0.06, "window_id": 994979, "holding_seconds": 3113.455483}
+{"timestamp": "2026-10-02T18:22:32.566458+00:00", "run_id": "37046896447", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 15328439379, "instrument": "frxXAUUSD", "window_id": 994980, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_vote_v3", "close_at": 1790965680}
+{"timestamp": "2026-10-02T18:22:33.649499+00:00", "run_id": "37046896447", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15328441859, "instrument": "frxGBPUSD", "window_id": 497490, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1790967480}
+{"timestamp": "2026-10-02T18:22:33.657402+00:00", "run_id": "37046896447", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124372}
+{"timestamp": "2026-10-02T18:22:33.665409+00:00", "run_id": "37046896447", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20728}
+{"timestamp": "2026-10-02T18:22:33.800511+00:00", "run_id": "37046896447", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497490, "reason": "no crossover"}
