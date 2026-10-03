@@ -66,14 +66,18 @@ from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.research_lab import evaluate_candidate, generate_candidate_params, register_if_passed
 from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.trend_pullback import TrendPullbackStrategy
 from trading.cfd.strategy_registry import list_all
 from trading.cfd.support_resistance import SupportResistanceReversionStrategy
+from trading.cfd.volatility_expansion import VolatilityExpansionBreakoutStrategy
 from trading.config import settings
 
 from optimize_cfd_breakout import PARAM_GRID as BREAKOUT_PARAM_GRID
 from optimize_cfd_mean_reversion import PARAM_GRID as MEAN_REVERSION_PARAM_GRID
 from optimize_cfd_rsi_reversion import PARAM_GRID as RSI_REVERSION_PARAM_GRID
 from optimize_cfd_support_resistance import PARAM_GRID as SUPPORT_RESISTANCE_PARAM_GRID
+from research_cfd_volatility_expansion import PARAM_GRID as VOLATILITY_EXPANSION_PARAM_GRID
+from research_cfd_trend_pullback import PARAM_GRID as TREND_PULLBACK_PARAM_GRID
 from optimize_cfd_strategy import (
     MAX_DRAWDOWN_CAP,
     MIN_TRADES,
@@ -97,6 +101,13 @@ STRATEGY_SPECS = [
         "name": "ema_crossover",
         "cls": EmaCrossoverStrategy,
         "param_grid": EMA_PARAM_GRID,
+        "filter_fn": lambda c: c["fast_span"] < c["slow_span"],
+        "suited_regimes": ["trending"],
+    },
+    {
+        "name": "trend_pullback",
+        "cls": TrendPullbackStrategy,
+        "param_grid": TREND_PULLBACK_PARAM_GRID,
         "filter_fn": lambda c: c["fast_span"] < c["slow_span"],
         "suited_regimes": ["trending"],
     },
@@ -127,6 +138,13 @@ STRATEGY_SPECS = [
         "param_grid": SUPPORT_RESISTANCE_PARAM_GRID,
         "filter_fn": None,
         "suited_regimes": ["ranging"],
+    },
+    {
+        "name": "volatility_expansion",
+        "cls": VolatilityExpansionBreakoutStrategy,
+        "param_grid": VOLATILITY_EXPANSION_PARAM_GRID,
+        "filter_fn": None,
+        "suited_regimes": ["ranging", "trending"],
     },
 ]
 
