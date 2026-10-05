@@ -9946,3 +9946,15 @@
 {"timestamp": "2026-10-04T21:28:42.417673+00:00", "run_id": "37236190893", "outcome": "ERROR", "error": "DerivRequestError"}
 {"timestamp": "2026-10-04T22:28:59.666773+00:00", "run_id": "37240121879", "outcome": "ERROR", "error": "DerivRequestError"}
 {"timestamp": "2026-10-04T23:28:45.292911+00:00", "run_id": "37243850287", "outcome": "ERROR", "error": "DerivRequestError"}
+{"timestamp": "2026-10-05T00:29:11.787177+00:00", "run_id": "37247659311", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15336019319, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 497491, "holding_seconds": 190842.052842}
+{"timestamp": "2026-10-05T00:29:11.974270+00:00", "run_id": "37247659311", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15336275319, "instrument": "frxUSDJPY", "pnl": -0.14, "window_id": 994983, "holding_seconds": 190723.288597}
+{"timestamp": "2026-10-05T00:29:12.032185+00:00", "run_id": "37247659311", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 994983, "current_window": 995088, "unobserved_windows": 104}
+{"timestamp": "2026-10-05T00:29:12.037916+00:00", "run_id": "37247659311", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995088}
+{"timestamp": "2026-10-05T00:29:12.039080+00:00", "run_id": "37247659311", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497491, "current_window": 497544, "unobserved_windows": 52}
+{"timestamp": "2026-10-05T00:29:13.103712+00:00", "run_id": "37247659311", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15627864719, "instrument": "frxXAUUSD", "window_id": 497544, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1791161880}
+{"timestamp": "2026-10-05T00:29:13.104882+00:00", "run_id": "37247659311", "outcome": "EVALUATION_GAP", "account": "quota_h4_forward", "previous_window": 124372, "current_window": 124386, "unobserved_windows": 13}
+{"timestamp": "2026-10-05T00:29:13.920228+00:00", "run_id": "37247659311", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 15627865919, "instrument": "frxGBPUSD", "window_id": 124386, "timeframe": "H4", "strategy": "quota_h4_forward@timeframe_vote_v3", "close_at": 1791172680}
+{"timestamp": "2026-10-05T00:29:13.921480+00:00", "run_id": "37247659311", "outcome": "EVALUATION_GAP", "account": "quota_d1_forward", "previous_window": 20728, "current_window": 20731, "unobserved_windows": 2}
+{"timestamp": "2026-10-05T00:29:15.051433+00:00", "run_id": "37247659311", "outcome": "OPENED", "account": "quota_d1_forward", "contract_id": 15627867419, "instrument": "frxUSDJPY", "window_id": 20731, "timeframe": "D1", "strategy": "quota_d1_forward@timeframe_vote_v3", "close_at": 1791244680}
+{"timestamp": "2026-10-05T00:29:15.052759+00:00", "run_id": "37247659311", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497491, "current_window": 497544, "unobserved_windows": 52}
+{"timestamp": "2026-10-05T00:29:15.137631+00:00", "run_id": "37247659311", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_h1_signal"}
