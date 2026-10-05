@@ -10463,3 +10463,11 @@
 {"timestamp": "2026-10-05T09:36:05.950344+00:00", "run_id": "37290219222", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124388}
 {"timestamp": "2026-10-05T09:36:05.958693+00:00", "run_id": "37290219222", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
 {"timestamp": "2026-10-05T09:36:06.109152+00:00", "run_id": "37290219222", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497553, "reason": "warming up"}
+{"timestamp": "2026-10-05T10:29:14.017537+00:00", "run_id": "37296783254", "outcome": "CLOSED", "account": "quota_h4_forward", "contract_id": 15665803619, "instrument": "frxXAUUSD", "pnl": -0.25, "window_id": 124388, "holding_seconds": 7228.003109}
+{"timestamp": "2026-10-05T10:29:14.449828+00:00", "run_id": "37296783254", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15672019299, "instrument": "frxEURUSD", "pnl": -0.15, "window_id": 497553, "holding_seconds": 3606.971179}
+{"timestamp": "2026-10-05T10:29:14.785778+00:00", "run_id": "37296783254", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15672118179, "instrument": "frxUSDJPY", "pnl": 0.02, "window_id": 995107, "holding_seconds": 3548.093933}
+{"timestamp": "2026-10-05T10:29:14.895326+00:00", "run_id": "37296783254", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995108}
+{"timestamp": "2026-10-05T10:29:16.026101+00:00", "run_id": "37296783254", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15678344779, "instrument": "frxGBPUSD", "window_id": 497554, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1791197880}
+{"timestamp": "2026-10-05T10:29:16.034730+00:00", "run_id": "37296783254", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124388}
+{"timestamp": "2026-10-05T10:29:16.043042+00:00", "run_id": "37296783254", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
+{"timestamp": "2026-10-05T10:29:16.163776+00:00", "run_id": "37296783254", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497554, "reason": "warming up"}
