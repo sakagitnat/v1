@@ -10165,3 +10165,12 @@
 {"timestamp": "2026-10-05T03:30:57.864497+00:00", "run_id": "37259674497", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124386}
 {"timestamp": "2026-10-05T03:30:57.873133+00:00", "run_id": "37259674497", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
 {"timestamp": "2026-10-05T03:30:58.006394+00:00", "run_id": "37259674497", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497547, "reason": "warming up"}
+{"timestamp": "2026-10-05T04:35:16.875737+00:00", "run_id": "37264103834", "outcome": "CLOSED_LATE", "account": "quota_h4_forward", "contract_id": 15627865919, "instrument": "frxGBPUSD", "pnl": 0.26, "window_id": 124386, "holding_seconds": 14763.351156}
+{"timestamp": "2026-10-05T04:35:17.403662+00:00", "run_id": "37264103834", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15640038319, "instrument": "frxUSDJPY", "pnl": -0.15, "window_id": 995095, "holding_seconds": 3861.215035}
+{"timestamp": "2026-10-05T04:35:17.670865+00:00", "run_id": "37264103834", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15640039659, "instrument": "frxUSDJPY", "pnl": 0.09, "window_id": 497547, "holding_seconds": 3860.276553}
+{"timestamp": "2026-10-05T04:35:17.758504+00:00", "run_id": "37264103834", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 995095, "current_window": 995097, "unobserved_windows": 1}
+{"timestamp": "2026-10-05T04:35:17.766079+00:00", "run_id": "37264103834", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_30m_forward"}
+{"timestamp": "2026-10-05T04:35:17.774865+00:00", "run_id": "37264103834", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-05T04:35:17.783110+00:00", "run_id": "37264103834", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-10-05T04:35:17.791906+00:00", "run_id": "37264103834", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
+{"timestamp": "2026-10-05T04:35:17.799961+00:00", "run_id": "37264103834", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
