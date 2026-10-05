@@ -10386,3 +10386,8 @@
 {"timestamp": "2026-10-05T08:28:46.838361+00:00", "run_id": "37283787848", "outcome": "OPENED", "account": "quota_h4_forward", "contract_id": 15665803619, "instrument": "frxXAUUSD", "window_id": 124388, "timeframe": "H4", "strategy": "quota_h4_forward@timeframe_vote_v3", "close_at": 1791201480}
 {"timestamp": "2026-10-05T08:28:46.847200+00:00", "run_id": "37283787848", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
 {"timestamp": "2026-10-05T08:28:46.914530+00:00", "run_id": "37283787848", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497552, "reason": "warming up"}
+{"timestamp": "2026-10-05T08:29:43.936851+00:00", "run_id": "37283787848", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995104}
+{"timestamp": "2026-10-05T08:29:43.945171+00:00", "run_id": "37283787848", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497552}
+{"timestamp": "2026-10-05T08:29:43.953452+00:00", "run_id": "37283787848", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124388}
+{"timestamp": "2026-10-05T08:29:43.962410+00:00", "run_id": "37283787848", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
+{"timestamp": "2026-10-05T08:29:44.021856+00:00", "run_id": "37283787848", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497552, "reason": "warming up"}
