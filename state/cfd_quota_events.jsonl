@@ -10631,3 +10631,13 @@
 {"timestamp": "2026-10-05T12:37:04.712563+00:00", "run_id": "37309848128", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124389}
 {"timestamp": "2026-10-05T12:37:04.721373+00:00", "run_id": "37309848128", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
 {"timestamp": "2026-10-05T12:37:04.863345+00:00", "run_id": "37309848128", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497556, "reason": "warming up"}
+{"timestamp": "2026-10-05T15:56:22.858638+00:00", "run_id": "37336727273", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15688901939, "instrument": "frxXAUUSD", "pnl": 0.5, "window_id": 497556, "holding_seconds": 13804.060254}
+{"timestamp": "2026-10-05T15:56:23.754575+00:00", "run_id": "37336727273", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15691518279, "instrument": "frxEURUSD", "pnl": -0.02, "window_id": 995113, "holding_seconds": 12376.585789}
+{"timestamp": "2026-10-05T15:56:23.854257+00:00", "run_id": "37336727273", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 995113, "current_window": 995119, "unobserved_windows": 5}
+{"timestamp": "2026-10-05T15:56:25.177756+00:00", "run_id": "37336727273", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 15715772139, "instrument": "frxUSDJPY", "window_id": 995119, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_vote_v3", "close_at": 1791215880}
+{"timestamp": "2026-10-05T15:56:25.179615+00:00", "run_id": "37336727273", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497556, "current_window": 497559, "unobserved_windows": 2}
+{"timestamp": "2026-10-05T15:56:26.627410+00:00", "run_id": "37336727273", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15715774179, "instrument": "frxUSDJPY", "window_id": 497559, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1791215880}
+{"timestamp": "2026-10-05T15:56:26.636046+00:00", "run_id": "37336727273", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124389}
+{"timestamp": "2026-10-05T15:56:26.644559+00:00", "run_id": "37336727273", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
+{"timestamp": "2026-10-05T15:56:26.646358+00:00", "run_id": "37336727273", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497556, "current_window": 497559, "unobserved_windows": 2}
+{"timestamp": "2026-10-05T15:56:26.779299+00:00", "run_id": "37336727273", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497559, "reason": "warming up"}
