@@ -10018,3 +10018,8 @@
 {"timestamp": "2026-10-05T00:54:27.928333+00:00", "run_id": "37249017820", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124386}
 {"timestamp": "2026-10-05T00:54:27.933410+00:00", "run_id": "37249017820", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
 {"timestamp": "2026-10-05T00:54:28.053619+00:00", "run_id": "37249017820", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-05T00:55:27.927459+00:00", "run_id": "37249017820", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_30m_forward"}
+{"timestamp": "2026-10-05T00:55:27.933284+00:00", "run_id": "37249017820", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497544}
+{"timestamp": "2026-10-05T00:55:27.938427+00:00", "run_id": "37249017820", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124386}
+{"timestamp": "2026-10-05T00:55:27.943547+00:00", "run_id": "37249017820", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20731}
+{"timestamp": "2026-10-05T00:55:28.064967+00:00", "run_id": "37249017820", "outcome": "STALE_OR_MISSING_DATA", "account": "quota_h1_signal"}
