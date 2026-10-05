@@ -33,6 +33,62 @@
       "close_at": 1791244680,
       "entry_reason": "majority direction vote across H4/D1/W1 (experimental baseline, not a qualified profitable strategy)",
       "buy_price": 1.0
+    },
+    "15656906219": {
+      "instrument": "frxGBPUSD",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
+      "side": "long",
+      "entry_time": "2026-10-05T07:00:55.052587+00:00",
+      "entry_price": 1.32195,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 95.42,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M15",
+        "M30",
+        "H1"
+      ],
+      "quota_window": 995102,
+      "close_at": 1791185280,
+      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
+      "buy_price": 1.0
+    },
+    "15656907179": {
+      "instrument": "frxUSDJPY",
+      "strategy": "quota_h1_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-05T07:00:56.016657+00:00",
+      "entry_price": 157.651,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 97.26,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_h1_forward",
+      "horizon": "3600s_window",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "M30",
+        "H1",
+        "H4"
+      ],
+      "quota_window": 497551,
+      "close_at": 1791187080,
+      "entry_reason": "majority direction vote across M30/H1/H4 (experimental baseline, not a qualified profitable strategy)",
+      "buy_price": 1.0
     }
   },
   "operating_mode": "normal",
@@ -897,15 +953,17 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "30-minute forced-quota forward research",
+      "label": "M30 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "TICK",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "TICK"
+        "M15",
+        "M30",
+        "H1"
       ],
-      "strategy_tag": "quota_30m@v0",
+      "strategy_tag": "quota_30m_forward@timeframe_vote_v3",
       "equity": 95.42,
       "high_water_mark": 100.0,
       "realized_pnl": -4.58,
@@ -919,15 +977,17 @@
     },
     "quota_h1_forward": {
       "account_id": "quota_h1_forward",
-      "label": "Hourly forced-quota forward research",
+      "label": "H1 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "M1",
+      "entry_timeframe": "H1",
       "context_timeframes": [
-        "M1"
+        "M30",
+        "H1",
+        "H4"
       ],
-      "strategy_tag": "quota_h1@v0",
+      "strategy_tag": "quota_h1_forward@timeframe_vote_v3",
       "equity": 97.26,
       "high_water_mark": 100.01,
       "realized_pnl": -2.74,
@@ -9256,11 +9316,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995101,
-    "quota_h1_forward": 497550,
+    "quota_30m_forward": 995102,
+    "quota_h1_forward": 497551,
     "quota_h4_forward": 124387,
     "quota_d1_forward": 20731,
-    "quota_h1_signal": 497550
+    "quota_h1_signal": 497551
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
