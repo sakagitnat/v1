@@ -6,34 +6,6 @@
   "excluded_instruments": {},
   "broker_baseline": 10000,
   "open_trades": {
-    "15778082099": {
-      "instrument": "frxXAUUSD",
-      "strategy": "quota_30m_forward@timeframe_vote_v3",
-      "side": "short",
-      "entry_time": "2026-10-06T02:20:17.774911+00:00",
-      "entry_price": 4130.29,
-      "stake": 1.0,
-      "risk_amount": 0.25,
-      "multiplier": 100,
-      "equity_before": 95.21,
-      "regime": "forced_quota_research",
-      "leg": "quota",
-      "broker_managed_only": true,
-      "forced_quota": true,
-      "experimental": true,
-      "virtual_account_id": "quota_30m_forward",
-      "horizon": "1800s_window",
-      "entry_timeframe": "M30",
-      "context_timeframes": [
-        "M15",
-        "M30",
-        "H1"
-      ],
-      "quota_window": 995140,
-      "close_at": 1791253680,
-      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
-      "buy_price": 1.0
-    },
     "15778083179": {
       "instrument": "frxGBPUSD",
       "strategy": "quota_h1_forward@timeframe_vote_v3",
@@ -62,60 +34,32 @@
       "entry_reason": "majority direction vote across M30/H1/H4 (experimental baseline, not a qualified profitable strategy)",
       "buy_price": 1.0
     },
-    "15778083919": {
-      "instrument": "frxXAUUSD",
-      "strategy": "quota_h4_forward@timeframe_vote_v3",
+    "15780224979": {
+      "instrument": "frxEURUSD",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
       "side": "short",
-      "entry_time": "2026-10-06T02:20:19.473117+00:00",
-      "entry_price": 4134.43,
+      "entry_time": "2026-10-06T02:51:37.395697+00:00",
+      "entry_price": 1.12168,
       "stake": 1.0,
       "risk_amount": 0.25,
       "multiplier": 100,
-      "equity_before": 96.06,
+      "equity_before": 95.72,
       "regime": "forced_quota_research",
       "leg": "quota",
       "broker_managed_only": true,
       "forced_quota": true,
       "experimental": true,
-      "virtual_account_id": "quota_h4_forward",
-      "horizon": "14400s_window",
-      "entry_timeframe": "H4",
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "H1",
-        "H4",
-        "D1"
+        "M15",
+        "M30",
+        "H1"
       ],
-      "quota_window": 124392,
-      "close_at": 1791259080,
-      "entry_reason": "majority direction vote across H1/H4/D1 (experimental baseline, not a qualified profitable strategy)",
-      "buy_price": 1.0
-    },
-    "15778084459": {
-      "instrument": "frxXAUUSD",
-      "strategy": "quota_d1_forward@timeframe_vote_v3",
-      "side": "short",
-      "entry_time": "2026-10-06T02:20:20.017166+00:00",
-      "entry_price": 4134.43,
-      "stake": 1.0,
-      "risk_amount": 0.25,
-      "multiplier": 100,
-      "equity_before": 99.49,
-      "regime": "forced_quota_research",
-      "leg": "quota",
-      "broker_managed_only": true,
-      "forced_quota": true,
-      "experimental": true,
-      "virtual_account_id": "quota_d1_forward",
-      "horizon": "86400s_window",
-      "entry_timeframe": "D1",
-      "context_timeframes": [
-        "H4",
-        "D1",
-        "W1"
-      ],
-      "quota_window": 20732,
-      "close_at": 1791331080,
-      "entry_reason": "majority direction vote across H4/D1/W1 (experimental baseline, not a qualified profitable strategy)",
+      "quota_window": 995141,
+      "close_at": 1791255480,
+      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
       "buy_price": 1.0
     }
   },
@@ -180,7 +124,7 @@
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 110.15999999999985,
+  "smoothed_equity": 110.61900000000006,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -990,11 +934,11 @@
         "TICK"
       ],
       "strategy_tag": "quota_30m@v0",
-      "equity": 95.21,
+      "equity": 95.72,
       "high_water_mark": 100.0,
-      "realized_pnl": -4.79,
-      "closed_trades": 153,
-      "wins": 44,
+      "realized_pnl": -4.28,
+      "closed_trades": 154,
+      "wins": 45,
       "losses": 104,
       "quota_daily": {
         "date": "2026-10-06",
@@ -1034,11 +978,11 @@
         "H4"
       ],
       "strategy_tag": "quota_h4_forward@execution_v1",
-      "equity": 96.06,
+      "equity": 96.57,
       "high_water_mark": 100.0,
-      "realized_pnl": -3.94,
-      "closed_trades": 42,
-      "wins": 9,
+      "realized_pnl": -3.43,
+      "closed_trades": 43,
+      "wins": 10,
       "losses": 32,
       "quota_daily": {
         "date": "2026-10-06",
@@ -1056,11 +1000,11 @@
         "D1"
       ],
       "strategy_tag": "quota_d1_forward@execution_v1",
-      "equity": 99.49,
+      "equity": 100.0,
       "high_water_mark": 100.15,
-      "realized_pnl": -0.51,
-      "closed_trades": 7,
-      "wins": 2,
+      "realized_pnl": 0.0,
+      "closed_trades": 8,
+      "wins": 3,
       "losses": 5,
       "quota_daily": {
         "date": "2026-10-06",
@@ -9958,13 +9902,94 @@
         "H4",
         "D1"
       ]
+    },
+    "15778082099": {
+      "contract_id": 15778082099,
+      "instrument": "frxXAUUSD",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-06T02:20:17.774911+00:00",
+      "exit_time": "2026-10-06T02:51:36.391533+00:00",
+      "entry_price": 4130.29,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": 0.51,
+      "equity_before": 95.21,
+      "equity_after": 95.72,
+      "exit_reason": "closed_externally; broker settlement verified",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M15",
+        "M30",
+        "H1"
+      ]
+    },
+    "15778083919": {
+      "contract_id": 15778083919,
+      "instrument": "frxXAUUSD",
+      "strategy": "quota_h4_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-06T02:20:19.473117+00:00",
+      "exit_time": "2026-10-06T02:51:36.762986+00:00",
+      "entry_price": 4134.43,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": 0.51,
+      "equity_before": 96.06,
+      "equity_after": 96.57,
+      "exit_reason": "closed_externally; broker settlement verified",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_h4_forward",
+      "horizon": "14400s_window",
+      "entry_timeframe": "H4",
+      "context_timeframes": [
+        "H1",
+        "H4",
+        "D1"
+      ]
+    },
+    "15778084459": {
+      "contract_id": 15778084459,
+      "instrument": "frxXAUUSD",
+      "strategy": "quota_d1_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-06T02:20:20.017166+00:00",
+      "exit_time": "2026-10-06T02:51:36.931938+00:00",
+      "entry_price": 4134.43,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": 0.51,
+      "equity_before": 99.49,
+      "equity_after": 100.0,
+      "exit_reason": "closed_externally; broker settlement verified",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_d1_forward",
+      "horizon": "86400s_window",
+      "entry_timeframe": "D1",
+      "context_timeframes": [
+        "H4",
+        "D1",
+        "W1"
+      ]
     }
   },
   "quota_windows": {
     "quota_30m_forward": {
-      "window_id": 995133,
-      "contract_id": 15762024359,
-      "closed_at": "2026-10-06T02:20:17.026138+00:00"
+      "window_id": 995140,
+      "contract_id": 15778082099,
+      "closed_at": "2026-10-06T02:51:36.391533+00:00"
     },
     "quota_h1_forward": {
       "window_id": 497566,
@@ -9972,14 +9997,14 @@
       "closed_at": "2026-10-06T02:20:17.369518+00:00"
     },
     "quota_h4_forward": {
-      "window_id": 124391,
-      "contract_id": 15762027459,
-      "closed_at": "2026-10-06T02:20:17.513200+00:00"
+      "window_id": 124392,
+      "contract_id": 15778083919,
+      "closed_at": "2026-10-06T02:51:36.762986+00:00"
     },
     "quota_d1_forward": {
-      "window_id": 20731,
-      "contract_id": 15627867419,
-      "closed_at": "2026-10-06T02:20:16.840002+00:00"
+      "window_id": 20732,
+      "contract_id": 15778084459,
+      "closed_at": "2026-10-06T02:51:36.931938+00:00"
     },
     "quota_h1_signal": {
       "window_id": 497460,
@@ -9988,7 +10013,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995140,
+    "quota_30m_forward": 995141,
     "quota_h1_forward": 497570,
     "quota_h4_forward": 124392,
     "quota_d1_forward": 20732,
