@@ -6,34 +6,6 @@
   "excluded_instruments": {},
   "broker_baseline": 10000,
   "open_trades": {
-    "15792050839": {
-      "instrument": "frxGBPUSD",
-      "strategy": "quota_30m_forward@timeframe_vote_v3",
-      "side": "short",
-      "entry_time": "2026-10-06T05:22:28.788868+00:00",
-      "entry_price": 1.3216,
-      "stake": 1.0,
-      "risk_amount": 0.25,
-      "multiplier": 100,
-      "equity_before": 95.7,
-      "regime": "forced_quota_research",
-      "leg": "quota",
-      "broker_managed_only": true,
-      "forced_quota": true,
-      "experimental": true,
-      "virtual_account_id": "quota_30m_forward",
-      "horizon": "1800s_window",
-      "entry_timeframe": "M30",
-      "context_timeframes": [
-        "M15",
-        "M30",
-        "H1"
-      ],
-      "quota_window": 995146,
-      "close_at": 1791264480,
-      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
-      "buy_price": 1.0
-    },
     "15792051539": {
       "instrument": "frxEURUSD",
       "strategy": "quota_h1_forward@timeframe_vote_v3",
@@ -1002,12 +974,12 @@
         "TICK"
       ],
       "strategy_tag": "quota_30m@v0",
-      "equity": 95.7,
+      "equity": 95.68,
       "high_water_mark": 100.0,
-      "realized_pnl": -4.3,
-      "closed_trades": 155,
+      "realized_pnl": -4.32,
+      "closed_trades": 156,
       "wins": 45,
-      "losses": 105,
+      "losses": 106,
       "quota_daily": {
         "date": "2026-10-06",
         "start_equity": 95.21
@@ -10105,13 +10077,40 @@
         "M30",
         "H1"
       ]
+    },
+    "15792050839": {
+      "contract_id": 15792050839,
+      "instrument": "frxGBPUSD",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-06T05:22:28.788868+00:00",
+      "exit_time": "2026-10-06T05:28:28.131719+00:00",
+      "entry_price": 1.3216,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "exit_price": null,
+      "pnl": -0.02,
+      "equity_before": 95.7,
+      "equity_after": 95.68,
+      "exit_reason": "quota_window_deadline",
+      "regime": "forced_quota_research",
+      "thesis_key": null,
+      "leg": "quota",
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M15",
+        "M30",
+        "H1"
+      ]
     }
   },
   "quota_windows": {
     "quota_30m_forward": {
-      "window_id": 995141,
-      "contract_id": 15780224979,
-      "closed_at": "2026-10-06T02:58:35.907546+00:00"
+      "window_id": 995146,
+      "contract_id": 15792050839,
+      "closed_at": "2026-10-06T05:28:28.131719+00:00"
     },
     "quota_h1_forward": {
       "window_id": 497570,
