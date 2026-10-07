@@ -11173,3 +11173,10 @@
 {"timestamp": "2026-10-07T01:42:32.225087+00:00", "run_id": "37557794464", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124398}
 {"timestamp": "2026-10-07T01:42:32.232410+00:00", "run_id": "37557794464", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20733}
 {"timestamp": "2026-10-07T01:42:32.486145+00:00", "run_id": "37557794464", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497593, "reason": "no crossover"}
+{"timestamp": "2026-10-07T02:13:20.846624+00:00", "run_id": "37560851438", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 15918843059, "instrument": "frxUSDJPY", "pnl": -0.01, "window_id": 995187, "holding_seconds": 2266.867335}
+{"timestamp": "2026-10-07T02:13:21.155953+00:00", "run_id": "37560851438", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 15918844579, "instrument": "frxEURUSD", "pnl": 0.07, "window_id": 497593, "holding_seconds": 2266.017993}
+{"timestamp": "2026-10-07T02:13:22.950527+00:00", "run_id": "37560851438", "outcome": "OPENED", "account": "quota_30m_forward", "contract_id": 15921423279, "instrument": "frxXAUUSD", "window_id": 995188, "timeframe": "M30", "strategy": "quota_30m_forward@timeframe_vote_v3", "close_at": 1791340080}
+{"timestamp": "2026-10-07T02:13:24.044945+00:00", "run_id": "37560851438", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 15921424479, "instrument": "frxGBPUSD", "window_id": 497594, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1791341880}
+{"timestamp": "2026-10-07T02:13:24.054250+00:00", "run_id": "37560851438", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124398}
+{"timestamp": "2026-10-07T02:13:24.063431+00:00", "run_id": "37560851438", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20733}
+{"timestamp": "2026-10-07T02:13:24.201903+00:00", "run_id": "37560851438", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497594, "reason": "no crossover"}
