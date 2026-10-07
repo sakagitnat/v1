@@ -132,7 +132,61 @@
     "start_equity": 109.6200000000008,
     "halted": false
   },
-  "pending_entries": {},
+  "pending_entries": {
+    "frxGBPUSD": {
+      "legs": [
+        {
+          "instrument": "frxGBPUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "short",
+          "entry_time": "2026-10-07T10:15:27.067016+00:00",
+          "entry_price": 1.32274,
+          "stake": 7.62,
+          "risk_amount": 0.27,
+          "multiplier": 20,
+          "thesis_key": "frxGBPUSD:short",
+          "equity_before": 109.85000000000036,
+          "regime": "trending",
+          "leg": "scalp",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ]
+        },
+        {
+          "instrument": "frxGBPUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "short",
+          "entry_time": "2026-10-07T10:15:27.067016+00:00",
+          "entry_price": 1.32274,
+          "stake": 7.62,
+          "risk_amount": 0.26,
+          "multiplier": 20,
+          "thesis_key": "frxGBPUSD:short",
+          "equity_before": 109.85000000000036,
+          "regime": "trending",
+          "leg": "runner",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ],
+          "trailing_stop": {
+            "entry_price": 1.32274,
+            "initial_stop_price": 1.325051917767806,
+            "side": "short",
+            "activated": false,
+            "current_stop_price": null
+          }
+        }
+      ]
+    }
+  },
   "smoothed_equity": 109.85000000000036,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
