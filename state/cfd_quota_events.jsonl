@@ -12353,3 +12353,8 @@
 {"timestamp": "2026-10-08T21:28:48.478529+00:00", "run_id": "37846982971", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20734}
 {"timestamp": "2026-10-08T21:28:48.479978+00:00", "run_id": "37846982971", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497635, "current_window": 497637, "unobserved_windows": 1}
 {"timestamp": "2026-10-08T21:28:48.591197+00:00", "run_id": "37846982971", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497637, "reason": "no crossover"}
+{"timestamp": "2026-10-08T21:29:46.500536+00:00", "run_id": "37846982971", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995274}
+{"timestamp": "2026-10-08T21:29:46.945384+00:00", "run_id": "37846982971", "outcome": "PRICE_REQUEST_FAILED", "account": "quota_h1_forward", "instrument": "frxEURUSD", "window_id": 497637, "error": "Deriv API error (proposal): Trading is not available from 20:55:00 to 21:30:00."}
+{"timestamp": "2026-10-08T21:29:47.706348+00:00", "run_id": "37846982971", "outcome": "PRICE_REQUEST_FAILED", "account": "quota_h4_forward", "instrument": "frxUSDJPY", "window_id": 124409, "error": "Deriv API error (proposal): Trading is not available from 20:55:00 to 21:30:00."}
+{"timestamp": "2026-10-08T21:29:47.713389+00:00", "run_id": "37846982971", "outcome": "ALREADY_COMPLETED", "account": "quota_d1_forward", "window_id": 20734}
+{"timestamp": "2026-10-08T21:29:47.816025+00:00", "run_id": "37846982971", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497637, "reason": "no crossover"}
