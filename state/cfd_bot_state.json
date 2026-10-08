@@ -89,6 +89,34 @@
       "close_at": 1791460680,
       "entry_reason": "majority direction vote across M30/H1/H4 (experimental baseline, not a qualified profitable strategy)",
       "buy_price": 1.0
+    },
+    "16116147879": {
+      "instrument": "frxUSDJPY",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
+      "side": "long",
+      "entry_time": "2026-10-08T11:30:52.010563+00:00",
+      "entry_price": 158.276,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 93.94,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M15",
+        "M30",
+        "H1"
+      ],
+      "quota_window": 995255,
+      "close_at": 1791460680,
+      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
+      "buy_price": 1.0
     }
   },
   "operating_mode": "defensive",
@@ -913,15 +941,17 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "30-minute forced-quota forward research",
+      "label": "M30 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "TICK",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "TICK"
+        "M15",
+        "M30",
+        "H1"
       ],
-      "strategy_tag": "quota_30m@v0",
+      "strategy_tag": "quota_30m_forward@timeframe_vote_v3",
       "equity": 93.94,
       "high_water_mark": 100.0,
       "realized_pnl": -6.06,
@@ -11702,7 +11732,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995254,
+    "quota_30m_forward": 995255,
     "quota_h1_forward": 497627,
     "quota_h4_forward": 124406,
     "quota_d1_forward": 20734,
