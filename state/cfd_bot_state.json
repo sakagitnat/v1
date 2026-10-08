@@ -934,17 +934,15 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "M30 experimental timeframe quota",
+      "label": "30-minute forced-quota forward research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "M30",
+      "entry_timeframe": "TICK",
       "context_timeframes": [
-        "M15",
-        "M30",
-        "H1"
+        "TICK"
       ],
-      "strategy_tag": "quota_30m_forward@timeframe_vote_v3",
+      "strategy_tag": "quota_30m@v0",
       "equity": 93.58,
       "high_water_mark": 100.0,
       "realized_pnl": -6.42,
@@ -958,17 +956,15 @@
     },
     "quota_h1_forward": {
       "account_id": "quota_h1_forward",
-      "label": "H1 experimental timeframe quota",
+      "label": "Hourly forced-quota forward research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "H1",
+      "entry_timeframe": "M1",
       "context_timeframes": [
-        "M30",
-        "H1",
-        "H4"
+        "M1"
       ],
-      "strategy_tag": "quota_h1_forward@timeframe_vote_v3",
+      "strategy_tag": "quota_h1@v0",
       "equity": 95.62,
       "high_water_mark": 100.01,
       "realized_pnl": -4.38,
@@ -982,17 +978,15 @@
     },
     "quota_h4_forward": {
       "account_id": "quota_h4_forward",
-      "label": "H4 experimental timeframe quota",
+      "label": "Four-hour quota execution research",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
       "entry_timeframe": "H4",
       "context_timeframes": [
-        "H1",
-        "H4",
-        "D1"
+        "H4"
       ],
-      "strategy_tag": "quota_h4_forward@timeframe_vote_v3",
+      "strategy_tag": "quota_h4_forward@execution_v1",
       "equity": 95.81,
       "high_water_mark": 100.0,
       "realized_pnl": -4.19,
