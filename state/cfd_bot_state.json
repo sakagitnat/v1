@@ -121,7 +121,28 @@
   },
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
-  "paper_positions": {},
+  "paper_positions": {
+    "virtual:iso_meanrev_m5|frxXAUUSD": {
+      "contract_id": -322,
+      "side": "long",
+      "entry_price": 4114.92,
+      "stop_price": 4108.359228090008,
+      "target_price": 4119.840578932493,
+      "stake": 35.12,
+      "multiplier": 20,
+      "risk_amount": 1.12,
+      "entry_time": "2026-10-08T10:32:44.101797+00:00",
+      "equity_before": 111.98,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    }
+  },
   "paper_equity": {
     "virtual:iso_breakout_m15": 103.15,
     "virtual:iso_breakout_m5": 109.63,
@@ -133,14 +154,14 @@
     "virtual:iso_trend_m5": 101.7,
     "donchian_breakout@v2": 99.81
   },
-  "paper_trade_counter": 321,
+  "paper_trade_counter": 322,
   "daily_risk_tracking": {
     "date": "2026-10-08",
     "start_equity": 110.38999999999942,
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 109.31599999999962,
+  "smoothed_equity": 109.32019999999972,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
