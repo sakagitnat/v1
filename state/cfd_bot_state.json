@@ -5,7 +5,64 @@
   "initial_floor": 100,
   "excluded_instruments": {},
   "broker_baseline": 10000,
-  "open_trades": {},
+  "open_trades": {
+    "16163130979": {
+      "instrument": "frxEURUSD",
+      "strategy": "quota_30m_forward@timeframe_vote_v3",
+      "side": "short",
+      "entry_time": "2026-10-08T18:35:06.479071+00:00",
+      "entry_price": 1.12036,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 93.78,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_30m_forward",
+      "horizon": "1800s_window",
+      "entry_timeframe": "M30",
+      "context_timeframes": [
+        "M15",
+        "M30",
+        "H1"
+      ],
+      "quota_window": 995269,
+      "close_at": 1791485880,
+      "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)",
+      "buy_price": 1.0
+    },
+    "16163133659": {
+      "instrument": "frxGBPUSD",
+      "strategy": "quota_h1_forward@timeframe_vote_v3",
+      "side": "long",
+      "entry_time": "2026-10-08T18:35:07.848078+00:00",
+      "entry_price": 1.32287,
+      "stake": 1.0,
+      "risk_amount": 0.25,
+      "multiplier": 100,
+      "equity_before": 95.72,
+      "regime": "forced_quota_research",
+      "leg": "quota",
+      "broker_managed_only": true,
+      "forced_quota": true,
+      "experimental": true,
+      "virtual_account_id": "quota_h1_forward",
+      "horizon": "3600s_window",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "M30",
+        "H1",
+        "H4"
+      ],
+      "quota_window": 497634,
+      "close_at": 1791485880,
+      "entry_reason": "majority direction vote across M30/H1/H4 (experimental baseline, not a qualified profitable strategy)",
+      "buy_price": 1.0
+    }
+  },
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
@@ -48,7 +105,7 @@
     "halted": false
   },
   "pending_entries": {},
-  "smoothed_equity": 108.01000000000022,
+  "smoothed_equity": 107.98999999999978,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -12097,11 +12154,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995267,
-    "quota_h1_forward": 497633,
+    "quota_30m_forward": 995269,
+    "quota_h1_forward": 497634,
     "quota_h4_forward": 124408,
     "quota_d1_forward": 20734,
-    "quota_h1_signal": 497633
+    "quota_h1_signal": 497634
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
