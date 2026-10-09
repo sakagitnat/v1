@@ -40,26 +40,6 @@
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
-    "virtual:iso_breakout_m5|frxEURUSD": {
-      "contract_id": -347,
-      "side": "short",
-      "entry_price": 1.11982,
-      "stop_price": 1.1206762619137065,
-      "target_price": 1.1184499809380697,
-      "stake": 70.86,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-10-09T12:35:55.214294+00:00",
-      "equity_before": 108.36,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
     "virtual:iso_trend_h1|frxEURUSD": {
       "contract_id": -349,
       "side": "short",
@@ -99,11 +79,31 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_breakout_m5|frxGBPUSD": {
+      "contract_id": -351,
+      "side": "long",
+      "entry_price": 1.32314,
+      "stop_price": 1.322032835968711,
+      "target_price": 1.3249114624500624,
+      "stake": 63.97,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-10-09T14:34:21.074785+00:00",
+      "equity_before": 107.06,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
     "virtual:iso_breakout_m15": 101.98,
-    "virtual:iso_breakout_m5": 107.28,
+    "virtual:iso_breakout_m5": 107.06,
     "virtual:breakout_h1": 98.31,
     "virtual:iso_trend_h1": 103.03,
     "virtual:iso_meanrev_m15": 107.78,
@@ -112,7 +112,7 @@
     "virtual:iso_trend_m5": 101.7,
     "donchian_breakout@v2": 99.81
   },
-  "paper_trade_counter": 350,
+  "paper_trade_counter": 351,
   "daily_risk_tracking": {
     "date": "2026-10-09",
     "start_equity": 107.04000000000087,
@@ -429,12 +429,12 @@
         "M5"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 107.28,
+      "equity": 107.06,
       "high_water_mark": 112.95,
-      "realized_pnl": 7.28,
-      "closed_trades": 65,
+      "realized_pnl": 7.06,
+      "closed_trades": 66,
       "wins": 28,
-      "losses": 37,
+      "losses": 38,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m1": {
