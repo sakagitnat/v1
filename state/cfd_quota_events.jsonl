@@ -12830,3 +12830,8 @@
 {"timestamp": "2026-10-09T10:29:34.157363+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124412}
 {"timestamp": "2026-10-09T10:29:34.168967+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
 {"timestamp": "2026-10-09T10:29:34.463684+00:00", "run_id": "37917794682", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497650, "reason": "no crossover"}
+{"timestamp": "2026-10-09T10:30:33.029050+00:00", "run_id": "37917794682", "outcome": "BUY_RESULT_UNKNOWN", "account": "quota_30m_forward", "instrument": "frxEURUSD", "window_id": 995301, "error": "Deriv API error (buy): Unknown contract proposal"}
+{"timestamp": "2026-10-09T10:30:33.040881+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497650}
+{"timestamp": "2026-10-09T10:30:33.053380+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124412}
+{"timestamp": "2026-10-09T10:30:33.065167+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
+{"timestamp": "2026-10-09T10:30:33.078717+00:00", "run_id": "37917794682", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}

@@ -172,7 +172,40 @@
     "start_equity": 107.04000000000087,
     "halted": false
   },
-  "pending_entries": {},
+  "pending_entries": {
+    "frxEURUSD": {
+      "legs": [
+        {
+          "instrument": "frxEURUSD",
+          "strategy": "quota_30m_forward@timeframe_vote_v3",
+          "side": "short",
+          "entry_time": "2026-10-09T10:30:32.760913+00:00",
+          "entry_price": 1.12157,
+          "stake": 1.0,
+          "risk_amount": 0.25,
+          "multiplier": 100,
+          "equity_before": 93.4,
+          "regime": "forced_quota_research",
+          "leg": "quota",
+          "broker_managed_only": true,
+          "forced_quota": true,
+          "experimental": true,
+          "virtual_account_id": "quota_30m_forward",
+          "horizon": "1800s_window",
+          "entry_timeframe": "M30",
+          "context_timeframes": [
+            "M15",
+            "M30",
+            "H1"
+          ],
+          "quota_window": 995301,
+          "close_at": 1791543480,
+          "entry_reason": "majority direction vote across M15/M30/H1 (experimental baseline, not a qualified profitable strategy)"
+        }
+      ],
+      "quota_intent": true
+    }
+  },
   "smoothed_equity": 107.275,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
@@ -974,15 +1007,17 @@
     },
     "quota_30m_forward": {
       "account_id": "quota_30m_forward",
-      "label": "30-minute forced-quota forward research",
+      "label": "M30 experimental timeframe quota",
       "starting_equity": 100.0,
       "execution_tier": "ACTIVE_DEMO",
       "horizon": "quota_forward",
-      "entry_timeframe": "TICK",
+      "entry_timeframe": "M30",
       "context_timeframes": [
-        "TICK"
+        "M15",
+        "M30",
+        "H1"
       ],
-      "strategy_tag": "quota_30m@v0",
+      "strategy_tag": "quota_30m_forward@timeframe_vote_v3",
       "equity": 93.4,
       "high_water_mark": 100.0,
       "realized_pnl": -6.6,
@@ -12951,7 +12986,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995300,
+    "quota_30m_forward": 995301,
     "quota_h1_forward": 497650,
     "quota_h4_forward": 124412,
     "quota_d1_forward": 20735,
