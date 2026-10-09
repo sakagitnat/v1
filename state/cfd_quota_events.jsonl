@@ -12865,3 +12865,10 @@
 {"timestamp": "2026-10-09T10:36:32.137939+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124412}
 {"timestamp": "2026-10-09T10:36:32.148819+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
 {"timestamp": "2026-10-09T10:36:32.160064+00:00", "run_id": "37917794682", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-09T11:29:12.715475+00:00", "run_id": "37923900184", "outcome": "CLOSED", "account": "quota_h4_forward", "contract_id": 16238922919, "instrument": "frxXAUUSD", "pnl": -0.27, "window_id": 124412, "holding_seconds": 7204.839835}
+{"timestamp": "2026-10-09T11:29:12.925736+00:00", "run_id": "37923900184", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 16244765879, "instrument": "frxGBPUSD", "pnl": -0.07, "window_id": 497650, "holding_seconds": 3579.219693}
+{"timestamp": "2026-10-09T11:29:13.020251+00:00", "run_id": "37923900184", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995302}
+{"timestamp": "2026-10-09T11:29:13.031332+00:00", "run_id": "37923900184", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-09T11:29:13.042579+00:00", "run_id": "37923900184", "outcome": "ALREADY_COMPLETED", "account": "quota_h4_forward", "window_id": 124412}
+{"timestamp": "2026-10-09T11:29:13.053672+00:00", "run_id": "37923900184", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
+{"timestamp": "2026-10-09T11:29:13.064734+00:00", "run_id": "37923900184", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
