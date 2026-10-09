@@ -12734,3 +12734,11 @@
 {"timestamp": "2026-10-09T06:07:56.126083+00:00", "run_id": "37891244779", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124411}
 {"timestamp": "2026-10-09T06:07:56.137142+00:00", "run_id": "37891244779", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
 {"timestamp": "2026-10-09T06:07:56.368803+00:00", "run_id": "37891244779", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497646, "reason": "no crossover"}
+{"timestamp": "2026-10-09T07:28:34.983917+00:00", "run_id": "37899151504", "outcome": "CLOSED_LATE", "account": "quota_30m_forward", "contract_id": 16219434379, "instrument": "frxXAUUSD", "pnl": -0.01, "window_id": 995292, "holding_seconds": 5258.081042}
+{"timestamp": "2026-10-09T07:28:35.422705+00:00", "run_id": "37899151504", "outcome": "CLOSED_LATE", "account": "quota_h1_forward", "contract_id": 16219435959, "instrument": "frxGBPUSD", "pnl": -0.02, "window_id": 497646, "holding_seconds": 5257.786338}
+{"timestamp": "2026-10-09T07:28:35.518220+00:00", "run_id": "37899151504", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 995292, "current_window": 995294, "unobserved_windows": 1}
+{"timestamp": "2026-10-09T07:28:35.524486+00:00", "run_id": "37899151504", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995294}
+{"timestamp": "2026-10-09T07:28:36.694667+00:00", "run_id": "37899151504", "outcome": "OPENED", "account": "quota_h1_forward", "contract_id": 16227228459, "instrument": "frxUSDJPY", "window_id": 497647, "timeframe": "H1", "strategy": "quota_h1_forward@timeframe_vote_v3", "close_at": 1791532680}
+{"timestamp": "2026-10-09T07:28:36.734416+00:00", "run_id": "37899151504", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124411}
+{"timestamp": "2026-10-09T07:28:36.754113+00:00", "run_id": "37899151504", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
+{"timestamp": "2026-10-09T07:28:36.936354+00:00", "run_id": "37899151504", "outcome": "NO_SIGNAL", "account": "quota_h1_signal", "window_id": 497647, "reason": "no crossover"}
