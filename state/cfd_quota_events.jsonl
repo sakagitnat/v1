@@ -12840,3 +12840,8 @@
 {"timestamp": "2026-10-09T10:31:32.009091+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124412}
 {"timestamp": "2026-10-09T10:31:32.021398+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
 {"timestamp": "2026-10-09T10:31:32.034280+00:00", "run_id": "37917794682", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-09T10:32:32.099246+00:00", "run_id": "37917794682", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_30m_forward"}
+{"timestamp": "2026-10-09T10:32:32.110951+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h1_forward", "window_id": 497650}
+{"timestamp": "2026-10-09T10:32:32.122020+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_h4_forward", "window_id": 124412}
+{"timestamp": "2026-10-09T10:32:32.132845+00:00", "run_id": "37917794682", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
+{"timestamp": "2026-10-09T10:32:32.143946+00:00", "run_id": "37917794682", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
