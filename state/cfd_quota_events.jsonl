@@ -13318,3 +13318,4 @@
 {"timestamp": "2026-10-09T22:56:40.078513+00:00", "run_id": "38001182668", "outcome": "HOLDING", "account": "quota_d1_forward", "window_id": 20735}
 {"timestamp": "2026-10-09T22:56:40.089683+00:00", "run_id": "38001182668", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
 {"timestamp": "2026-10-10T00:28:49.472745+00:00", "run_id": "38009147516", "outcome": "ERROR", "error": "DerivRequestError"}
+{"timestamp": "2026-10-10T01:29:11.973853+00:00", "run_id": "38013282049", "outcome": "ERROR", "error": "DerivRequestError"}
