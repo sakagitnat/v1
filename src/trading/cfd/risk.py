@@ -75,6 +75,21 @@ class CfdRiskManager:
         if self.daily_start_equity is None:
             self.daily_start_equity = self.equity
         self._halted = self.initially_halted
+        # Defense in depth: initially_halted is only as fresh as whatever
+        # a caller last persisted (trading.cfd.state's daily_risk_tracking
+        # / champion_daily_risk_tracking). If that persist step never ran
+        # -- an exception partway through a run, after equity already
+        # moved but before the caller's own end-of-run
+        # set_daily_risk_tracking() call -- a stale "halted": False can
+        # silently survive into the next run even though today's actual
+        # loss already breached the threshold. Recomputing from equity
+        # vs daily_start_equity here as well means the breaker can never
+        # be masked by a caller failing to persist it -- it's derived
+        # from the numbers themselves, not just trusted secondhand.
+        if self.daily_start_equity > 0:
+            daily_loss_pct = (self.daily_start_equity - self.equity) / self.daily_start_equity
+            if daily_loss_pct >= self.max_daily_loss_pct:
+                self._halted = True
 
     def below_floor(self) -> bool:
         return self.capital_floor is not None and self.equity < self.capital_floor

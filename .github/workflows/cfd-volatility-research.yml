@@ -1,0 +1,49 @@
+name: CFD Volatility Expansion Research
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - state/cfd_volatility_research_kick.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cfd-volatility-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run volatility expansion research
+        env:
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+          DERIV_APP_ID: "34riFtseEtSES06LjclCo"
+          CFD_ALLOW_LIVE_TRADING: "false"
+        run: python scripts/research_cfd_volatility_expansion.py --granularity 3600 --source yfinance
+      - name: Persist validated registry changes
+        if: always()
+        run: |
+          git config user.name "trading-bot"
+          git config user.email "actions@github.com"
+          [ -f state/cfd_strategy_registry.json ] && git add state/cfd_strategy_registry.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update volatility expansion research results"
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
+          else
+            echo "No validated registry changes."
+          fi
