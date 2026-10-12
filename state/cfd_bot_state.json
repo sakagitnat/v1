@@ -13002,7 +13002,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995424,
+    "quota_30m_forward": 995425,
     "quota_h1_forward": 497712,
     "quota_h4_forward": 124428,
     "quota_d1_forward": 20738,
