@@ -31,26 +31,6 @@
         "H1"
       ]
     },
-    "virtual:iso_meanrev_m15|frxEURUSD": {
-      "contract_id": -355,
-      "side": "short",
-      "entry_price": 1.12115,
-      "stop_price": 1.1219896616302072,
-      "target_price": 1.1205202537773447,
-      "stake": 71.96,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-10-12T00:28:49.339581+00:00",
-      "equity_before": 107.78,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:breakout_h1|frxXAUUSD": {
       "contract_id": -356,
       "side": "long",
@@ -96,7 +76,7 @@
     "virtual:iso_breakout_m5": 108.77,
     "virtual:breakout_h1": 98.31,
     "virtual:iso_trend_h1": 103.03,
-    "virtual:iso_meanrev_m15": 108.14,
+    "virtual:iso_meanrev_m15": 108.31,
     "virtual:iso_meanrev_m5": 115.91,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
@@ -142,7 +122,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99827055969996,
+  "smoothed_equity": 106.99878939178997,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -458,11 +438,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 108.14,
-      "high_water_mark": 108.14,
-      "realized_pnl": 8.14,
-      "closed_trades": 74,
-      "wins": 48,
+      "equity": 108.31,
+      "high_water_mark": 108.31,
+      "realized_pnl": 8.31,
+      "closed_trades": 75,
+      "wins": 49,
       "losses": 26,
       "drawdown_from_start_pct": 0.0
     },
@@ -13001,11 +12981,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995431,
-    "quota_h1_forward": 497715,
-    "quota_h4_forward": 124428,
+    "quota_30m_forward": 995432,
+    "quota_h1_forward": 497716,
+    "quota_h4_forward": 124429,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497715
+    "quota_h1_signal": 497716
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
