@@ -31,26 +31,6 @@
         "H1"
       ]
     },
-    "virtual:iso_meanrev_m15|frxXAUUSD": {
-      "contract_id": -354,
-      "side": "short",
-      "entry_price": 4206.58,
-      "stop_price": 4217.660843806235,
-      "target_price": 4198.2693671453235,
-      "stake": 20.46,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-10-12T00:28:49.304302+00:00",
-      "equity_before": 107.78,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_meanrev_m15|frxEURUSD": {
       "contract_id": -355,
       "side": "short",
@@ -116,7 +96,7 @@
     "virtual:iso_breakout_m5": 108.77,
     "virtual:breakout_h1": 98.31,
     "virtual:iso_trend_h1": 103.03,
-    "virtual:iso_meanrev_m15": 107.78,
+    "virtual:iso_meanrev_m15": 108.14,
     "virtual:iso_meanrev_m5": 115.91,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
@@ -162,7 +142,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99647052999993,
+  "smoothed_equity": 106.99752937099994,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -478,11 +458,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 107.78,
-      "high_water_mark": 108.06,
-      "realized_pnl": 7.78,
-      "closed_trades": 73,
-      "wins": 47,
+      "equity": 108.14,
+      "high_water_mark": 108.14,
+      "realized_pnl": 8.14,
+      "closed_trades": 74,
+      "wins": 48,
       "losses": 26,
       "drawdown_from_start_pct": 0.0
     },
@@ -13021,11 +13001,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995428,
-    "quota_h1_forward": 497714,
+    "quota_30m_forward": 995430,
+    "quota_h1_forward": 497715,
     "quota_h4_forward": 124428,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497714
+    "quota_h1_signal": 497715
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
