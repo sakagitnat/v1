@@ -31,25 +31,6 @@
         "H1"
       ]
     },
-    "donchian_breakout@v2|frxXAUUSD": {
-      "contract_id": -357,
-      "side": "long",
-      "entry_price": 4210.8,
-      "stop_price": 4166.581899302149,
-      "target_price": 4286.602458339174,
-      "stake": 4.75,
-      "multiplier": 20,
-      "risk_amount": 1.0,
-      "entry_time": "2026-10-12T01:24:16.595898+00:00",
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "virtual:iso_breakout_m5|frxXAUUSD": {
       "contract_id": -362,
       "side": "short",
@@ -120,7 +101,7 @@
     "virtual:iso_meanrev_m5": 114.82,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
-    "donchian_breakout@v2": 99.81
+    "donchian_breakout@v2": 99.03
   },
   "paper_trade_counter": 368,
   "daily_risk_tracking": {
@@ -162,7 +143,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99995114759206,
+  "smoothed_equity": 106.99996580331444,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -196,13 +177,13 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 97.48,
+      "equity": 96.7,
       "high_water_mark": 104.99,
-      "realized_pnl": -2.52,
-      "closed_trades": 25,
+      "realized_pnl": -3.3,
+      "closed_trades": 26,
       "wins": 9,
-      "losses": 16,
-      "drawdown_from_start_pct": 2.52
+      "losses": 17,
+      "drawdown_from_start_pct": 3.3
     },
     "intraday_m15": {
       "account_id": "intraday_m15",
@@ -13021,11 +13002,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995439,
-    "quota_h1_forward": 497719,
-    "quota_h4_forward": 124429,
+    "quota_30m_forward": 995440,
+    "quota_h1_forward": 497720,
+    "quota_h4_forward": 124430,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497719
+    "quota_h1_signal": 497720
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
