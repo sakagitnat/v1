@@ -13365,3 +13365,14 @@
 {"timestamp": "2026-10-11T21:28:40.921361+00:00", "run_id": "38176473695", "outcome": "ERROR", "error": "DerivRequestError"}
 {"timestamp": "2026-10-11T22:28:49.631110+00:00", "run_id": "38180506516", "outcome": "ERROR", "error": "DerivRequestError"}
 {"timestamp": "2026-10-11T22:50:29.111259+00:00", "run_id": "38181920703", "outcome": "ERROR", "error": "DerivRequestError"}
+{"timestamp": "2026-10-12T00:28:44.037329+00:00", "run_id": "38188093216", "outcome": "CLOSED_LATE", "account": "quota_d1_forward", "contract_id": 16196769259, "instrument": "frxUSDJPY", "pnl": 0.03, "window_id": 20735, "holding_seconds": 259177.401198}
+{"timestamp": "2026-10-12T00:28:44.103300+00:00", "run_id": "38188093216", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 995325, "current_window": 995424, "unobserved_windows": 98}
+{"timestamp": "2026-10-12T00:28:44.111683+00:00", "run_id": "38188093216", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995424}
+{"timestamp": "2026-10-12T00:28:44.113276+00:00", "run_id": "38188093216", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497662, "current_window": 497712, "unobserved_windows": 49}
+{"timestamp": "2026-10-12T00:28:44.119258+00:00", "run_id": "38188093216", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-12T00:28:44.121380+00:00", "run_id": "38188093216", "outcome": "EVALUATION_GAP", "account": "quota_h4_forward", "previous_window": 124415, "current_window": 124428, "unobserved_windows": 12}
+{"timestamp": "2026-10-12T00:28:44.127463+00:00", "run_id": "38188093216", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-10-12T00:28:44.129066+00:00", "run_id": "38188093216", "outcome": "EVALUATION_GAP", "account": "quota_d1_forward", "previous_window": 20735, "current_window": 20738, "unobserved_windows": 2}
+{"timestamp": "2026-10-12T00:28:44.135022+00:00", "run_id": "38188093216", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
+{"timestamp": "2026-10-12T00:28:44.136554+00:00", "run_id": "38188093216", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497662, "current_window": 497712, "unobserved_windows": 49}
+{"timestamp": "2026-10-12T00:28:44.144772+00:00", "run_id": "38188093216", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
