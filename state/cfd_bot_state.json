@@ -141,62 +141,9 @@
         }
       ],
       "quota_intent": true
-    },
-    "frxXAUUSD": {
-      "legs": [
-        {
-          "instrument": "frxXAUUSD",
-          "strategy": "ema_crossover@v1",
-          "side": "short",
-          "entry_time": "2026-10-12T16:28:45.797897+00:00",
-          "entry_price": 4162.78,
-          "stake": 1.8,
-          "risk_amount": 0.2,
-          "multiplier": 20,
-          "thesis_key": "frxXAUUSD:short",
-          "equity_before": 107.0,
-          "regime": "trending",
-          "leg": "scalp",
-          "virtual_account_id": "core_h1",
-          "horizon": "core",
-          "entry_timeframe": "H1",
-          "context_timeframes": [
-            "H4",
-            "H1"
-          ]
-        },
-        {
-          "instrument": "frxXAUUSD",
-          "strategy": "ema_crossover@v1",
-          "side": "short",
-          "entry_time": "2026-10-12T16:28:45.797897+00:00",
-          "entry_price": 4162.78,
-          "stake": 1.81,
-          "risk_amount": 0.19,
-          "multiplier": 20,
-          "thesis_key": "frxXAUUSD:short",
-          "equity_before": 107.0,
-          "regime": "trending",
-          "leg": "runner",
-          "virtual_account_id": "core_h1",
-          "horizon": "core",
-          "entry_timeframe": "H1",
-          "context_timeframes": [
-            "H4",
-            "H1"
-          ],
-          "trailing_stop": {
-            "entry_price": 4162.78,
-            "initial_stop_price": 4185.23186233591,
-            "side": "short",
-            "activated": false,
-            "current_stop_price": null
-          }
-        }
-      ]
     }
   },
-  "smoothed_equity": 106.99999994431366,
+  "smoothed_equity": 106.99999996101955,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -13055,11 +13002,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995456,
-    "quota_h1_forward": 497728,
+    "quota_30m_forward": 995460,
+    "quota_h1_forward": 497730,
     "quota_h4_forward": 124432,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497728
+    "quota_h1_signal": 497730
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
