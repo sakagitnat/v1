@@ -70,6 +70,45 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:breakout_h1|frxXAUUSD": {
+      "contract_id": -356,
+      "side": "long",
+      "entry_price": 4210.75,
+      "stop_price": 4179.165979800625,
+      "target_price": 4261.284432319,
+      "stake": 6.55,
+      "multiplier": 20,
+      "risk_amount": 0.98,
+      "entry_time": "2026-10-12T01:24:14.144500+00:00",
+      "equity_before": 98.31,
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
+    },
+    "donchian_breakout@v2|frxXAUUSD": {
+      "contract_id": -357,
+      "side": "long",
+      "entry_price": 4210.8,
+      "stop_price": 4166.581899302149,
+      "target_price": 4286.602458339174,
+      "stake": 4.75,
+      "multiplier": 20,
+      "risk_amount": 1.0,
+      "entry_time": "2026-10-12T01:24:16.595898+00:00",
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
     }
   },
   "paper_equity": {
@@ -83,7 +122,7 @@
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 99.81
   },
-  "paper_trade_counter": 355,
+  "paper_trade_counter": 357,
   "daily_risk_tracking": {
     "date": "2026-10-12",
     "start_equity": 107.0,
@@ -123,7 +162,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.98970999999977,
+  "smoothed_equity": 106.99279699999984,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
