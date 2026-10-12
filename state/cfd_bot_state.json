@@ -110,26 +110,6 @@
         "H4",
         "H1"
       ]
-    },
-    "virtual:iso_meanrev_m15|frxUSDJPY": {
-      "contract_id": -381,
-      "side": "long",
-      "entry_price": 158.607,
-      "stop_price": 158.53748103932904,
-      "target_price": 158.65913922050322,
-      "stake": 107.5,
-      "multiplier": 20,
-      "risk_amount": 1.07,
-      "entry_time": "2026-10-12T21:43:12.556444+00:00",
-      "equity_before": 107.5,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
     }
   },
   "paper_equity": {
@@ -137,7 +117,7 @@
     "virtual:iso_breakout_m5": 112.81,
     "virtual:breakout_h1": 96.7,
     "virtual:iso_trend_h1": 104.06,
-    "virtual:iso_meanrev_m15": 107.5,
+    "virtual:iso_meanrev_m15": 106.56,
     "virtual:iso_meanrev_m5": 112.95,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
@@ -183,7 +163,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99999999922923,
+  "smoothed_equity": 106.99999999946046,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -499,12 +479,12 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 107.5,
+      "equity": 106.56,
       "high_water_mark": 110.75,
-      "realized_pnl": 7.5,
-      "closed_trades": 81,
+      "realized_pnl": 6.56,
+      "closed_trades": 82,
       "wins": 52,
-      "losses": 29,
+      "losses": 30,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m5": {
@@ -13042,11 +13022,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995469,
-    "quota_h1_forward": 497734,
+    "quota_30m_forward": 995470,
+    "quota_h1_forward": 497735,
     "quota_h4_forward": 124433,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497734
+    "quota_h1_signal": 497735
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
