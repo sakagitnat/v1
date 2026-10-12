@@ -51,26 +51,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m5|frxEURUSD": {
-      "contract_id": -377,
-      "side": "long",
-      "entry_price": 1.11686,
-      "stop_price": 1.1162714307480468,
-      "target_price": 1.1173014269389647,
-      "stake": 108.25,
-      "multiplier": 20,
-      "risk_amount": 1.14,
-      "entry_time": "2026-10-12T15:28:45.825047+00:00",
-      "equity_before": 114.09,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
     "virtual:iso_breakout_m15|frxEURUSD": {
       "contract_id": -378,
       "side": "short",
@@ -90,6 +70,26 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_trend_h1|frxXAUUSD": {
+      "contract_id": -379,
+      "side": "short",
+      "entry_price": 4162.91,
+      "stop_price": 4185.334919926615,
+      "target_price": 4140.485080073385,
+      "stake": 9.66,
+      "multiplier": 20,
+      "risk_amount": 1.04,
+      "entry_time": "2026-10-12T16:28:43.423300+00:00",
+      "equity_before": 104.06,
+      "regime": "trending",
+      "virtual_account_id": "iso_trend_h1",
+      "horizon": "isolated",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
     }
   },
   "paper_equity": {
@@ -98,12 +98,12 @@
     "virtual:breakout_h1": 96.7,
     "virtual:iso_trend_h1": 104.06,
     "virtual:iso_meanrev_m15": 107.5,
-    "virtual:iso_meanrev_m5": 114.09,
+    "virtual:iso_meanrev_m5": 112.95,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 99.03
   },
-  "paper_trade_counter": 378,
+  "paper_trade_counter": 379,
   "daily_risk_tracking": {
     "date": "2026-10-12",
     "start_equity": 107.0,
@@ -141,9 +141,62 @@
         }
       ],
       "quota_intent": true
+    },
+    "frxXAUUSD": {
+      "legs": [
+        {
+          "instrument": "frxXAUUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "short",
+          "entry_time": "2026-10-12T16:28:45.797897+00:00",
+          "entry_price": 4162.78,
+          "stake": 1.8,
+          "risk_amount": 0.2,
+          "multiplier": 20,
+          "thesis_key": "frxXAUUSD:short",
+          "equity_before": 107.0,
+          "regime": "trending",
+          "leg": "scalp",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ]
+        },
+        {
+          "instrument": "frxXAUUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "short",
+          "entry_time": "2026-10-12T16:28:45.797897+00:00",
+          "entry_price": 4162.78,
+          "stake": 1.81,
+          "risk_amount": 0.19,
+          "multiplier": 20,
+          "thesis_key": "frxXAUUSD:short",
+          "equity_before": 107.0,
+          "regime": "trending",
+          "leg": "runner",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ],
+          "trailing_stop": {
+            "entry_price": 4162.78,
+            "initial_stop_price": 4185.23186233591,
+            "side": "short",
+            "activated": false,
+            "current_stop_price": null
+          }
+        }
+      ]
     }
   },
-  "smoothed_equity": 106.99999992044808,
+  "smoothed_equity": 106.99999994431366,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -479,12 +532,12 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 114.09,
+      "equity": 112.95,
       "high_water_mark": 115.91,
-      "realized_pnl": 14.09,
-      "closed_trades": 97,
+      "realized_pnl": 12.95,
+      "closed_trades": 98,
       "wins": 62,
-      "losses": 35,
+      "losses": 36,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m1": {
@@ -13002,11 +13055,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995455,
-    "quota_h1_forward": 497727,
-    "quota_h4_forward": 124431,
+    "quota_30m_forward": 995456,
+    "quota_h1_forward": 497728,
+    "quota_h4_forward": 124432,
     "quota_d1_forward": 20738,
-    "quota_h1_signal": 497727
+    "quota_h1_signal": 497728
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
