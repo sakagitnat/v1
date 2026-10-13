@@ -143,7 +143,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99999999999986,
+  "smoothed_equity": 106.9999999999999,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -13002,11 +13002,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995487,
-    "quota_h1_forward": 497743,
-    "quota_h4_forward": 124435,
+    "quota_30m_forward": 995488,
+    "quota_h1_forward": 497744,
+    "quota_h4_forward": 124436,
     "quota_d1_forward": 20739,
-    "quota_h1_signal": 497743
+    "quota_h1_signal": 497744
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
