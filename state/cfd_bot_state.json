@@ -31,46 +31,6 @@
         "M5"
       ]
     },
-    "virtual:iso_breakout_m5|frxEURUSD": {
-      "contract_id": -394,
-      "side": "long",
-      "entry_price": 1.11784,
-      "stop_price": 1.117408377150054,
-      "target_price": 1.1185305965599135,
-      "stake": 114.62,
-      "multiplier": 20,
-      "risk_amount": 1.15,
-      "entry_time": "2026-10-13T05:54:15.512171+00:00",
-      "equity_before": 114.62,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
-    "virtual:iso_meanrev_m5|frxGBPUSD": {
-      "contract_id": -395,
-      "side": "short",
-      "entry_price": 1.32256,
-      "stop_price": 1.3229443163358683,
-      "target_price": 1.3222717627480987,
-      "stake": 114.04,
-      "multiplier": 20,
-      "risk_amount": 1.14,
-      "entry_time": "2026-10-13T05:54:15.676136+00:00",
-      "equity_before": 114.04,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
     "virtual:iso_breakout_m15|frxEURUSD": {
       "contract_id": -396,
       "side": "long",
@@ -90,55 +50,15 @@
         "H1",
         "M15"
       ]
-    },
-    "virtual:iso_breakout_m15|frxGBPUSD": {
-      "contract_id": -397,
-      "side": "long",
-      "entry_price": 1.32272,
-      "stop_price": 1.3218086634599728,
-      "target_price": 1.3241781384640432,
-      "stake": 76.69,
-      "multiplier": 20,
-      "risk_amount": 1.06,
-      "entry_time": "2026-10-13T05:59:14.983246+00:00",
-      "equity_before": 105.68,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
-    "virtual:iso_breakout_m5|frxGBPUSD": {
-      "contract_id": -398,
-      "side": "long",
-      "entry_price": 1.32272,
-      "stop_price": 1.3221846328242242,
-      "target_price": 1.3235765874812413,
-      "stake": 114.62,
-      "multiplier": 20,
-      "risk_amount": 1.15,
-      "entry_time": "2026-10-13T05:59:15.075555+00:00",
-      "equity_before": 114.62,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
-    "virtual:iso_breakout_m15": 105.68,
-    "virtual:iso_breakout_m5": 114.62,
+    "virtual:iso_breakout_m15": 104.62,
+    "virtual:iso_breakout_m5": 112.8,
     "virtual:breakout_h1": 95.11,
     "virtual:iso_trend_h1": 103.02,
     "virtual:iso_meanrev_m15": 105.35,
-    "virtual:iso_meanrev_m5": 114.77,
+    "virtual:iso_meanrev_m5": 115.27,
     "virtual:iso_trend_m15": 96.18,
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 99.03
@@ -183,7 +103,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99999999999939,
+  "smoothed_equity": 106.99999999999957,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
@@ -440,12 +360,12 @@
         "M15"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 105.68,
+      "equity": 104.62,
       "high_water_mark": 108.59,
-      "realized_pnl": 5.68,
-      "closed_trades": 50,
+      "realized_pnl": 4.62,
+      "closed_trades": 51,
       "wins": 21,
-      "losses": 29,
+      "losses": 30,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m5": {
@@ -460,12 +380,12 @@
         "M5"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 114.62,
+      "equity": 112.8,
       "high_water_mark": 114.62,
-      "realized_pnl": 14.62,
-      "closed_trades": 73,
+      "realized_pnl": 12.8,
+      "closed_trades": 75,
       "wins": 34,
-      "losses": 39,
+      "losses": 41,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m1": {
@@ -519,11 +439,11 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 114.77,
+      "equity": 115.27,
       "high_water_mark": 115.91,
-      "realized_pnl": 14.77,
-      "closed_trades": 103,
-      "wins": 66,
+      "realized_pnl": 15.27,
+      "closed_trades": 104,
+      "wins": 67,
       "losses": 37,
       "drawdown_from_start_pct": 0.0
     },
