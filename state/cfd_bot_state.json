@@ -70,6 +70,66 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_breakout_m15|frxEURUSD": {
+      "contract_id": -396,
+      "side": "long",
+      "entry_price": 1.11789,
+      "stop_price": 1.11707585454283,
+      "target_price": 1.1191926327314718,
+      "stake": 72.55,
+      "multiplier": 20,
+      "risk_amount": 1.06,
+      "entry_time": "2026-10-13T05:59:14.942962+00:00",
+      "equity_before": 105.68,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_breakout_m15|frxGBPUSD": {
+      "contract_id": -397,
+      "side": "long",
+      "entry_price": 1.32272,
+      "stop_price": 1.3218086634599728,
+      "target_price": 1.3241781384640432,
+      "stake": 76.69,
+      "multiplier": 20,
+      "risk_amount": 1.06,
+      "entry_time": "2026-10-13T05:59:14.983246+00:00",
+      "equity_before": 105.68,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxGBPUSD": {
+      "contract_id": -398,
+      "side": "long",
+      "entry_price": 1.32272,
+      "stop_price": 1.3221846328242242,
+      "target_price": 1.3235765874812413,
+      "stake": 114.62,
+      "multiplier": 20,
+      "risk_amount": 1.15,
+      "entry_time": "2026-10-13T05:59:15.075555+00:00",
+      "equity_before": 114.62,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -83,7 +143,7 @@
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 99.03
   },
-  "paper_trade_counter": 395,
+  "paper_trade_counter": 398,
   "daily_risk_tracking": {
     "date": "2026-10-13",
     "start_equity": 107.0,
@@ -123,7 +183,7 @@
       "quota_intent": true
     }
   },
-  "smoothed_equity": 106.99999999999912,
+  "smoothed_equity": 106.99999999999939,
   "high_water_mark": 121.94000000000051,
   "virtual_accounts": {
     "core_h1": {
