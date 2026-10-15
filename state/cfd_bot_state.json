@@ -148,6 +148,26 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_trend_h1|frxGBPUSD": {
+      "contract_id": -478,
+      "side": "long",
+      "entry_price": 1.32402,
+      "stop_price": 1.3208553877537725,
+      "target_price": 1.3271846122462274,
+      "stake": 21.55,
+      "multiplier": 20,
+      "risk_amount": 1.03,
+      "entry_time": "2026-10-15T06:29:16.502664+00:00",
+      "equity_before": 103.01,
+      "regime": "trending",
+      "virtual_account_id": "iso_trend_h1",
+      "horizon": "isolated",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
     }
   },
   "paper_equity": {
@@ -161,7 +181,7 @@
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 97.06
   },
-  "paper_trade_counter": 477,
+  "paper_trade_counter": 478,
   "daily_risk_tracking": {
     "date": "2026-10-15",
     "start_equity": 107.0,
@@ -199,6 +219,59 @@
         }
       ],
       "quota_intent": true
+    },
+    "frxGBPUSD": {
+      "legs": [
+        {
+          "instrument": "frxGBPUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "long",
+          "entry_time": "2026-10-15T06:29:18.952580+00:00",
+          "entry_price": 1.32399,
+          "stake": 4.07,
+          "risk_amount": 0.2,
+          "multiplier": 20,
+          "thesis_key": "frxGBPUSD:long",
+          "equity_before": 107.0,
+          "regime": "trending",
+          "leg": "scalp",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ]
+        },
+        {
+          "instrument": "frxGBPUSD",
+          "strategy": "ema_crossover@v1",
+          "side": "long",
+          "entry_time": "2026-10-15T06:29:18.952580+00:00",
+          "entry_price": 1.32399,
+          "stake": 4.07,
+          "risk_amount": 0.19,
+          "multiplier": 20,
+          "thesis_key": "frxGBPUSD:long",
+          "equity_before": 107.0,
+          "regime": "trending",
+          "leg": "runner",
+          "virtual_account_id": "core_h1",
+          "horizon": "core",
+          "entry_timeframe": "H1",
+          "context_timeframes": [
+            "H4",
+            "H1"
+          ],
+          "trailing_stop": {
+            "entry_price": 1.32399,
+            "initial_stop_price": 1.3208258864746452,
+            "side": "long",
+            "activated": false,
+            "current_stop_price": null
+          }
+        }
+      ]
     }
   },
   "smoothed_equity": 106.99999999999999,
@@ -13060,11 +13133,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995579,
-    "quota_h1_forward": 497789,
+    "quota_30m_forward": 995580,
+    "quota_h1_forward": 497790,
     "quota_h4_forward": 124447,
     "quota_d1_forward": 20741,
-    "quota_h1_signal": 497789
+    "quota_h1_signal": 497790
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
