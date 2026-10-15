@@ -109,26 +109,6 @@
         "H1"
       ]
     },
-    "virtual:iso_trend_h1|frxGBPUSD": {
-      "contract_id": -478,
-      "side": "long",
-      "entry_price": 1.32402,
-      "stop_price": 1.3208553877537725,
-      "target_price": 1.3271846122462274,
-      "stake": 21.55,
-      "multiplier": 20,
-      "risk_amount": 1.03,
-      "entry_time": "2026-10-15T06:29:16.502664+00:00",
-      "equity_before": 103.01,
-      "regime": "trending",
-      "virtual_account_id": "iso_trend_h1",
-      "horizon": "isolated",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "virtual:iso_breakout_m15|frxGBPUSD": {
       "contract_id": -479,
       "side": "long",
@@ -214,7 +194,7 @@
     "virtual:iso_breakout_m15": 104.8,
     "virtual:iso_breakout_m5": 119.31,
     "virtual:breakout_h1": 92.15,
-    "virtual:iso_trend_h1": 103.01,
+    "virtual:iso_trend_h1": 104.04,
     "virtual:iso_meanrev_m15": 99.76,
     "virtual:iso_meanrev_m5": 113.47,
     "virtual:iso_trend_m15": 98.11,
@@ -266,8 +246,8 @@
           "instrument": "frxXAUUSD",
           "strategy": "ema_crossover@v1",
           "side": "long",
-          "entry_time": "2026-10-15T09:29:41.413913+00:00",
-          "entry_price": 4158.94,
+          "entry_time": "2026-10-15T09:49:37.448283+00:00",
+          "entry_price": 4154.89,
           "stake": 1.44,
           "risk_amount": 0.2,
           "multiplier": 20,
@@ -287,9 +267,9 @@
           "instrument": "frxXAUUSD",
           "strategy": "ema_crossover@v1",
           "side": "long",
-          "entry_time": "2026-10-15T09:29:41.413913+00:00",
-          "entry_price": 4158.94,
-          "stake": 1.44,
+          "entry_time": "2026-10-15T09:49:37.448283+00:00",
+          "entry_price": 4154.89,
+          "stake": 1.43,
           "risk_amount": 0.19,
           "multiplier": 20,
           "thesis_key": "frxXAUUSD:long",
@@ -304,8 +284,8 @@
             "H1"
           ],
           "trailing_stop": {
-            "entry_price": 4158.94,
-            "initial_stop_price": 4130.870260176121,
+            "entry_price": 4154.89,
+            "initial_stop_price": 4126.744775062926,
             "side": "long",
             "activated": false,
             "current_stop_price": null
@@ -511,11 +491,11 @@
         "H1"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 103.01,
+      "equity": 104.04,
       "high_water_mark": 104.06,
-      "realized_pnl": 3.01,
-      "closed_trades": 7,
-      "wins": 5,
+      "realized_pnl": 4.04,
+      "closed_trades": 8,
+      "wins": 6,
       "losses": 2,
       "drawdown_from_start_pct": 0.0
     },
@@ -13173,7 +13153,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995586,
+    "quota_30m_forward": 995587,
     "quota_h1_forward": 497793,
     "quota_h4_forward": 124448,
     "quota_d1_forward": 20741,
