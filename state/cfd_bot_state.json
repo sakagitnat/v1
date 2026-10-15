@@ -239,59 +239,6 @@
         }
       ],
       "quota_intent": true
-    },
-    "frxXAUUSD": {
-      "legs": [
-        {
-          "instrument": "frxXAUUSD",
-          "strategy": "ema_crossover@v1",
-          "side": "long",
-          "entry_time": "2026-10-15T09:49:37.448283+00:00",
-          "entry_price": 4154.89,
-          "stake": 1.44,
-          "risk_amount": 0.2,
-          "multiplier": 20,
-          "thesis_key": "frxXAUUSD:long",
-          "equity_before": 107.0,
-          "regime": "trending",
-          "leg": "scalp",
-          "virtual_account_id": "core_h1",
-          "horizon": "core",
-          "entry_timeframe": "H1",
-          "context_timeframes": [
-            "H4",
-            "H1"
-          ]
-        },
-        {
-          "instrument": "frxXAUUSD",
-          "strategy": "ema_crossover@v1",
-          "side": "long",
-          "entry_time": "2026-10-15T09:49:37.448283+00:00",
-          "entry_price": 4154.89,
-          "stake": 1.43,
-          "risk_amount": 0.19,
-          "multiplier": 20,
-          "thesis_key": "frxXAUUSD:long",
-          "equity_before": 107.0,
-          "regime": "trending",
-          "leg": "runner",
-          "virtual_account_id": "core_h1",
-          "horizon": "core",
-          "entry_timeframe": "H1",
-          "context_timeframes": [
-            "H4",
-            "H1"
-          ],
-          "trailing_stop": {
-            "entry_price": 4154.89,
-            "initial_stop_price": 4126.744775062926,
-            "side": "long",
-            "activated": false,
-            "current_stop_price": null
-          }
-        }
-      ]
     }
   },
   "smoothed_equity": 106.99999999999999,
@@ -13153,11 +13100,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995587,
-    "quota_h1_forward": 497793,
+    "quota_30m_forward": 995590,
+    "quota_h1_forward": 497795,
     "quota_h4_forward": 124448,
     "quota_d1_forward": 20741,
-    "quota_h1_signal": 497793
+    "quota_h1_signal": 497795
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
