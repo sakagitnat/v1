@@ -17705,3 +17705,4 @@
 {"timestamp": "2026-10-17T02:33:18.924944+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-10-17T02:33:18.936169+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-10-17T02:33:18.947660+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-17T06:30:26.763638+00:00", "run_id": "39010009634", "outcome": "ERROR", "error": "RuntimeError"}
