@@ -17675,3 +17675,13 @@
 {"timestamp": "2026-10-15T22:17:57.738017+00:00", "run_id": "38815490161", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-10-15T22:17:57.748261+00:00", "run_id": "38815490161", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-10-15T22:17:57.758154+00:00", "run_id": "38815490161", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-17T02:29:19.067386+00:00", "run_id": "38995003643", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 995612, "current_window": 995668, "unobserved_windows": 55}
+{"timestamp": "2026-10-17T02:29:19.079052+00:00", "run_id": "38995003643", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 995668}
+{"timestamp": "2026-10-17T02:29:19.083562+00:00", "run_id": "38995003643", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 497806, "current_window": 497834, "unobserved_windows": 27}
+{"timestamp": "2026-10-17T02:29:19.092993+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-17T02:29:19.095254+00:00", "run_id": "38995003643", "outcome": "EVALUATION_GAP", "account": "quota_h4_forward", "previous_window": 124451, "current_window": 124458, "unobserved_windows": 6}
+{"timestamp": "2026-10-17T02:29:19.104224+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-10-17T02:29:19.106400+00:00", "run_id": "38995003643", "outcome": "EVALUATION_GAP", "account": "quota_d1_forward", "previous_window": 20741, "current_window": 20743, "unobserved_windows": 1}
+{"timestamp": "2026-10-17T02:29:19.115442+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
+{"timestamp": "2026-10-17T02:29:19.117631+00:00", "run_id": "38995003643", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 497806, "current_window": 497834, "unobserved_windows": 27}
+{"timestamp": "2026-10-17T02:29:19.126728+00:00", "run_id": "38995003643", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
