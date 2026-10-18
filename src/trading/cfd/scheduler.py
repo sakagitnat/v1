@@ -1,10 +1,16 @@
 import asyncio
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
 
+from trading.cfd.auto_mode import choose_autonomous_mode
 from trading.cfd.broker import DerivBroker
+from trading.cfd.quota import commit_close as commit_quota_close
+from trading.cfd.decision_log import record_decision
+from trading.cfd.incident_log import record_incident
+from trading.cfd.lab_collector import collect_lab_observations
 from trading.cfd.capital import equity_for_account
 from trading.cfd.decay_supervisor import run_autonomous_demotion
 from trading.cfd.drawdown_monitor import (
@@ -13,6 +19,8 @@ from trading.cfd.drawdown_monitor import (
     classify_drawdown_tier,
     drawdown_risk_multiplier,
 )
+from trading.cfd.event_blackout import in_blackout_window
+from trading.cfd.event_calendar import EVENTS as OFFICIAL_EVENTS
 from trading.cfd.exit_manager import (
     TrailingStopState,
     split_stake_for_partial_close,
@@ -46,9 +54,11 @@ from trading.cfd.state import (
     set_daily_risk_tracking,
     set_equity_tracking,
     set_pending_entry,
+    set_operating_mode,
 )
 from trading.cfd.strategy_registry import LifecycleState, get, list_by_state
-from trading.cfd.trade_log import TradeRecord, load_trades, record_trade
+from trading.cfd.trade_log import TradeRecord, load_trades
+from trading.cfd.virtual_accounts import account_for_strategy, commit_trade_settlement, ensure_virtual_accounts, flush_trade_settlements
 from trading.config import settings
 from trading.logging_utils import get_logger
 from trading.strategy.base import Action
@@ -64,26 +74,62 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], equity_now: float) -> list[TradeRecord]:
-    """Detects contracts this system was tracking as open that are no
-    longer open on Deriv's side -- closed by Deriv's own stop-loss/
-    take-profit (or a manual scripts/cfd_cli.py close-position) between
-    runs, rather than by this scheduler's own signal-exit/trailing-stop
-    logic below.
+async def close_overdue_demo_probes(broker, account_type, current=None):
+    """Bound legacy experimental positions without applying an H1 signal exit.
 
-    Deriv's account balance only moves on a realized close or a new stake
-    being paid, never on the unrealized/floating P&L of a still-open
-    contract. So if exactly one tracked contract disappeared and nothing
-    else touched the balance since it was opened, equity_now minus that
-    trade's recorded equity_before is its exact realized P&L. With more
-    than one simultaneous disappearance there's no way to split one
-    combined balance change between them without an extra API call this
-    project doesn't make yet (see docs/ARCHITECTURE_AUDIT.md) -- those are
-    still logged, honestly, with pnl=None rather than a guessed split.
-    Two legs of one entry (see exit_manager.split_stake_for_partial_close)
-    disappearing in the same run is exactly this "more than one" case --
-    e.g. a "scalp" leg's Deriv-side take-profit firing the same hour a
-    "runner" leg's stop is hit externally would both land here unpriced.
+    Persist intent before sell; ordinary verified settlement reconciliation owns
+    accounting. Unknown/manual positions and quota deadlines are excluded.
+    """
+    if account_type != "demo":
+        return
+    current = current or datetime.now(timezone.utc)
+    limits = {"TICK": 1800, "M1": 1800, "M5": 1800, "M15": 3600, "H1": 14400}
+    actual = None
+    for cid, meta in list_open_trades().items():
+        if not meta.get("experimental") or not meta.get("broker_managed_only") or "quota_window" in meta:
+            continue
+        entered = datetime.fromisoformat(meta["entry_time"])
+        if entered.tzinfo is None:
+            raise ValueError("Probe entry timestamp must include timezone")
+        if (current-entered).total_seconds() < limits.get(meta.get("entry_timeframe"), 21600):
+            continue
+        if actual is None:
+            actual = await broker.open_contract_ids()
+        if int(cid) not in actual:
+            continue
+        meta["exit_requested_reason"] = "legacy_demo_probe_max_holding_time"
+        record_open_trade(int(cid), meta)
+        await broker.close_position(int(cid))
+        if int(cid) in await broker.open_contract_ids():
+            raise RuntimeError("Overdue demo probe close not confirmed")
+
+
+def _reserved_stake_for_open_ids(tracked_open: dict, open_ids: set[int]) -> float:
+    """Cash paid as stake for bot contracts that are still open.
+
+    Deriv deducts buy_price/stake from cash balance at entry. Adding only
+    the still-open bot stakes back produces a realized-equity ledger:
+    opening a position does not masquerade as a loss, while closing it
+    removes the reserve and lets only realized P&L change virtual equity.
+    """
+    total = 0.0
+    for contract_id, meta in tracked_open.items():
+        try:
+            cid = int(contract_id)
+        except (TypeError, ValueError):
+            continue
+        if cid in open_ids:
+            total += float(meta.get("stake", 0.0) or 0.0)
+    return round(total, 10)
+
+
+def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], equity_now: float,
+                             contract_profits: Optional[dict[int, float]] = None) -> list[TradeRecord]:
+    """Attribute closed trades only from verified contract settlements.
+
+    A balance delta can contain other trades and cash movements, even if
+    only one locally tracked contract disappeared. Missing evidence stays
+    unknown; the runtime fetches all settlements before applying changes.
     """
     disappeared = {cid: meta for cid, meta in tracked_open.items() if int(cid) not in currently_open_ids}
     if not disappeared:
@@ -91,10 +137,8 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
 
     records = []
     for contract_id, meta in disappeared.items():
-        pnl = None
+        pnl = (contract_profits or {}).get(int(contract_id))
         equity_before = meta.get("equity_before")
-        if len(disappeared) == 1 and equity_before is not None:
-            pnl = round(equity_now - equity_before, 2)
         records.append(
             TradeRecord(
                 contract_id=int(contract_id),
@@ -109,10 +153,14 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
                 pnl=pnl,
                 equity_before=equity_before,
                 equity_after=equity_now if pnl is not None else None,
-                exit_reason="closed_externally (stop-loss/take-profit or manual close)",
+                exit_reason=meta.get("exit_requested_reason", "closed_externally (stop-loss/take-profit or manual close)"),
                 regime=meta.get("regime"),
                 thesis_key=meta.get("thesis_key"),
                 leg=meta.get("leg"),
+                virtual_account_id=meta.get("virtual_account_id"),
+                horizon=meta.get("horizon"),
+                entry_timeframe=meta.get("entry_timeframe"),
+                context_timeframes=meta.get("context_timeframes"),
             )
         )
     return records
@@ -120,12 +168,12 @@ def _reconcile_closed_trades(tracked_open: dict, currently_open_ids: set[int], e
 
 def _reconcile_unknown_positions(
     positions_by_instrument: dict[str, list[dict]], tracked_open: dict, pending_entries: dict
-) -> tuple[list[tuple[int, dict]], list[dict]]:
+) -> tuple[list[tuple[int, dict]], list[dict], list[dict]]:
     """Splits every currently-open contract with no local metadata
-    (`tracked_open`) into two buckets:
+    (`tracked_open`) into three buckets:
 
     adoptions: (contract_id, leg_meta) pairs to record_open_trade() --
-    contracts matching a *pending* entry (trading.cfd.state.
+    contracts matched to a *pending* entry (trading.cfd.state.
     set_pending_entry, written right before this bot's own
     submit_multiplier_order calls) from a run that crashed between
     submitting the order and its state-file commit ever landing (each
@@ -134,29 +182,80 @@ def _reconcile_unknown_positions(
     recovers the strategy/thesis/risk_amount attribution that would
     otherwise be lost, closing Revision 3 gap #9's attribution window.
 
-    foreign: contracts with NO matching pending entry either -- never
-    opened by this bot's own tracked intent at all (a manual trade, or
-    an unrelated script hitting the same account). Never silently
-    absorbed into this bot's own strategy/thesis attribution -- closes
-    Revision 3 gap #8. The caller logs these loudly and excludes the
-    instrument from new entries until a human investigates; their
-    balance impact still reaches virtual equity (which is derived from
-    the raw broker balance delta, not per-trade attribution -- see
-    docs/ARCHITECTURE_AUDIT.md for why that part isn't solvable without
-    a deeper per-trade balance API this project doesn't have)."""
+    Matched by (instrument, side) -- 2026-09-25 review fix: this used to
+    match by instrument alone, popping whichever pending leg happened to
+    be first in the list, with no check that its side even agreed with
+    the broker-reported contract it was being attributed to. A pending
+    Long leg could silently absorb a broker-reported Short position (or
+    vice versa) as long as they shared an instrument. side is the one
+    field broker.py's open_positions_list() already reliably parses from
+    Deriv for every open contract (unlike stake or purchase_time, which
+    it doesn't currently parse at all -- see that method's own docstring
+    for the confirmed-vs-assumed field names this project trusts); using
+    it to gate adoption closes the wrong-leg misattribution this review
+    found, without inventing an unverified new API field.
+
+    foreign: contracts with NO pending entry on this instrument at all --
+    never opened by this bot's own tracked intent (a manual trade, or an
+    unrelated script hitting the same account). Never silently absorbed
+    into this bot's own strategy/thesis attribution -- closes Revision 3
+    gap #8.
+
+    ambiguous: contracts where a pending entry DOES exist on this
+    instrument, but side alone can't identify which specific leg this
+    is -- either none of the pending legs share this contract's side, or
+    more than one does (e.g. a "scalp"+"runner" split, both the same
+    direction; broker.py doesn't currently parse stake to tell those
+    apart either). Genuinely unresolvable with the fields this project
+    currently trusts from Deriv -- never guessed at. The caller treats
+    this the same way as foreign for risk purposes (the instrument is
+    excluded until a human investigates) but logs it distinctly: this
+    might still be one of this bot's own positions, just not one this
+    function could safely identify -- not necessarily a rogue trade."""
     adoptions: list[tuple[int, dict]] = []
     foreign: list[dict] = []
+    ambiguous: list[dict] = []
     for instrument, legs in positions_by_instrument.items():
         unknown_legs = [leg for leg in legs if str(leg["contract_id"]) not in tracked_open]
         if not unknown_legs:
             continue
         pending_legs = list(pending_entries.get(instrument, {}).get("legs", []))
         for leg in unknown_legs:
-            if pending_legs:
-                adoptions.append((leg["contract_id"], pending_legs.pop(0)))
+            side_matches = [pl for pl in pending_legs if pl.get("side") == leg["side"]]
+            if len(side_matches) == 1:
+                matched = side_matches[0]
+                pending_legs.remove(matched)
+                adoptions.append((leg["contract_id"], matched))
+            elif pending_legs:
+                ambiguous.append({"contract_id": leg["contract_id"], "instrument": instrument, "side": leg["side"]})
             else:
                 foreign.append({"contract_id": leg["contract_id"], "instrument": instrument, "side": leg["side"]})
-    return adoptions, foreign
+    return adoptions, foreign, ambiguous
+
+
+def _owned_by(meta: dict, owner_account_id: str) -> bool:
+    """True if a tracked_open leg's metadata belongs to owner_account_id
+    (or predates the virtual-account laboratory, meta.get("virtual_account_id")
+    is None -- treated as this scheduler's own, same as always). False for
+    any OTHER isolated $100 account's position (a timeframe champion,
+    trading.cfd.timeframe_champion; a GPT research/quota account,
+    trading.cfd.virtual_accounts) sharing the same Deriv demo account and
+    the same tracked_open dict.
+
+    Without this filter, a champion's own open position on an instrument
+    run_once() also trades would be invisible in tracked_open's DIRECT
+    sense but NOT invisible to positions_by_instrument (built straight
+    from the broker's raw open_positions_list()) -- _resolve_exit_strategy_
+    entry() would then fail to resolve its unrecognized strategy tag,
+    fall back to "the sole ACTIVE strategy" (ema_crossover@v1, currently),
+    and this scheduler would wrongly evaluate ema_crossover's exit signal
+    against a position it never opened and doesn't own -- silently
+    mismanaging another account's trade and double-counting it into this
+    account's own Portfolio Risk Governor snapshot and occupied-slot
+    count. Each isolated account must stay invisible to every other
+    account's exit/entry/risk accounting, the same way two different
+    human traders sharing one broker login would be."""
+    return meta.get("virtual_account_id") in (None, owner_account_id)
 
 
 def _legs_by_strategy(legs: list[dict], tracked_open: dict) -> dict[str, list[dict]]:
@@ -351,8 +450,23 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     """
     summary: list[dict] = []
 
-    def _record(instrument: str, outcome: str, reason: str) -> None:
+    def _record(
+        instrument: str,
+        outcome: str,
+        reason: str,
+        regime: Optional[str] = None,
+        strategy: Optional[str] = None,
+    ) -> None:
         summary.append({"instrument": instrument, "outcome": outcome, "reason": reason})
+        record_decision(
+            instrument,
+            outcome,
+            reason,
+            regime=regime,
+            strategy=strategy,
+            run_id=os.environ.get("GITHUB_RUN_ID"),
+            bridge_command_id=bridge_command_id,
+        )
 
     state = load_state()
     if state.get("paused"):
@@ -361,6 +475,13 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
     if bridge_command_id:
         logger.info("Bridge-triggered run (command_id=%s)", bridge_command_id)
+
+    # Retry any trade_settlements outbox entry from a prior run whose
+    # equity/dedup write succeeded but whose separate Trade Database
+    # append then failed (see commit_trade_settlement's docstring) --
+    # never re-touches equity, only replays the missing log line. Same
+    # first-thing-in-the-run placement as quota.py's own flush_settlements.
+    flush_trade_settlements()
 
     trades = load_trades()
 
@@ -392,19 +513,37 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
     try:
         account = await broker.connect()
         account_type = account.get("account_type")
+        await close_overdue_demo_probes(broker, account_type)
         broker_balance = await broker.account_equity()
+        # Deriv deducts the contract stake from CASH at buy time. Cash alone
+        # therefore falls when a position opens even though no loss has been
+        # realized. Reconstruct realized account equity by adding back the
+        # cost basis of bot-owned contracts that are actually still open.
+        tracked_for_equity = list_open_trades()
+        currently_open_ids = await broker.open_contract_ids()
+        reserved_stake = _reserved_stake_for_open_ids(tracked_for_equity, currently_open_ids)
+        broker_equity = broker_balance + reserved_stake
 
         broker_baseline = state.get("broker_baseline")
         if account_type == "demo" and broker_baseline is None:
-            set_broker_baseline(broker_balance)
-            broker_baseline = broker_balance
+            set_broker_baseline(broker_equity)
+            broker_baseline = broker_equity
             logger.info(
                 "First run: broker baseline recorded at %.2f (raw demo balance) -- "
                 "virtual equity now tracks P&L from here, rebased onto %.2f, not the raw balance.",
                 broker_balance, settings.cfd_virtual_starting_capital,
             )
 
-        equity = equity_for_account(broker_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
+        equity = equity_for_account(broker_equity, account_type, broker_baseline, settings.cfd_virtual_starting_capital)
+
+        # Virtual sub-account lab: seed logical $100 ledgers and collect
+        # genuine forward observations on M15/M5/M1. SHADOW accounts never
+        # submit orders; this cannot increase broker risk.
+        virtual_accounts = ensure_virtual_accounts()
+        lab_rows = await collect_lab_observations(
+            broker, settings.cfd_instruments, run_id=os.environ.get("GITHUB_RUN_ID")
+        )
+        logger.info("Virtual-account lab collected %d forward observation row(s).", len(lab_rows))
 
         # Smoothed Equity / High-Water-Mark + Automatic Drawdown-Tiered
         # Risk Reduction (docs/VISION.md's Revision 3 "Drawdown
@@ -427,6 +566,18 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         )
         drawdown_tier = classify_drawdown_tier(equity, high_water_mark, drawdown_thresholds)
         drawdown_multiplier = drawdown_risk_multiplier(drawdown_tier, drawdown_thresholds)
+
+        # Autonomy boundary: the manager may reduce risk on its own but may
+        # never raise it. Persist a defensive/recovery mode when drawdown
+        # warrants it; normal conditions never auto-upgrade the current mode.
+        current_mode = state.get("operating_mode", NORMAL)
+        auto_mode, auto_reason = choose_autonomous_mode(drawdown_tier, current_mode)
+        if auto_mode != current_mode:
+            set_operating_mode(auto_mode, auto_reason)
+            state["operating_mode"] = auto_mode
+            state["operating_mode_reason"] = auto_reason
+            logger.warning("Autonomous risk reduction: operating mode %s -> %s (%s)", current_mode, auto_mode, auto_reason)
+
         if drawdown_tier != DRAWDOWN_NORMAL:
             logger.warning(
                 "Drawdown tier=%s (equity %.2f vs high-water-mark %.2f) -- new-entry risk scaled by %.2fx this run.",
@@ -492,11 +643,27 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # own (stop-loss/take-profit, or a manual close) since the last
         # run, before this run does anything else.
         tracked_open = list_open_trades()
-        currently_open_ids = await broker.open_contract_ids()
+        # Reuse the broker-open set captured for equity reconstruction so
+        # reconciliation and the equity snapshot describe the same instant.
         reconciled_ids: set[int] = set()
-        for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity):
-            record_trade(record)
-            pop_open_trade(record.contract_id)
+        contract_profits = {}
+        for cid in tracked_open:
+            if int(cid) not in currently_open_ids:
+                contract_profits[int(cid)] = await broker.settled_profit(int(cid))
+        for record in _reconcile_closed_trades(tracked_open, currently_open_ids, equity, contract_profits):
+            meta = tracked_open[str(record.contract_id)]
+            if "quota_window" in meta:
+                commit_quota_close(record, meta["quota_window"])
+                reconciled_ids.add(record.contract_id)
+                continue
+            # One atomic settlement (equity mutation, Trade Database queue,
+            # and open_trades removal together, keyed by contract_id) --
+            # not three separate calls. Those three used to be able to
+            # apply this contract's P&L twice: if record_virtual_close
+            # succeeded but record_trade then raised, the contract stayed
+            # in open_trades un-popped, so the next run's retry walked
+            # through record_virtual_close again for the same pnl.
+            commit_trade_settlement(record)
             reconciled_ids.add(record.contract_id)
             logger.info(
                 "%s: reconciled externally-closed contract %d (pnl=%s)",
@@ -510,6 +677,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # one of. See broker.py's docstrings on both methods.
         positions_by_instrument: dict[str, list[dict]] = {}
         for p in await broker.open_positions_list():
+            if not _owned_by(tracked_open.get(str(p["contract_id"]), {}), "core_h1"):
+                continue  # another isolated $100 account's position -- see _owned_by's docstring
             positions_by_instrument.setdefault(p["instrument"], []).append(p)
 
         # Idempotency / attribution recovery + foreign-position detection
@@ -526,7 +695,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
         # risk-reducing action, no human approval needed) until a human
         # investigates and runs `cfd_cli.py include-instrument` again.
         pending_entries = get_pending_entries()
-        adoptions, foreign = _reconcile_unknown_positions(positions_by_instrument, tracked_open, pending_entries)
+        adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions_by_instrument, tracked_open, pending_entries)
         for contract_id, leg_meta in adoptions:
             record_open_trade(contract_id, leg_meta)
             tracked_open[str(contract_id)] = leg_meta
@@ -535,6 +704,13 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 leg_meta.get("instrument", ""), contract_id,
             )
         for pending_instrument in pending_entries:
+            pending = pending_entries[pending_instrument]
+            if pending.get("quota_intent"):
+                # An absent position may already have closed at the broker.
+                # Do not erase an ambiguous quota buy without attribution.
+                if not any(m.get("instrument") == pending_instrument for _, m in adoptions):
+                    exclude_instrument(pending_instrument, "unresolved quota buy intent")
+                    continue
             clear_pending_entry(pending_instrument)
         excluded = dict(state.get("excluded_instruments") or {})
         for f in foreign:
@@ -547,6 +723,21 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 "Virtual equity still reflects its balance impact (derived from the raw broker balance delta, "
                 "not per-trade attribution). Investigate manually.",
                 f["instrument"], f["contract_id"],
+            )
+        for a in ambiguous:
+            reason = (
+                f"unresolved position attribution: contract {a['contract_id']} ({a['side']}) has a pending entry "
+                "on this instrument, but its side didn't uniquely identify which pending leg it is -- never "
+                "guessed. Investigate, then `include-instrument` to resume"
+            )
+            exclude_instrument(a["instrument"], reason)
+            excluded[a["instrument"]] = reason
+            logger.warning(
+                "UNRESOLVED ATTRIBUTION: %s contract %d (%s) matches a pending entry's instrument but not "
+                "uniquely by side -- likely one of this bot's own positions (not necessarily foreign), but "
+                "not safely attributable to a specific pending leg. Instrument auto-excluded from new "
+                "entries pending investigation.",
+                a["instrument"], a["contract_id"], a["side"],
             )
 
         # Portfolio Risk Governor snapshot: every position this system
@@ -566,7 +757,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 notional=meta.get("stake", 0.0) * meta.get("multiplier", 0.0),
             )
             for cid, meta in tracked_open.items()
-            if int(cid) not in reconciled_ids
+            if int(cid) not in reconciled_ids and _owned_by(meta, "core_h1")
         ]
         risk_ceilings = PortfolioRiskCeilings(
             max_thesis_risk_pct=settings.cfd_max_thesis_risk_pct,
@@ -594,6 +785,14 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             bars = await broker.get_candles(instrument, granularity_seconds=GRANULARITY_SECONDS, count=CANDLE_COUNT)
             if len(bars) < 2:
                 logger.debug("%s: not enough candles yet", instrument)
+                record_incident(
+                    "data_quality",
+                    severity="warning",
+                    message="insufficient candle history",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"bar_count": len(bars)},
+                )
                 _record(instrument, "NO_TRADE", "insufficient candle history")
                 continue
 
@@ -605,6 +804,21 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 volatility_lookback=settings.cfd_regime_volatility_lookback,
                 unstable_volatility_ratio=settings.cfd_regime_unstable_volatility_ratio,
             )
+
+            # Event context is SHADOW-ONLY until blackout validation clears
+            # the project's TRAIN/TEST + forward qualification discipline.
+            # We tag event windows now so later analysis has point-in-time
+            # evidence; this does not alter BUY/SELL/NO TRADE yet.
+            matched_event = in_blackout_window(datetime.now(timezone.utc), OFFICIAL_EVENTS)
+            if matched_event is not None:
+                record_incident(
+                    "event_blackout",
+                    severity="info",
+                    message=f"shadow event window: {matched_event.name}",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "mode": "shadow_only"},
+                )
 
             # Paper Trading runs independently of the real position below
             # -- every PAPER-state strategy gets evaluated on this same
@@ -618,6 +832,15 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             for strategy_tag, group_legs in strategy_groups.items():
                 first_meta = tracked_open.get(str(group_legs[0]["contract_id"]))
+                # Short-horizon/manual demo probes can be explicitly marked
+                # broker_managed_only. Their timeframe-specific entry logic is
+                # not represented by an ACTIVE H1 strategy, so applying the
+                # H1 strategy's signal-exit here would mix incompatible
+                # timeframes. Deriv's own stop-loss/take-profit remains live;
+                # reconciliation records the realized result on a later run.
+                if first_meta and first_meta.get("broker_managed_only"):
+                    occupied_tags.add(strategy_tag)
+                    continue
                 exit_entry = _resolve_exit_strategy_entry(first_meta)
                 if exit_entry is None:
                     logger.warning(
@@ -674,19 +897,34 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                         "%s: closing %s leg (contract %d, %s position) -- %s",
                         instrument, leg_tag or "untagged", contract_id, in_position, close_reason,
                     )
-                    pop_open_trade(contract_id)
-                    open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
                     equity_before = risk.equity
                     await broker.close_position(contract_id)
                     new_balance = await broker.account_equity()
+                    remaining_ids = await broker.open_contract_ids()
+                    if contract_id in remaining_ids:
+                        raise RuntimeError("Close not confirmed; retaining tracked contract for reconciliation")
+                    remaining_tracked = list_open_trades()
+                    remaining_reserved = _reserved_stake_for_open_ids(remaining_tracked, remaining_ids)
                     new_equity = equity_for_account(
-                        new_balance, account_type, broker_baseline, settings.cfd_virtual_starting_capital
+                        new_balance + remaining_reserved,
+                        account_type,
+                        broker_baseline,
+                        settings.cfd_virtual_starting_capital,
                     )
-                    pnl = round(new_equity - equity_before, 2)
+                    pnl = await broker.settled_profit(contract_id)
                     risk.register_close(pnl)
                     equity = new_equity
                     if meta:
-                        record_trade(
+                        # One atomic settlement (equity mutation, Trade
+                        # Database queue, and open_trades removal together,
+                        # keyed by contract_id) instead of three separate
+                        # calls -- see commit_trade_settlement's docstring
+                        # for the double-counting bug this replaces (a
+                        # confirmed $4.50 win applied twice took a $100
+                        # account to $109 when record_virtual_close
+                        # succeeded but record_trade then raised, leaving
+                        # this contract un-popped for a next-run retry).
+                        commit_trade_settlement(
                             TradeRecord(
                                 contract_id=contract_id,
                                 instrument=instrument,
@@ -705,6 +943,10 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                                 regime=meta.get("regime"),
                                 thesis_key=meta.get("thesis_key"),
                                 leg=leg_tag,
+                                virtual_account_id=meta.get("virtual_account_id"),
+                                horizon=meta.get("horizon"),
+                                entry_timeframe=meta.get("entry_timeframe"),
+                                context_timeframes=meta.get("context_timeframes"),
                             )
                         )
                     else:
@@ -713,6 +955,13 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                             "(opened before trade logging existed) -- pnl not logged to the trade database.",
                             instrument, contract_id,
                         )
+                        # No tracked metadata means commit_trade_settlement
+                        # (which needs meta to build a TradeRecord) never
+                        # ran to pop this -- do it directly so a
+                        # metadata-less contract doesn't stay tracked open
+                        # forever.
+                        pop_open_trade(contract_id)
+                    open_risk_positions = [p for p in open_risk_positions if p.contract_id != contract_id]
 
                 if group_still_open:
                     occupied_tags.add(strategy_tag)
@@ -730,7 +979,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     "%s: NO TRADE (regime=%s, no ACTIVE strategy suited to it with an available slot)",
                     instrument, regime,
                 )
-                _record(instrument, "NO_TRADE", f"regime={regime}, no ACTIVE strategy suited to it with an available slot")
+                _record(instrument, "NO_TRADE", f"regime={regime}, no ACTIVE strategy suited to it with an available slot", regime=regime)
                 continue
 
             strategy = entry_candidate.build()
@@ -740,7 +989,7 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", instrument, signal.reason)
-                _record(instrument, "NO_TRADE", signal.reason)
+                _record(instrument, "NO_TRADE", signal.reason, regime=regime, strategy=f"{entry_candidate.name}@{entry_candidate.version}")
                 continue
             if total_open_slots >= effective_max_positions:
                 logger.info("Skipping %s: max open positions reached", instrument)
@@ -767,7 +1016,15 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             )
             if rejection is not None:
                 logger.info("Skipping %s: Portfolio Risk Governor rejected this entry -- %s", instrument, rejection)
-                _record(instrument, "REJECTED", rejection)
+                record_incident(
+                    "risk_control",
+                    severity="info",
+                    message=rejection,
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "strategy": strategy_tag},
+                )
+                _record(instrument, "REJECTED", rejection, regime=regime, strategy=strategy_tag)
                 continue
 
             # Adaptive Exit Management (trading.cfd.exit_manager, see
@@ -791,6 +1048,8 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
 
             entry_thesis_key = compute_thesis_key(instrument, side)
             entry_time = _now_iso()
+            virtual_account_id = account_for_strategy(strategy_tag) or "core_h1"
+            virtual_account = virtual_accounts.get(virtual_account_id, {})
             leg_metas = []
             for leg_tag, leg_terms in legs_to_open:
                 leg_meta = {
@@ -806,6 +1065,10 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                     "equity_before": risk.equity,
                     "regime": regime,
                     "leg": leg_tag,
+                    "virtual_account_id": virtual_account_id,
+                    "horizon": virtual_account.get("horizon", "core"),
+                    "entry_timeframe": virtual_account.get("entry_timeframe", "H1"),
+                    "context_timeframes": virtual_account.get("context_timeframes", ["H4", "H1"]),
                 }
                 if leg_tag == "runner":
                     leg_meta["trailing_stop"] = TrailingStopState(
@@ -854,9 +1117,17 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
                 risk.register_open()
                 positions_by_instrument[instrument] = opened_legs
                 total_open_slots += 1
-                _record(instrument, "TRADE", f"{side} {strategy_tag} ({len(opened_legs)} leg(s))")
+                _record(instrument, "TRADE", f"{side} {strategy_tag} ({len(opened_legs)} leg(s))", regime=regime, strategy=strategy_tag)
             else:
-                _record(instrument, "ERROR", "order submitted but no contract_id returned for any leg")
+                record_incident(
+                    "broker_error",
+                    severity="error",
+                    message="order submitted but no contract_id returned for any leg",
+                    instrument=instrument,
+                    correlation_id=os.environ.get("GITHUB_RUN_ID"),
+                    metadata={"regime": regime, "strategy": strategy_tag},
+                )
+                _record(instrument, "ERROR", "order submitted but no contract_id returned for any leg", regime=regime, strategy=strategy_tag)
 
         set_daily_risk_tracking(today, risk.daily_start_equity, risk.halted)
         return summary

@@ -1,0 +1,67 @@
+# Runtime repair / Claude handoff — 2026-09-23
+
+PR #14 merged into runtime as 7ad536a05d7f4e702f0433dc9cf4a24fc50af5b9.
+Reran failed workflow 35873570386 (attempt 2, job 107268394714).
+Broker/scheduler step succeeded, but state publication failed:
+`cannot pull with rebase: You have unstaged changes`.
+The previous hard-coded staging list omitted cfd_lab_observations.jsonl.
+A PAPER-FORWARD close was printed, but the state commit did not reach GitHub;
+do not treat that log line as a durably recorded trade or broker fill.
+
+This repair stages all tracked state updates and cfd_*.json/jsonl outputs,
+and archives a runtime snapshot before attempting publication in both main
+scheduler and watchdog. A scoped push trigger on main's trading workflow
+runs the repaired workflow after deployment; all broker gates remain DEMO.
+This is a stopgap for the existing architecture, not a durable external DB.
+
+Scheduler fixes:
+- Keep tracked entry metadata until sell confirmation and accounting finish.
+- Reject a close that still appears in broker portfolio.
+- Read realized profit from the specific settled USD contract, using
+  proposal_open_contract; accept numeric strings but reject unconfirmed,
+  mismatched, non-finite or missing results. No aggregate-balance P&L guesses.
+- External closes must all have confirmed settlements before local processing.
+- Correct observation-count logging (the function returns a list).
+
+Official API reference consulted:
+https://developers.deriv.com/comparison/proposal-open-contract/
+Actual settled-contract response compatibility still needs broker validation.
+
+Validation: 501 offline tests pass, including the existing suite, real local
+Git staging regression, failure injection at sell/balance/confirmation/
+settlement, demo isolation, bounded connection retry and contract P&L parsing.
+
+Outstanding: exactly-once accounting across process interruption, transactional
+journal, persistent service and coordinated ownership across all research
+writers, four-horizon quota execution, realistic simulation and migration.
+Do not call this the completed rebuild. Contract settlement failure deliberately
+retains recovery metadata and aborts this scheduler evaluation. There is no
+claim that a direct Claude session has read this repository handoff.
+
+## Verified deployment outcome
+PR #15 merged runtime fixes; PR #16 merged main scheduler workflows.
+Run https://github.com/sakagitnat/v1/actions/runs/35887954639 completed SUCCESS.
+Job 107272855207: scheduler, state archive and state publication all succeeded.
+Heartbeat saved at 2026-09-23T16:20:08Z (23:20:08 Asia/Bangkok).
+Runtime state commit: 753c439 (324 new forward observation rows logged).
+Latest repository state still tracks 1 open contract and 0 pending entries;
+this count is from persisted state, not an independently queried broker snapshot.
+quota_30m_forward and quota_h1_forward each still show 0 closed trades.
+A PAPER close is not a broker-demo fill. No new complete broker trade lifecycle
+has been verified during this repair, and this run does not certify 24/7 uptime.
+No host/service deployment manifest was found in the inspected runtime tree;
+continuous hosting access must be established for the requested 24/7 rebuild.
+
+## Verified four-horizon quota run
+Run https://github.com/sakagitnat/v1/actions/runs/35890858855 completed SUCCESS.
+The main scheduler and the quota runner both completed, runtime state was archived,
+and publication succeeded. Quota events recorded eight lifecycle events:
+- quota_30m_forward: contract 14125430179, frxEURUSD, P&L -$0.02.
+- quota_h1_forward: contract 14125447779, frxXAUUSD, P&L +$0.01.
+- quota_h4_forward: contract 14125464299, frxGBPUSD, P&L -$0.03.
+- quota_d1_forward: contract 14125479019, frxUSDJPY, P&L -$0.03.
+All four were demo orders closed by the bot and have contract-level settlement evidence.
+The four results prove execution and accounting paths, not strategy profitability;
+forced quota trades remain excluded from qualified strategy performance.
+The persisted state has no quota open trades or pending quota intents after the run.
+The regular strategy scheduler still has one tracked open contract to manage.
