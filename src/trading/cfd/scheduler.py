@@ -28,7 +28,7 @@ from trading.cfd.exit_manager import (
     update_trailing_stop,
 )
 from trading.cfd.operating_mode import NORMAL, effective_max_open_positions, effective_risk_per_trade
-from trading.cfd.paper_trading import run_paper_trading
+from trading.cfd.paper_trading import run_paper_trading, is_fresh_forward_bar
 from trading.cfd.portfolio_allocator import compute_allocations, risk_scale_factor
 from trading.cfd.portfolio_risk import (
     OpenRiskPosition,
@@ -824,7 +824,10 @@ async def run_once(bridge_command_id: Optional[str] = None) -> list[dict]:
             # -- every PAPER-state strategy gets evaluated on this same
             # instrument/candles/regime regardless of what's happening
             # with real (or virtual-real) capital.
-            run_paper_trading(instrument, bars, regime)
+            if is_fresh_forward_bar(bars, "H1"):
+                run_paper_trading(instrument, bars, regime)
+            else:
+                logger.debug("%s: skipping stale/undated H1 PAPER evaluation", instrument)
 
             legs = positions_by_instrument.get(instrument, [])
             strategy_groups = _legs_by_strategy(legs, tracked_open)
