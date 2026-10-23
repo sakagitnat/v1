@@ -45,3 +45,38 @@ def test_expired_probe_only_closes_owned_demo_and_retains_metadata(tmp_path, mon
     broker.close_position.assert_awaited_once_with(1)
     assert state.list_open_trades()["1"]["exit_requested_reason"] == "legacy_demo_probe_max_holding_time"
     assert len(state.list_open_trades()) == 3  # settlement reconciliation owns removal
+
+
+
+def test_checkpoint_rotates_before_staging(monkeypatch):
+    from types import SimpleNamespace
+
+    events = []
+    monkeypatch.setattr(service, "rotate_lab_observations",
+                        lambda: events.append("rotate") or {"rotated": True})
+    monkeypatch.setattr(service, "command",
+                        lambda args, timeout=240: events.append(args[:3]))
+    monkeypatch.setattr(service.subprocess, "run",
+                        lambda *args, **kwargs: SimpleNamespace(returncode=0))
+
+    service.checkpoint()
+    assert events[0] == "rotate"
+    assert events[1] == ["git", "add", "-u"]
+
+
+def test_lab_rotation_preserves_jsonl_bytes_and_bounds_chunks(tmp_path, monkeypatch):
+    from scripts import rotate_cfd_lab_observations as rotation
+
+    monkeypatch.setattr(rotation, "ROTATE_AT", 128)
+    monkeypatch.setattr(rotation, "CHUNK_MAX", 64)
+    active = tmp_path / "cfd_lab_observations.jsonl"
+    original = b"".join((f'{{"n":{n:03d}}}\n').encode() for n in range(40))
+    active.write_bytes(original)
+
+    result = rotation.rotate(active)
+    assert result["rotated"] is True
+    archives = sorted(tmp_path.glob("cfd_lab_observations_archive_*.jsonl"))
+    assert archives
+    assert all(p.stat().st_size <= 64 for p in archives)
+    assert b"".join(p.read_bytes() for p in archives) + active.read_bytes() == original
+    assert rotation.rotate(active) == {"rotated": False}
