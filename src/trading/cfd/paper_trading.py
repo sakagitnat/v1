@@ -162,6 +162,21 @@ def run_paper_trading(instrument: str, bars: pd.DataFrame, regime: str) -> None:
             logger.info("PAPER %s: closed %s %s (pnl=%.2f, %s)", strategy_tag, instrument, in_position, pnl, exit_reason)
             continue
 
+        # The lab collector owns forward PAPER entries for mapped, implemented
+        # virtual accounts. Continue managing legacy registry-keyed positions
+        # above until they close, but never create a second registry-keyed
+        # position against the SAME virtual account's $100 ledger. This
+        # prevents duplicate positions such as -507/-509 in breakout_h1.
+        # Import lazily: lab_collector itself imports this module.
+        if virtual_account_id and virtual_account.get("execution_tier") == "PAPER":
+            from trading.cfd.lab_collector import _GRANULARITY, _strategy_for_tag
+            if (
+                virtual_account.get("entry_timeframe") in _GRANULARITY
+                and virtual_account.get("strategy_tag") == strategy_tag
+                and _strategy_for_tag(strategy_tag) is not None
+            ):
+                continue
+
         if regime not in (entry.suited_regimes or []):
             continue
 
