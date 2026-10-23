@@ -70,7 +70,7 @@ def test_lab_rotation_preserves_jsonl_bytes_and_bounds_chunks(tmp_path, monkeypa
     monkeypatch.setattr(rotation, "ROTATE_AT", 128)
     monkeypatch.setattr(rotation, "CHUNK_MAX", 64)
     active = tmp_path / "cfd_lab_observations.jsonl"
-    original = b"".join((f'{{"n":{n:03d}}}\n').encode() for n in range(40))
+    original = b"".join((f'{{"n":{n}}}\n').encode() for n in range(40))
     active.write_bytes(original)
 
     result = rotation.rotate(active)
