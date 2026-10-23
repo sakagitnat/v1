@@ -54,8 +54,14 @@ def assess(now: datetime, max_age_minutes: float, path: Path = HEARTBEAT_PATH) -
     if age is None:
         return {"healthy": False, "market_expected_open": True, "reason": "heartbeat_missing"}
 
-    healthy = age <= max_age_minutes and data.get("status") != "failure"
-    reason = "fresh" if healthy else ("last_run_failed" if data.get("status") == "failure" else "heartbeat_stale")
+    # Recovery is permitted only after the heartbeat is stale. A fresh
+    # failure remains an incident, not permission to start a duplicate run.
+    healthy = age <= max_age_minutes
+    reason = (
+        "fresh_failure_waiting_for_threshold" if healthy and data.get("status") == "failure"
+        else "fresh" if healthy
+        else "heartbeat_stale"
+    )
     return {
         "healthy": healthy,
         "market_expected_open": True,
@@ -68,7 +74,7 @@ def assess(now: datetime, max_age_minutes: float, path: Path = HEARTBEAT_PATH) -
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--max-age-minutes", type=float, default=40.0)
+    parser.add_argument("--max-age-minutes", type=float, default=70.0)
     args = parser.parse_args()
     result = assess(datetime.now(timezone.utc), args.max_age_minutes)
     print(json.dumps(result, sort_keys=True))
