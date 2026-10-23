@@ -22,7 +22,7 @@ jobs:
       - name: Check scheduler heartbeat
         id: health
         continue-on-error: true
-        run: python scripts/cfd_runner_health.py --max-age-minutes 10
+        run: python scripts/cfd_runner_health.py --max-age-minutes 70
       - name: Dispatch authoritative trading workflow
         if: steps.health.outcome == 'failure'
         env:
