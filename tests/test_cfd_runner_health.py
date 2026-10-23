@@ -48,7 +48,12 @@ def test_failure_or_stale_heartbeat_requires_recovery(tmp_path: Path):
     failed.write_text(
         '{"status":"failure","last_update_at":"2026-09-21T09:59:00+00:00","run_id":"1"}'
     )
-    assert assess(dt(2026, 9, 21, 10, 0), 40, failed)["reason"] == "last_run_failed"
+    recent_failure = assess(dt(2026, 9, 21, 10, 0), 70, failed)
+    assert recent_failure["healthy"] is True
+    assert recent_failure["reason"] == "fresh_failure_waiting_for_threshold"
+    stale_failure = assess(dt(2026, 9, 21, 11, 11), 70, failed)
+    assert stale_failure["healthy"] is False
+    assert stale_failure["reason"] == "heartbeat_stale"
 
     stale = tmp_path / "stale.json"
     stale.write_text(
