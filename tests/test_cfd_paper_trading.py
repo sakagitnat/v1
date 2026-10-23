@@ -321,3 +321,29 @@ def test_stake_below_min_stake_skips_the_trade(tmp_path, monkeypatch):
     pt.run_paper_trading("frxXAUUSD", _bars([100, 100]), "trending")
 
     assert state.get_paper_position("scripted@v1", "frxXAUUSD") is None
+
+
+def test_forward_paper_candle_freshness_blocks_stale_weekend_replays():
+    from datetime import datetime, timezone, timedelta
+
+    bars = _bars([100, 101])
+    bars.index = pd.DatetimeIndex(["2026-10-23T23:20:00Z", "2026-10-23T23:25:00Z"])
+    now = datetime(2026, 10, 23, 23, 30, tzinfo=timezone.utc)
+
+    assert pt.is_fresh_forward_bar(bars, "M5", now=now)
+    assert not pt.is_fresh_forward_bar(bars, "M5", now=now + timedelta(minutes=20))
+    assert not pt.is_fresh_forward_bar(bars, "M15", now=now + timedelta(hours=1))
+    assert not pt.is_fresh_forward_bar(bars, "M5", now=now - timedelta(minutes=10))
+    assert not pt.is_fresh_forward_bar(bars, "UNKNOWN", now=now)
+    assert not pt.is_fresh_forward_bar(bars.reset_index(drop=True), "M5", now=now)
+    assert not pt.is_fresh_forward_bar(bars.tz_localize(None), "M5", now=now)
+
+
+def test_forward_paper_candle_age_uses_last_candle_open_not_last_price():
+    from datetime import datetime, timezone
+
+    bars = _bars([100, 100])
+    bars.index = pd.DatetimeIndex(["2026-10-23T20:00:00Z", "2026-10-23T21:00:00Z"])
+    now = datetime(2026, 10, 23, 23, 30, tzinfo=timezone.utc)
+    assert pt.paper_bar_age_seconds(bars, now=now) == 9000
+    assert not pt.is_fresh_forward_bar(bars, "H1", now=now)
