@@ -50,44 +50,44 @@
         "H1"
       ]
     },
-    "virtual:iso_trend_h1|frxXAUUSD": {
-      "contract_id": -482,
+    "virtual:iso_meanrev_m15|frxEURUSD": {
+      "contract_id": -496,
       "side": "long",
-      "entry_price": 4155.4,
-      "stop_price": 4127.981189306802,
-      "target_price": 4182.8188106931975,
-      "stake": 7.81,
+      "entry_price": 1.11939,
+      "stop_price": 1.1185493439647485,
+      "target_price": 1.120020492026439,
+      "stake": 68.82,
       "multiplier": 20,
       "risk_amount": 1.03,
-      "entry_time": "2026-10-15T09:03:14.537694+00:00",
-      "equity_before": 103.01,
-      "regime": "trending",
-      "virtual_account_id": "iso_trend_h1",
+      "entry_time": "2026-10-23T07:29:16.678380+00:00",
+      "equity_before": 103.36,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m15",
       "horizon": "isolated",
-      "entry_timeframe": "H1",
+      "entry_timeframe": "M15",
       "context_timeframes": [
-        "H4",
-        "H1"
+        "H1",
+        "M15"
       ]
     },
-    "virtual:iso_meanrev_m5|frxXAUUSD": {
-      "contract_id": -495,
+    "virtual:iso_meanrev_m15|frxGBPUSD": {
+      "contract_id": -497,
       "side": "long",
-      "entry_price": 4164.3,
-      "stop_price": 4159.442387313405,
-      "target_price": 4167.943209514947,
-      "stake": 50.1,
+      "entry_price": 1.33743,
+      "stop_price": 1.3365017922697118,
+      "target_price": 1.338126155797716,
+      "stake": 74.46,
       "multiplier": 20,
-      "risk_amount": 1.17,
-      "entry_time": "2026-10-17T02:29:24.450415+00:00",
-      "equity_before": 116.89,
+      "risk_amount": 1.03,
+      "entry_time": "2026-10-23T07:29:16.717458+00:00",
+      "equity_before": 103.36,
       "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
+      "virtual_account_id": "iso_meanrev_m15",
       "horizon": "isolated",
-      "entry_timeframe": "M5",
+      "entry_timeframe": "M15",
       "context_timeframes": [
-        "M15",
-        "M5"
+        "H1",
+        "M15"
       ]
     }
   },
@@ -95,16 +95,16 @@
     "virtual:iso_breakout_m15": 103.75,
     "virtual:iso_breakout_m5": 115.76,
     "virtual:breakout_h1": 90.29,
-    "virtual:iso_trend_h1": 104.04,
+    "virtual:iso_trend_h1": 103.01,
     "virtual:iso_meanrev_m15": 103.36,
-    "virtual:iso_meanrev_m5": 116.89,
+    "virtual:iso_meanrev_m5": 115.72,
     "virtual:iso_trend_m15": 98.11,
     "virtual:iso_trend_m5": 102.72,
     "donchian_breakout@v2": 96.07
   },
-  "paper_trade_counter": 495,
+  "paper_trade_counter": 497,
   "daily_risk_tracking": {
-    "date": "2026-10-17",
+    "date": "2026-10-23",
     "start_equity": 107.0,
     "halted": false
   },
@@ -339,12 +339,12 @@
         "H1"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 104.04,
+      "equity": 103.01,
       "high_water_mark": 104.06,
-      "realized_pnl": 4.04,
-      "closed_trades": 8,
+      "realized_pnl": 3.01,
+      "closed_trades": 9,
       "wins": 6,
-      "losses": 2,
+      "losses": 3,
       "drawdown_from_start_pct": 0.0
     },
     "iso_trend_m15": {
@@ -478,12 +478,12 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 116.89,
+      "equity": 115.72,
       "high_water_mark": 118.41,
-      "realized_pnl": 16.89,
-      "closed_trades": 128,
+      "realized_pnl": 15.72,
+      "closed_trades": 129,
       "wins": 83,
-      "losses": 45,
+      "losses": 46,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m1": {
@@ -13001,26 +13001,26 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 995715,
-    "quota_h1_forward": 497857,
-    "quota_h4_forward": 124464,
-    "quota_d1_forward": 20744,
-    "quota_h1_signal": 497857
+    "quota_30m_forward": 995966,
+    "quota_h1_forward": 497983,
+    "quota_h4_forward": 124495,
+    "quota_d1_forward": 20749,
+    "quota_h1_signal": 497983
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
     "champion_m30": {
-      "date": "2026-10-17",
+      "date": "2026-10-23",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_h4": {
-      "date": "2026-10-17",
+      "date": "2026-10-23",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_d1": {
-      "date": "2026-10-17",
+      "date": "2026-10-23",
       "start_equity": 100.0,
       "halted": false
     }
