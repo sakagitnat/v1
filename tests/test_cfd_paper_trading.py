@@ -238,6 +238,78 @@ def test_isolated_account_manages_existing_exit_regardless_of_regime(tmp_path, m
     assert trades[0]["exit_reason"] == "paper-forward: stop_loss"
 
 
+
+def test_lab_owned_account_has_single_paper_entry_path(tmp_path, monkeypatch):
+    """Registry PAPER and virtual lab must not open two contracts in breakout_h1.
+
+    The 2026-10-23 forward trace had -507 and -509 on XAUUSD, both
+    attributed to the same virtual $100 account through different keys.
+    """
+    strategy = _ScriptedStrategy({
+        0: Signal("frxXAUUSD", Action.SELL, price=100.0, stop_price=105.0, take_profit_price=90.0),
+    })
+    entry = _FakeEntry("donchian_breakout", "v2", ["trending"], strategy)
+    _setup(tmp_path, monkeypatch, [entry])
+    account = {
+        "account_id": "breakout_h1", "execution_tier": "PAPER",
+        "strategy_tag": "donchian_breakout@v2", "entry_timeframe": "H1",
+        "equity": 100.0, "starting_equity": 100.0, "horizon": "swing",
+        "context_timeframes": ["H4", "H1"],
+    }
+    monkeypatch.setattr(pt, "account_for_strategy", lambda tag: "breakout_h1")
+    monkeypatch.setattr(pt, "ensure_virtual_accounts", lambda: {"breakout_h1": account})
+    monkeypatch.setattr(pt, "get_registry_entry", lambda name, version: entry)
+
+    bars = _bars([100, 100])
+    pt.run_paper_trading("frxXAUUSD", bars, "trending")
+    assert state.get_paper_position("donchian_breakout@v2", "frxXAUUSD") is None
+
+    # The intended lab path still opens the PAPER position for this account.
+    pt.run_virtual_account_paper("breakout_h1", "frxXAUUSD", bars, "trending", strategy)
+    lab_position = state.get_paper_position("virtual:breakout_h1", "frxXAUUSD")
+    assert lab_position is not None
+    assert lab_position["virtual_account_id"] == "breakout_h1"
+    assert len(state.load_state()["paper_positions"]) == 1
+
+
+def test_legacy_registry_paper_position_still_exits_without_reentry(tmp_path, monkeypatch):
+    """Do not orphan already-open legacy positions while changing ownership."""
+    strategy = _ScriptedStrategy({
+        1: Signal("frxXAUUSD", Action.BUY, price=96.0, stop_price=91.0, take_profit_price=106.0),
+    })
+    entry = _FakeEntry("donchian_breakout", "v2", ["trending"], strategy)
+    _setup(tmp_path, monkeypatch, [entry])
+    account = {
+        "account_id": "breakout_h1", "execution_tier": "PAPER",
+        "strategy_tag": "donchian_breakout@v2", "entry_timeframe": "H1",
+        "equity": 100.0, "starting_equity": 100.0, "horizon": "swing",
+        "context_timeframes": ["H4", "H1"],
+    }
+    state.set_virtual_accounts({"breakout_h1": account})
+    monkeypatch.setattr(pt, "account_for_strategy", lambda tag: "breakout_h1")
+    monkeypatch.setattr(pt, "ensure_virtual_accounts", lambda: {"breakout_h1": account})
+    state.set_paper_position("donchian_breakout@v2", "frxXAUUSD", {
+        "contract_id": -509, "side": "long", "entry_price": 100.0,
+        "stop_price": 95.0, "target_price": 110.0, "stake": 10.0,
+        "multiplier": 20, "risk_amount": 1.0,
+        "entry_time": "2026-10-23T14:27:39+00:00",
+        "regime": "trending", "virtual_account_id": "breakout_h1",
+    })
+    state.set_paper_equity("donchian_breakout@v2", 100.0)
+    bars = _bars([97, 96], lows=[97, 94], highs=[97, 96])
+    pt.run_paper_trading("frxXAUUSD", bars, "trending")
+    assert state.get_paper_position("donchian_breakout@v2", "frxXAUUSD") is None
+    trades = load_trades(tmp_path / "cfd_paper_trades.jsonl")
+    assert len(trades) == 1
+    assert trades[0]["contract_id"] == -509
+    assert trades[0]["pnl"] == -10.0
+
+    # A later eligible signal cannot recreate a second registry-keyed leg.
+    pt.run_paper_trading("frxXAUUSD", bars, "trending")
+    assert state.get_paper_position("donchian_breakout@v2", "frxXAUUSD") is None
+    assert len(load_trades(tmp_path / "cfd_paper_trades.jsonl")) == 1
+
+
 def test_stake_below_min_stake_skips_the_trade(tmp_path, monkeypatch):
     from trading.config import settings
 
