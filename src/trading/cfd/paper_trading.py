@@ -63,6 +63,39 @@ PAPER_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_paper_trad
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+# A forward PAPER fill must use a recent market candle. Manual runs outside
+# market hours can receive the same final Friday candle repeatedly; without
+# this gate, historical high/low from that candle is reused to manufacture
+# fresh entry/exit P&L on every subsequent run.
+_FORWARD_BAR_SECONDS = {"H4": 14400, "H1": 3600, "M15": 900, "M5": 300, "M1": 60}
+
+
+def paper_bar_age_seconds(bars: pd.DataFrame, now: datetime | None = None) -> float | None:
+    """Wall-clock age of the last broker candle OPEN time; fail closed if unknown."""
+    if bars.empty or not isinstance(bars.index, pd.DatetimeIndex):
+        return None
+    last = bars.index[-1]
+    if pd.isna(last) or last.tzinfo is None:
+        return None
+    current = pd.Timestamp(now if now is not None else datetime.now(timezone.utc))
+    if current.tzinfo is None:
+        return None
+    return (current - last).total_seconds()
+
+
+def is_fresh_forward_bar(bars: pd.DataFrame, timeframe: str, now: datetime | None = None) -> bool:
+    """Allow PAPER evaluation only on a plausible current candle.
+
+    Deriv candle epochs represent candle OPEN time. A full bar plus five
+    minutes of transport/scheduler tolerance is allowed; a minimum ten-minute
+    window accommodates short timeframes. No timestamp/unknown TF fails closed.
+    This does not retroactively alter or delete previously recorded PAPER P&L.
+    """
+    seconds = _FORWARD_BAR_SECONDS.get(timeframe)
+    age = paper_bar_age_seconds(bars, now=now)
+    return seconds is not None and age is not None and -60 <= age <= max(seconds + 300, 600)
+
+
 
 def _pnl(side: str, entry: float, exit_price: float, stake: float, multiplier: int) -> float:
     """Same shape as CfdBacktestEngine._pnl -- capped at -stake, matching
