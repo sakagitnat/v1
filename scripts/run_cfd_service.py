@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.cfd_scheduler_heartbeat import mark
+from scripts.rotate_cfd_lab_observations import rotate as rotate_lab_observations
 
 
 def command(args, timeout=240):
@@ -19,6 +20,12 @@ def command(args, timeout=240):
 
 
 def checkpoint():
+    # Rotate the append-only lab ledger BEFORE staging any checkpoint.
+    # Archive chunks remain lossless and below GitHub's 100 MB file limit.
+    # This also runs on the failure path, preserving recovery metadata.
+    rotation = rotate_lab_observations()
+    if rotation.get("rotated"):
+        print(f"CFD_LAB_ROTATION={rotation}", flush=True)
     command(["git", "add", "-u", "--", "state"])
     files = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "state").glob("cfd_*.json*"))
     if files:
