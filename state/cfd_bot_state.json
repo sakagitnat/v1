@@ -30,26 +30,6 @@
         "H4",
         "H1"
       ]
-    },
-    "virtual:iso_trend_m5|frxUSDJPY": {
-      "contract_id": -504,
-      "side": "short",
-      "entry_price": 156.731,
-      "stop_price": 156.84929443158055,
-      "target_price": 156.61270556841944,
-      "stake": 68.05,
-      "multiplier": 20,
-      "risk_amount": 1.03,
-      "entry_time": "2026-10-23T12:30:46.225459+00:00",
-      "equity_before": 102.72,
-      "regime": "trending",
-      "virtual_account_id": "iso_trend_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
@@ -60,7 +40,7 @@
     "virtual:iso_meanrev_m15": 104.92,
     "virtual:iso_meanrev_m5": 114.56,
     "virtual:iso_trend_m15": 97.13,
-    "virtual:iso_trend_m5": 102.72,
+    "virtual:iso_trend_m5": 103.75,
     "donchian_breakout@v2": 97.75
   },
   "paper_trade_counter": 504,
@@ -340,11 +320,11 @@
         "M5"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 102.72,
-      "high_water_mark": 103.51,
-      "realized_pnl": 2.72,
-      "closed_trades": 26,
-      "wins": 14,
+      "equity": 103.75,
+      "high_water_mark": 103.75,
+      "realized_pnl": 3.75,
+      "closed_trades": 27,
+      "wins": 15,
       "losses": 12,
       "drawdown_from_start_pct": 0.0
     },
