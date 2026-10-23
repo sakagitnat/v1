@@ -17,7 +17,7 @@ from trading.cfd.strategy import EmaCrossoverStrategy
 from trading.cfd.breakout import DonchianBreakoutStrategy
 from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.virtual_accounts import ensure_virtual_accounts, DEFAULT_VIRTUAL_ACCOUNTS
-from trading.cfd.paper_trading import run_virtual_account_paper
+from trading.cfd.paper_trading import run_virtual_account_paper, is_fresh_forward_bar, paper_bar_age_seconds
 
 LAB_LOG_PATH = Path(__file__).resolve().parents[3] / "state" / "cfd_lab_observations.jsonl"
 
@@ -107,6 +107,10 @@ async def collect_lab_observations(broker, instruments, run_id=None):
                 close = pd.to_numeric(df["close"], errors="coerce").dropna()
                 if close.empty:
                     continue
+                # Forward PAPER execution is forbidden on stale candles (e.g.
+                # a manual weekend run replaying Friday's last OHLC).
+                bar_age = paper_bar_age_seconds(df)
+                bar_fresh = is_fresh_forward_bar(df, tf)
                 regime = classify_regime(df)
                 volatility = classify_volatility(df)
                 signal = _latest_signal(EmaCrossoverStrategy(), instrument, df)
@@ -117,13 +121,16 @@ async def collect_lab_observations(broker, instruments, run_id=None):
                     "account": spec.account_id, "tier": spec.execution_tier,
                     "strategy": spec.strategy_tag, "timeframe": tf, "instrument": instrument,
                     "regime": regime, "volatility": volatility, "close": float(close.iloc[-1]),
+                    "last_bar_time": df.index[-1].isoformat() if isinstance(df.index, pd.DatetimeIndex) else None,
+                    "last_bar_age_seconds": round(bar_age, 1) if bar_age is not None else None,
+                    "paper_forward_bar_fresh": bar_fresh,
                     "ema_action": (signal.action.value if hasattr(signal.action, "value") else str(signal.action)) if signal else "hold",
                     "breakout_action": (breakout.action.value if hasattr(breakout.action, "value") else str(breakout.action)) if breakout else "hold",
                     "meanrev_action": (meanrev.action.value if hasattr(meanrev.action, "value") else str(meanrev.action)) if meanrev else "hold",
                 }
                 observations.append(obs)
                 _append(obs)
-                if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe:
+                if spec.execution_tier == "PAPER" and tf == spec.entry_timeframe and bar_fresh:
                     strategy = _strategy_for_tag(spec.strategy_tag)
                     if strategy is not None:
                         run_virtual_account_paper(spec.account_id, instrument, df, regime, strategy)
