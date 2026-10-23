@@ -112,3 +112,30 @@ def test_crypto_accounts_are_seeded_as_shadow_tier_with_no_strategy_tag():
     for account_id in ("crypto_btc_h1", "crypto_eth_h1"):
         assert accounts[account_id]["execution_tier"] == virtual_accounts.SHADOW
         assert accounts[account_id]["strategy_tag"] is None
+
+
+def test_stale_market_data_records_observations_but_never_fills_paper(monkeypatch):
+    broker = Mock()
+    broker.get_candles = AsyncMock(return_value=_bars())  # old historical bars
+    paper = Mock()
+    monkeypatch.setattr(lab_collector, "run_virtual_account_paper", paper)
+
+    observations = asyncio.run(collect_lab_observations(broker, instruments=["frxEURUSD"], run_id="stale"))
+    assert observations
+    assert any(o.get("paper_forward_bar_fresh") is False for o in observations)
+    assert all(o.get("last_bar_time") for o in observations if "close" in o)
+    paper.assert_not_called()
+
+
+def test_recent_market_data_allows_isolated_paper_evaluation(monkeypatch):
+    bars = _bars()
+    bars.index = pd.date_range(end=pd.Timestamp.now(tz="UTC").floor("min"),
+                               periods=len(bars), freq="5min", tz="UTC")
+    broker = Mock()
+    broker.get_candles = AsyncMock(return_value=bars)
+    paper = Mock()
+    monkeypatch.setattr(lab_collector, "run_virtual_account_paper", paper)
+
+    observations = asyncio.run(collect_lab_observations(broker, instruments=["frxEURUSD"], run_id="fresh"))
+    assert any(o.get("paper_forward_bar_fresh") is True for o in observations)
+    assert paper.call_count > 0
