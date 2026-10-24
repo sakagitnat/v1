@@ -1,6 +1,8 @@
+import asyncio
 import json
+from unittest.mock import AsyncMock, Mock
 
-from scripts.run_cfd_trading import run_bridge
+from scripts.run_cfd_trading import run_bridge, run_normal
 
 
 def test_run_bridge_reports_ok_with_instrument_summary(monkeypatch, capsys):
@@ -37,3 +39,28 @@ def test_run_bridge_reports_error_without_leaking_the_exception_message(monkeypa
 
     out = capsys.readouterr().out
     assert "super-secret-value" not in out
+
+
+def test_run_normal_runs_champions_after_run_once_on_the_same_broker(monkeypatch):
+    calls = []
+
+    async def fake_run_once():
+        calls.append("run_once")
+
+    async def fake_run_champions(broker):
+        calls.append("run_champions")
+        assert broker is fake_broker
+
+    fake_broker = Mock()
+    fake_broker.connect = AsyncMock()
+    fake_broker.close = AsyncMock()
+
+    monkeypatch.setattr("scripts.run_cfd_trading.run_once", fake_run_once)
+    monkeypatch.setattr("scripts.run_cfd_trading.run_champions", fake_run_champions)
+    monkeypatch.setattr("scripts.run_cfd_trading.DerivBroker", lambda: fake_broker)
+
+    asyncio.run(run_normal())
+
+    assert calls == ["run_once", "run_champions"]
+    fake_broker.connect.assert_awaited_once()
+    fake_broker.close.assert_awaited_once()

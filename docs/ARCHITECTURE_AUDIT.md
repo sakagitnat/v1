@@ -1322,6 +1322,171 @@ capital model. These all still match the revised vision as-is.
     user's own explicit go-ahead for that specific step — this entry
     documents the code + test state only. Still not synced to `main`; no
     live trading enabled; `CFD_ALLOW_LIVE_TRADING=false` unchanged.
+- **2026-09-24 — Timeframe-champion account foundation (M30/H4/D1)
+  built on `gpt/autonomous-demo-runner`.** User's explicit spec after the
+  earlier GPT autonomous-operation handoff (see the many "STATUS
+  CHECKPOINT" issue #5 comments spanning 2026-09-21 through 09-24): four
+  isolated $100 "champion" accounts, one per timeframe (30m/1H/4H/1D),
+  each running whichever strategy has most recently cleared TRAIN/TEST/
+  walk-forward at that timeframe's own granularity — never a shared risk
+  pool across the four (confirmed explicitly with the user). Exit is
+  price-bound (ATR stop/target, Deriv's own `stop_loss`/`take_profit`
+  enforced server-side) or the strategy's own signal exit — **never a
+  timeframe-duration-based forced close**; an earlier "yield up to 2x the
+  timeframe's duration before force-closing" proposal was replaced with
+  this after a design discussion (time-based extension while losing is
+  functionally "let the loser run," the same trap as martingale/revenge
+  trading issue #5 §3 already forbids, even though it isn't sizing-based).
+  - **H1's champion is `core_h1`, already wired** — GPT's autonomous
+    work already tags every `run_once()`-opened `ema_crossover@v1`
+    position with `virtual_account_id="core_h1"` and calls
+    `record_virtual_close()` on exit. No new code needed for H1.
+  - **Real bug found and fixed before any of this could be trusted**:
+    `run_once()` built `positions_by_instrument`/`open_risk_positions`
+    straight from every open Deriv contract, with no filter for which
+    isolated account actually owns each one. A champion's (or a GPT
+    research/quota account's) open position on an instrument `core_h1`
+    also trades would reach `_resolve_exit_strategy_entry()` carrying an
+    unrecognized strategy tag, fall back to "the sole ACTIVE strategy"
+    (`ema_crossover@v1`), and get wrongly exit-managed and double-counted
+    into `core_h1`'s own Portfolio Risk Governor snapshot. New
+    `scheduler._owned_by()` filters both to `virtual_account_id in
+    (None, "core_h1")` — every other account is now as invisible to
+    `run_once()`'s own accounting as a different trader's position would
+    be on a shared broker login.
+  - **`trading/cfd/timeframe_champion.py`** (new): `assign()`/
+    `get_assignment()`/`unassign()` for the three managed champions
+    (`champion_m30`, `champion_h4`, `champion_d1`). Deliberately separate
+    from `strategy_registry.py` (that registry is the single H1
+    production pool's lifecycle timeline, read directly by the live
+    scheduler — forcing four independent per-timeframe assignments onto
+    it would impose a single-timeline model on something meant to vary
+    independently) and deliberately not stored via
+    `VirtualAccountSpec.strategy_tag` either (that field gets reconciled
+    back to the static default on every `ensure_virtual_accounts()`
+    call, which would silently erase a live assignment). Reuses
+    `strategy_registry.STRATEGY_CLASSES` to build the actual strategy
+    object. Every reassignment keeps the prior one in an in-record
+    history list.
+  - **`trading/cfd/champion_scheduler.py`** (new): the M30/H4/D1 loop.
+    Reuses `CfdRiskManager` (own equity, own daily-loss breaker per
+    account — new `state.py` keys `champion_daily_risk_tracking` and
+    `timeframe_champions`), `classify_regime`, `broker.
+    submit_multiplier_order`/`settled_profit` (exact contract-level P&L
+    on close, not a balance-delta guess — simpler and more precise than
+    `run_once()`'s multi-leg reconciliation since each champion holds at
+    most one position per instrument). Checks the assigned strategy's own
+    exit signal on every still-open position, not just Deriv's stop/
+    target. Must always run in the same process as `run_once()`, never a
+    separately scheduled workflow — `run_cfd_trading.py`'s `run_normal()`
+    now calls `run_champions()` right after `run_once()` finishes, on a
+    fresh `DerivBroker()` connection, before exiting. This is what
+    actually prevents the two from ever racing on the shared
+    `open_trades` state, the same class of bug the earlier
+    `cfd-ai-demo-bridge.yml` concurrency-group fix was about.
+  - **All three champions start unassigned** — a standing NO TRADE for
+    every instrument at every one of the three new timeframes, not an
+    error, until a real candidate clears TRAIN/TEST/walk-forward there.
+    `optimize_cfd_strategy.py`'s `YFINANCE_INTERVAL_BY_GRANULARITY` was
+    missing 1800s (30m) and 14400s (4h) entries — every optimizer script
+    imports this and silently fell back to 1h data for any unmapped
+    granularity, which would have validated a strategy against candles
+    it will never see live at M30/H4. Fixed (14400 resamples native 1h
+    yfinance data to 4h bars; Yahoo has no native 4h endpoint) before
+    this could bite the promotion pipeline that still needs building.
+  - 26 new tests across `test_cfd_timeframe_champion.py`,
+    `test_cfd_champion_scheduler.py`, `test_cfd_scheduler.py` (`_owned_by`),
+    `test_run_cfd_trading.py` (`run_normal()` sequencing), and
+    `test_optimize_cfd_strategy_yfinance.py`. Full suite: 542 passed.
+  - **Not yet done**: the promotion pipeline itself (running the existing
+    `optimize_cfd_*.py` TRAIN/TEST scripts at each new granularity against
+    the seven already-implemented strategy classes to actually assign a
+    champion its first strategy), decay-based auto-swap for champions
+    (an analogue of `decay_supervisor.py`, scoped to one champion at a
+    time), and cross-timeframe context as anything more than data sitting
+    in `CHAMPION_SPECS`. Also fixed a separate, unrelated bug found while
+    reconciling with GPT's 3-day autonomous-operation branch:
+    `lab_collector._strategy_for_tag()` silently defaulted 13 unmapped
+    virtual-account strategy tags (momentum/hybrid/main/family/hr20/news
+    families) to `EmaCrossoverStrategy()`, contaminating the isolated
+    strategy-comparison data those accounts exist to produce — now
+    returns `None` and the caller skips recording rather than mislabel.
+    No live trading enabled anywhere in this work; `CFD_ALLOW_LIVE_
+    TRADING=false` unchanged; not live-smoke-tested yet (needs the
+    user's go-ahead for that specific step, same standing rule as every
+    other execution-adjacent change).
+
+- **2026-09-24 (later same day) — Five bugs in `champion_scheduler.py`
+  found by user review before any champion was ever assigned a
+  strategy** (all three were still unassigned at review time, so none of
+  this had opened a real position). Confirmed each against the live code
+  and fixed all five:
+  - **P1: no `paused`/`excluded_instruments` check.** `run_once()` skips
+    its whole run when `state["paused"]`, but `run_cfd_trading.py`'s
+    `run_normal()` called `run_champions()` unconditionally right after
+    — a champion could keep opening positions while the bot was
+    supposedly fully stopped. `_run_one_champion()` now loads state
+    itself and returns a single `NO_TRADE: bot paused` immediately if
+    paused (a full stop, matching `run_once()`'s own semantics, and
+    self-contained rather than trusting the caller to gate it). Excluded
+    instruments now block new entries the same way `run_once()`'s
+    per-instrument loop does — but only new entries: an already-open
+    champion position on a since-excluded instrument still gets managed
+    normally, since exclusion is about not taking on new risk, not
+    marooning an existing one.
+  - **P1: a stale persisted `halted` flag could mask an already-breached
+    day.** `CfdRiskManager.__post_init__` only ever trusted the
+    `initially_halted` bool a caller passed in; if that caller's own
+    end-of-run persist (`set_daily_risk_tracking`/
+    `set_champion_daily_risk_tracking`) never landed — e.g. an exception
+    partway through a run, after equity already moved but before that
+    final call — the next run would read a stale `False` and keep
+    trading past the real breach. User's repro: equity $100→$96 under a
+    3% daily cap, still submitted an order. `__post_init__` now also
+    recomputes `halted` directly from `equity` vs `daily_start_equity` on
+    every construction — the breaker can no longer be masked by a caller
+    failing to persist it, since it's derived from the numbers
+    themselves. Fixed in `risk.py`, so this benefits `core_h1` too, not
+    just champions.
+  - **P1: order submitted before any crash-recovery marker existed.**
+    Champions had none of `run_once()`'s pending-entry mechanism (this
+    was disclosed as a known v1 gap in the module's own docstring, not
+    missed — but real, and now the right time to close it before any
+    champion goes live). Fixed with its own `champion_pending_entries`
+    state namespace (new `state.py` functions), deliberately **not**
+    reusing `run_once()`'s `pending_entries` key: that one gets
+    unconditionally swept clean of everything it doesn't adopt at the
+    end of every single `run_once()` call, and since `run_normal()`
+    always runs `run_once()` first in the same process, sharing the key
+    (even with a composite `f"{account_id}:{instrument}"` name) would
+    have let `run_once()` silently wipe a champion's still-unresolved
+    marker before the champion's own reconciliation this same tick ever
+    saw it — a real bug found while designing the fix, not one that
+    shipped. A pending marker is now set before every order submission
+    and cleared after `record_open_trade` commits; the top of each
+    instrument's turn checks for one first and adopts it if exactly one
+    untracked (by any account) contract matches, or drops it if
+    unresolvable — same one-shot recovery window `run_once()` gives its
+    own pending entries.
+  - **P1: `pop_open_trade` ran before `record_virtual_close`/
+    `record_trade`.** A failure in either of the latter after the former
+    already ran would lose the only local record tying a settled
+    contract back to an account/strategy/thesis, while `open_trades`
+    itself already showed it as closed. Reordered: durable records now
+    persist first, `pop_open_trade` is the last step, so any failure in
+    between leaves the contract correctly still tracked as open for the
+    next run to retry.
+  - **P2: exit rebuilt the strategy with `{}` instead of the params used
+    at entry.** `record_open_trade`'s meta now stores `strategy_params`
+    (the assignment's params at the moment this position was opened);
+    the exit-side `_build_strategy` call reads it back instead of
+    hardcoding `{}` or re-reading the champion's *current* (possibly
+    since-reassigned) assignment — so a position's exit logic always
+    matches what was actually validated and live when it opened.
+  - 15 new tests in `test_cfd_champion_scheduler.py`, `test_cfd_risk.py`,
+    and `test_cfd_state.py`. Full suite: 558 passed. No live trading
+    enabled anywhere in this fix; `CFD_ALLOW_LIVE_TRADING=false`
+    unchanged; still no champion has an assigned strategy.
 
 ## Executive summary
 

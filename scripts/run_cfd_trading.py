@@ -22,6 +22,17 @@ Exits 0 either way in bridge mode: the audit comment is the failure signal
 there, not a red Actions run. The normal hourly schedule (BRIDGE_COMMAND_ID
 unset) is untouched and still raises/fails loudly as before.
 
+After run_once() finishes, also runs the three timeframe-champion
+accounts without their own dedicated loop (M30/H4/D1 -- H1's champion,
+core_h1, is what run_once() itself already trades). Always sequential,
+in this same process, right after run_once() -- never a separately
+scheduled workflow. Both read/write the same shared open_trades state,
+and this is what actually guarantees neither ever executes concurrently
+with the other (see trading.cfd.champion_scheduler's docstring). Skipped
+entirely in bridge mode: the bridge's one-command-one-evaluation
+contract is about run_once() specifically, and champions have no
+command_id to attribute a result to.
+
 Usage: python scripts/run_cfd_trading.py
 """
 import asyncio
@@ -32,6 +43,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from trading.cfd.broker import DerivBroker
+from trading.cfd.champion_scheduler import run_champions
 from trading.cfd.scheduler import run_once
 
 
@@ -46,9 +59,19 @@ def run_bridge(command_id: str) -> dict:
     return result
 
 
+async def run_normal() -> None:
+    await run_once()
+    broker = DerivBroker()
+    try:
+        await broker.connect()
+        await run_champions(broker)
+    finally:
+        await broker.close()
+
+
 if __name__ == "__main__":
     bridge_command_id = os.environ.get("BRIDGE_COMMAND_ID") or None
     if bridge_command_id:
         run_bridge(bridge_command_id)
     else:
-        asyncio.run(run_once())
+        asyncio.run(run_normal())
