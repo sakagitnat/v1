@@ -8,7 +8,10 @@ def test_service_has_single_writer_and_demo_guard():
     assert "group: cfd-trading" in TRADING
     assert "cancel-in-progress: false" in TRADING
     assert 'CFD_ALLOW_LIVE_TRADING: "false"' in TRADING
-    assert "python scripts/run_cfd_service.py --minutes 180" in TRADING
+    # Match the deployed bounded runner; never regress to the old 180-minute service.
+    assert "python scripts/run_cfd_service.py --minutes 8" in TRADING
+    assert "timeout-minutes: 15" in TRADING
+    assert "python scripts/run_cfd_service.py --minutes 180" not in TRADING
     assert "if: always()" in TRADING
     assert "Archive runtime state" in TRADING
 
