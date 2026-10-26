@@ -129,6 +129,66 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:breakout_h1|frxGBPUSD": {
+      "contract_id": -533,
+      "side": "short",
+      "entry_price": 1.33416,
+      "stop_price": 1.3370290245994843,
+      "target_price": 1.329569560640825,
+      "stake": 20.94,
+      "multiplier": 20,
+      "risk_amount": 0.9,
+      "entry_time": "2026-10-26T13:48:25.398074+00:00",
+      "equity_before": 90.07,
+      "regime": "trending",
+      "virtual_account_id": "breakout_h1",
+      "horizon": "swing",
+      "entry_timeframe": "H1",
+      "context_timeframes": [
+        "H4",
+        "H1"
+      ]
+    },
+    "virtual:iso_breakout_m15|frxXAUUSD": {
+      "contract_id": -534,
+      "side": "short",
+      "entry_price": 3999.57,
+      "stop_price": 4014.508155229147,
+      "target_price": 3975.6689516333654,
+      "stake": 13.61,
+      "multiplier": 20,
+      "risk_amount": 1.02,
+      "entry_time": "2026-10-26T13:48:26.163068+00:00",
+      "equity_before": 101.69,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxXAUUSD": {
+      "contract_id": -535,
+      "side": "short",
+      "entry_price": 3999.53,
+      "stop_price": 4009.474389196184,
+      "target_price": 3983.618977286106,
+      "stake": 22.14,
+      "multiplier": 20,
+      "risk_amount": 1.1,
+      "entry_time": "2026-10-26T13:48:26.290977+00:00",
+      "equity_before": 110.08,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -142,7 +202,7 @@
     "virtual:iso_trend_m5": 104.79,
     "donchian_breakout@v2": 97.75
   },
-  "paper_trade_counter": 532,
+  "paper_trade_counter": 535,
   "daily_risk_tracking": {
     "date": "2026-10-26",
     "start_equity": 107.0,
@@ -13041,11 +13101,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996121,
-    "quota_h1_forward": 498060,
+    "quota_30m_forward": 996123,
+    "quota_h1_forward": 498061,
     "quota_h4_forward": 124515,
     "quota_d1_forward": 20752,
-    "quota_h1_signal": 498060
+    "quota_h1_signal": 498061
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
