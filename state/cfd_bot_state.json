@@ -90,26 +90,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m15|frxUSDJPY": {
-      "contract_id": -521,
-      "side": "short",
-      "entry_price": 157.049,
-      "stop_price": 157.23072464532805,
-      "target_price": 156.91270651600396,
-      "stake": 46.47,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-10-26T00:19:40.001688+00:00",
-      "equity_before": 107.54,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_meanrev_m15|frxGBPUSD": {
       "contract_id": -524,
       "side": "short",
@@ -136,7 +116,7 @@
     "virtual:iso_breakout_m5": 110.08,
     "virtual:breakout_h1": 90.98,
     "virtual:iso_trend_h1": 103.01,
-    "virtual:iso_meanrev_m15": 107.54,
+    "virtual:iso_meanrev_m15": 108.35,
     "virtual:iso_meanrev_m5": 118.54,
     "virtual:iso_trend_m15": 97.13,
     "virtual:iso_trend_m5": 104.79,
@@ -498,11 +478,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 107.54,
+      "equity": 108.35,
       "high_water_mark": 110.75,
-      "realized_pnl": 7.54,
-      "closed_trades": 110,
-      "wins": 69,
+      "realized_pnl": 8.35,
+      "closed_trades": 111,
+      "wins": 70,
       "losses": 41,
       "drawdown_from_start_pct": 0.0
     },
@@ -13041,11 +13021,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996098,
-    "quota_h1_forward": 498049,
+    "quota_30m_forward": 996100,
+    "quota_h1_forward": 498050,
     "quota_h4_forward": 124512,
     "quota_d1_forward": 20752,
-    "quota_h1_signal": 498049
+    "quota_h1_signal": 498050
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
