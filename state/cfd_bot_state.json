@@ -11,26 +11,6 @@
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
-    "virtual:breakout_h1|frxXAUUSD": {
-      "contract_id": -507,
-      "side": "short",
-      "entry_price": 3984.33,
-      "stop_price": 4025.3836724448065,
-      "target_price": 3918.6441240883096,
-      "stake": 4.41,
-      "multiplier": 20,
-      "risk_amount": 0.91,
-      "entry_time": "2026-10-23T14:27:35.567397+00:00",
-      "equity_before": 90.98,
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "donchian_breakout@v2|frxXAUUSD": {
       "contract_id": -509,
       "side": "short",
@@ -154,7 +134,7 @@
   "paper_equity": {
     "virtual:iso_breakout_m15": 101.69,
     "virtual:iso_breakout_m5": 110.08,
-    "virtual:breakout_h1": 90.98,
+    "virtual:breakout_h1": 90.07,
     "virtual:iso_trend_h1": 102.64,
     "virtual:iso_meanrev_m15": 107.77,
     "virtual:iso_meanrev_m5": 118.35,
@@ -236,13 +216,13 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 90.98,
+      "equity": 90.07,
       "high_water_mark": 104.99,
-      "realized_pnl": -9.02,
-      "closed_trades": 42,
+      "realized_pnl": -9.93,
+      "closed_trades": 43,
       "wins": 12,
-      "losses": 30,
-      "drawdown_from_start_pct": 9.02
+      "losses": 31,
+      "drawdown_from_start_pct": 9.93
     },
     "intraday_m15": {
       "account_id": "intraday_m15",
@@ -13061,11 +13041,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996119,
-    "quota_h1_forward": 498059,
-    "quota_h4_forward": 124514,
+    "quota_30m_forward": 996121,
+    "quota_h1_forward": 498060,
+    "quota_h4_forward": 124515,
     "quota_d1_forward": 20752,
-    "quota_h1_signal": 498059
+    "quota_h1_signal": 498060
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
