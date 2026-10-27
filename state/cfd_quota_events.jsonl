@@ -21626,3 +21626,8 @@
 {"timestamp": "2026-10-27T05:34:06.795656+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-10-27T05:34:06.804671+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-10-27T05:34:06.813572+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-27T05:35:06.481591+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_30m_forward"}
+{"timestamp": "2026-10-27T05:35:06.491566+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-27T05:35:06.500641+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-10-27T05:35:06.510596+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
+{"timestamp": "2026-10-27T05:35:06.519508+00:00", "run_id": "40455436672", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
