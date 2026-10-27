@@ -22365,3 +22365,8 @@
 {"timestamp": "2026-10-27T23:57:38.477711+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h4_forward", "window_id": 124523}
 {"timestamp": "2026-10-27T23:57:38.486557+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_d1_forward", "window_id": 20753}
 {"timestamp": "2026-10-27T23:57:38.495796+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_signal", "window_id": 498095}
+{"timestamp": "2026-10-27T23:58:38.166360+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 996191}
+{"timestamp": "2026-10-27T23:58:38.176313+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_forward", "window_id": 498095}
+{"timestamp": "2026-10-27T23:58:38.186264+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h4_forward", "window_id": 124523}
+{"timestamp": "2026-10-27T23:58:38.195534+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_d1_forward", "window_id": 20753}
+{"timestamp": "2026-10-27T23:58:38.204527+00:00", "run_id": "40605369478", "outcome": "WINDOW_TOO_SHORT", "account": "quota_h1_signal", "window_id": 498095}
