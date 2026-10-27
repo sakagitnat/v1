@@ -21646,3 +21646,4 @@
 {"timestamp": "2026-10-27T06:30:14.041240+00:00", "run_id": "40461231358", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-10-27T06:30:14.048062+00:00", "run_id": "40461231358", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-10-27T06:30:14.054951+00:00", "run_id": "40461231358", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-27T06:31:11.673237+00:00", "run_id": "40461231358", "outcome": "ERROR", "error": "TimeoutError"}
