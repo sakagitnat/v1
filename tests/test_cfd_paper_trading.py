@@ -347,3 +347,39 @@ def test_forward_paper_candle_age_uses_last_candle_open_not_last_price():
     now = datetime(2026, 10, 23, 23, 30, tzinfo=timezone.utc)
     assert pt.paper_bar_age_seconds(bars, now=now) == 9000
     assert not pt.is_fresh_forward_bar(bars, "H1", now=now)
+
+def test_isolated_paper_close_uses_current_equity_across_instruments(tmp_path, monkeypatch):
+    """Two positions entered at $100 must settle against the latest shared
+    virtual-account balance, not each position's stale entry snapshot."""
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    monkeypatch.setattr(pt, "PAPER_LOG_PATH", tmp_path / "cfd_paper_trades.jsonl")
+    state.set_virtual_accounts({"iso_test": _isolated_account("test@v1")})
+
+    for contract_id, instrument, stop, target in (
+        (-901, "frxXAUUSD", 95.0, 102.0),
+        (-902, "frxGBPUSD", 99.0, 110.0),
+    ):
+        state.set_paper_position("virtual:iso_test", instrument, {
+            "contract_id": contract_id, "side": "long", "entry_price": 100.0,
+            "stop_price": stop, "target_price": target, "stake": 10.0,
+            "multiplier": 20, "risk_amount": 1.0,
+            "entry_time": "2026-01-01T00:00:00+00:00",
+            "equity_before": 100.0, "regime": "trending",
+        })
+
+    strategy = _ScriptedStrategy({})  # price exits only
+    pt.run_virtual_account_paper("iso_test", "frxXAUUSD", _bars([102, 102]), "trending", strategy)
+    pt.run_virtual_account_paper("iso_test", "frxGBPUSD", _bars([98, 98]), "trending", strategy)
+
+    trades = load_trades(tmp_path / "cfd_paper_trades.jsonl")
+    assert [t["contract_id"] for t in trades] == [-901, -902]
+    assert [(t["equity_before"], t["pnl"], t["equity_after"]) for t in trades] == [
+        (100.0, 4.0, 104.0),
+        (104.0, -2.0, 102.0),
+    ]
+    assert all(round(t["equity_after"] - t["equity_before"], 2) == t["pnl"] for t in trades)
+    assert state.get_virtual_accounts()["iso_test"]["equity"] == 102.0
+    assert state.get_paper_equity("virtual:iso_test", default=0.0) == 102.0
+    # Retrying with no open position must not settle either contract twice.
+    pt.run_virtual_account_paper("iso_test", "frxGBPUSD", _bars([98, 98]), "trending", strategy)
+    assert len(load_trades(tmp_path / "cfd_paper_trades.jsonl")) == 2
