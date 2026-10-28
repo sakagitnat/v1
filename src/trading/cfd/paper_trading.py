@@ -290,7 +290,7 @@ def run_virtual_account_paper(account_id: str, instrument: str, bars: pd.DataFra
                 side=side, entry_time=position["entry_time"], exit_time=_now_iso(),
                 entry_price=position["entry_price"], stake=position["stake"],
                 risk_amount=position["risk_amount"], exit_price=exit_price, pnl=pnl,
-                equity_before=position["equity_before"], equity_after=row_account["equity"],
+                equity_before=round(float(row_account["equity"]) - pnl, 2), equity_after=row_account["equity"],
                 exit_reason=f"paper-forward: {exit_reason}", regime=position.get("regime"),
                 virtual_account_id=account_id, horizon=account.get("horizon"),
                 entry_timeframe=position.get("entry_timeframe"),
