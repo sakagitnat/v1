@@ -11,26 +11,6 @@
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
-    "virtual:breakout_h1|frxEURUSD": {
-      "contract_id": -559,
-      "side": "short",
-      "entry_price": 1.1128,
-      "stop_price": 1.1149996234034236,
-      "target_price": 1.1092806025545223,
-      "stake": 22.96,
-      "multiplier": 20,
-      "risk_amount": 0.91,
-      "entry_time": "2026-10-27T20:39:14.049194+00:00",
-      "equity_before": 90.77,
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "virtual:breakout_h1|frxGBPUSD": {
       "contract_id": -567,
       "side": "short",
@@ -55,7 +35,7 @@
   "paper_equity": {
     "virtual:iso_breakout_m15": 104.48,
     "virtual:iso_breakout_m5": 110.85,
-    "virtual:breakout_h1": 91.84,
+    "virtual:breakout_h1": 91.63,
     "virtual:iso_trend_h1": 102.64,
     "virtual:iso_meanrev_m15": 109.66,
     "virtual:iso_meanrev_m5": 122.44,
@@ -137,13 +117,13 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 91.84,
+      "equity": 91.63,
       "high_water_mark": 104.99,
-      "realized_pnl": -8.16,
-      "closed_trades": 48,
+      "realized_pnl": -8.37,
+      "closed_trades": 49,
       "wins": 15,
-      "losses": 33,
-      "drawdown_from_start_pct": 8.16
+      "losses": 34,
+      "drawdown_from_start_pct": 8.37
     },
     "intraday_m15": {
       "account_id": "intraday_m15",
@@ -12962,11 +12942,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996214,
-    "quota_h1_forward": 498107,
-    "quota_h4_forward": 124526,
+    "quota_30m_forward": 996217,
+    "quota_h1_forward": 498108,
+    "quota_h4_forward": 124527,
     "quota_d1_forward": 20754,
-    "quota_h1_signal": 498107
+    "quota_h1_signal": 498108
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
