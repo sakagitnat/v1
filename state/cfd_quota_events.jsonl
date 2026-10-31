@@ -24016,3 +24016,12 @@
 {"timestamp": "2026-10-30T21:48:41.282944+00:00", "run_id": "41132677271", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-10-30T21:48:41.293863+00:00", "run_id": "41132677271", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-10-30T21:48:41.304516+00:00", "run_id": "41132677271", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-10-31T10:29:05.995550+00:00", "run_id": "41192845772", "outcome": "EVALUATION_GAP", "account": "quota_30m_forward", "previous_window": 996331, "current_window": 996356, "unobserved_windows": 24}
+{"timestamp": "2026-10-31T10:29:06.004181+00:00", "run_id": "41192845772", "outcome": "WINDOW_TOO_SHORT", "account": "quota_30m_forward", "window_id": 996356}
+{"timestamp": "2026-10-31T10:29:06.006867+00:00", "run_id": "41192845772", "outcome": "EVALUATION_GAP", "account": "quota_h1_forward", "previous_window": 498165, "current_window": 498178, "unobserved_windows": 12}
+{"timestamp": "2026-10-31T10:29:06.013577+00:00", "run_id": "41192845772", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_forward"}
+{"timestamp": "2026-10-31T10:29:06.015129+00:00", "run_id": "41192845772", "outcome": "EVALUATION_GAP", "account": "quota_h4_forward", "previous_window": 124541, "current_window": 124544, "unobserved_windows": 2}
+{"timestamp": "2026-10-31T10:29:06.020970+00:00", "run_id": "41192845772", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
+{"timestamp": "2026-10-31T10:29:06.028223+00:00", "run_id": "41192845772", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
+{"timestamp": "2026-10-31T10:29:06.029790+00:00", "run_id": "41192845772", "outcome": "EVALUATION_GAP", "account": "quota_h1_signal", "previous_window": 498165, "current_window": 498178, "unobserved_windows": 12}
+{"timestamp": "2026-10-31T10:29:06.035696+00:00", "run_id": "41192845772", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
