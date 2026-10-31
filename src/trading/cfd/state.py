@@ -1,5 +1,7 @@
 import copy
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +24,10 @@ _DEFAULTS = {
     "pending_entries": {},
     "smoothed_equity": None,
     "high_water_mark": None,
+    "virtual_accounts": {},
+    "timeframe_champions": {},
+    "champion_daily_risk_tracking": {},
+    "champion_pending_entries": {},
 }
 
 
@@ -36,7 +42,18 @@ def load_state() -> dict:
 
 def _write_state(state: dict) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_PATH.write_text(json.dumps(state, indent=2) + "\n")
+    # Atomic local replacement: an interrupted write leaves the old file intact.
+    payload = json.dumps(state, indent=2, allow_nan=False) + "\n"
+    fd, name = tempfile.mkstemp(prefix=".cfd-state-", dir=_STATE_PATH.parent)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(name, _STATE_PATH)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
 
 
 def set_paused(paused: bool, reason: str = "") -> None:
@@ -117,6 +134,29 @@ def set_broker_baseline(balance: float) -> None:
     if state.get("broker_baseline") is None:
         state["broker_baseline"] = balance
         _write_state(state)
+
+
+def rebase_demo_virtual_capital(broker_balance: float, virtual_starting_capital: float) -> None:
+    """Administrative one-time migration for a demo account whose legacy
+    broker_baseline predates the virtual-capital model.
+
+    This intentionally overwrites the normally immutable baseline and
+    resets equity-derived safety state to the requested virtual starting
+    capital. Callers MUST first prove there are no bot trade records,
+    locally tracked positions, pending entries, or broker-side open
+    contracts. It is not a normal runtime operation and must never be used
+    to erase genuine trading P&L.
+    """
+    state = load_state()
+    state["broker_baseline"] = float(broker_balance)
+    state["smoothed_equity"] = float(virtual_starting_capital)
+    state["high_water_mark"] = float(virtual_starting_capital)
+    state["daily_risk_tracking"] = {
+        "date": None,
+        "start_equity": None,
+        "halted": False,
+    }
+    _write_state(state)
 
 
 def record_open_trade(contract_id: int, meta: dict) -> None:
@@ -208,6 +248,74 @@ def pop_paper_position(strategy_tag: str, instrument: str) -> Optional[dict]:
     return meta
 
 
+
+def get_virtual_accounts() -> dict:
+    return load_state().get("virtual_accounts", {})
+
+
+def set_virtual_accounts(accounts: dict) -> None:
+    state = load_state()
+    state["virtual_accounts"] = accounts
+    _write_state(state)
+
+
+def get_champion_daily_risk_tracking(account_id: str) -> dict:
+    """Same purpose as get_daily_risk_tracking(), keyed per champion
+    account instead of one global tracker -- each of the four timeframe-
+    champion accounts (trading.cfd.timeframe_champion) has its own
+    isolated $100 equity, so each needs its own daily-loss circuit
+    breaker rather than sharing core_h1's."""
+    return load_state().get("champion_daily_risk_tracking", {}).get(
+        account_id, {"date": None, "start_equity": None, "halted": False}
+    )
+
+
+def set_champion_daily_risk_tracking(account_id: str, date: str, start_equity: float, halted: bool) -> None:
+    state = load_state()
+    tracking = state.setdefault("champion_daily_risk_tracking", {})
+    tracking[account_id] = {"date": date, "start_equity": start_equity, "halted": halted}
+    _write_state(state)
+
+
+def get_champion_pending_entries() -> dict:
+    """Same purpose as get_pending_entries() -- crash-recovery attribution
+    for an order submitted but not yet confirmed committed to
+    open_trades -- but in a namespace of its own, never
+    "pending_entries". run_once() unconditionally clears every entry in
+    "pending_entries" it doesn't adopt at the end of every single run
+    (trading.cfd.scheduler); reusing that key for champions, even with a
+    composite f"{account_id}:{instrument}" key, would mean run_once()
+    (which always runs first in the same process, see
+    scripts/run_cfd_trading.py's run_normal()) silently wipes a
+    champion's still-unresolved pending marker before the champion's own
+    reconciliation in this same tick ever gets to look at it. Keyed by
+    f"{account_id}:{instrument}" since more than one champion can hold a
+    pending entry on the same instrument at once."""
+    return load_state().get("champion_pending_entries", {})
+
+
+def set_champion_pending_entry(key: str, meta: dict) -> None:
+    state = load_state()
+    state.setdefault("champion_pending_entries", {})[key] = meta
+    _write_state(state)
+
+
+def clear_champion_pending_entry(key: str) -> None:
+    state = load_state()
+    state.setdefault("champion_pending_entries", {}).pop(key, None)
+    _write_state(state)
+
+
+def get_timeframe_champions() -> dict:
+    return load_state().get("timeframe_champions", {})
+
+
+def set_timeframe_champions(champions: dict) -> None:
+    state = load_state()
+    state["timeframe_champions"] = champions
+    _write_state(state)
+
+
 def exclude_instrument(instrument: str, reason: str = "") -> None:
     # Deliberately NOT .upper()'d: Deriv symbol names are mixed-case and
     # case-sensitive (frxXAUUSD, not FRXXAUUSD) -- uppercasing here would
@@ -223,3 +331,4 @@ def include_instrument(instrument: str) -> None:
     state = load_state()
     state.setdefault("excluded_instruments", {}).pop(instrument, None)
     _write_state(state)
+

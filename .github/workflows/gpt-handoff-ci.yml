@@ -1,0 +1,37 @@
+name: GPT Handoff CI
+
+# 2026-09-24: dropped the pull_request trigger. PR #7's base branch
+# (gpt/deriv-demo-bridge) has no copy of this workflow file at all, so
+# GitHub's paths filter on pull_request events -- added earlier today to
+# stop this from re-running on every state-only checkpoint commit -- was
+# not excluding anything: it kept firing on every "Checkpoint CFD demo
+# service cycle" push to the PR's head branch (704+ runs and counting,
+# all action_required and never approved). The push trigger below already
+# tests every real code change on this exact branch with a working paths
+# filter, so this isn't a coverage loss -- just removing a trigger that
+# was never filtering as intended.
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - gpt/autonomous-demo-runner
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/gpt-handoff-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pytest -q

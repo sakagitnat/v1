@@ -148,3 +148,25 @@ def test_does_not_recommend_promoting_a_losing_paper_strategy(tmp_path, monkeypa
     report = build_report([], paper_trades)
     recs = [r for r in report["recommendations"] if r["type"] == "consider_promoting_paper_strategy"]
     assert recs == []
+
+
+def test_opportunity_summary_explains_where_setups_are_blocked(tmp_path, monkeypatch):
+    _use_tmp_registry(tmp_path, monkeypatch)
+    import trading.cfd.manager_report as mr
+    monkeypatch.setattr(mr, "load_decisions", lambda: [
+        {"outcome": "NO_TRADE", "regime": "ranging", "strategy": None, "reason": "no suited ACTIVE strategy"},
+        {"outcome": "NO_TRADE", "regime": "ranging", "strategy": None, "reason": "no suited ACTIVE strategy"},
+        {"outcome": "REJECTED", "regime": "trending", "strategy": "ema_crossover@v1", "reason": "portfolio risk ceiling"},
+        {"outcome": "TRADE", "regime": "trending", "strategy": "ema_crossover@v1", "reason": "entry accepted"},
+    ])
+    monkeypatch.setattr(mr, "load_incidents", lambda: [])
+
+    report = mr.build_report([], [_trade(pnl=1.0, strategy="donchian_breakout@v2")])
+    summary = report["opportunity_summary"]
+    assert summary["market_evaluations"] == 4
+    assert summary["trade_candidates"] == 1
+    assert summary["no_trade"] == 2
+    assert summary["rejected"] == 1
+    assert summary["paper_closed_trades"] == 1
+    assert summary["regime_mix"]["ranging"] == 2
+    assert summary["top_blockers"][0] == ("no suited ACTIVE strategy", 2)

@@ -1,4 +1,4 @@
-from trading.cfd.scheduler import _legs_by_strategy, _reconcile_closed_trades, _reconcile_unknown_positions
+from trading.cfd.scheduler import _legs_by_strategy, _owned_by, _reconcile_closed_trades, _reconcile_unknown_positions, _reserved_stake_for_open_ids
 
 
 def _meta(**overrides):
@@ -21,13 +21,13 @@ def test_no_disappeared_contracts_returns_nothing():
     assert _reconcile_closed_trades(tracked, currently_open_ids={1}, equity_now=100.0) == []
 
 
-def test_single_disappeared_contract_gets_exact_pnl():
+def test_single_disappeared_contract_does_not_guess_from_balance():
     tracked = {"1": _meta(equity_before=100.0)}
     records = _reconcile_closed_trades(tracked, currently_open_ids=set(), equity_now=112.0)
     assert len(records) == 1
     assert records[0].contract_id == 1
-    assert records[0].pnl == 12.0
-    assert records[0].equity_after == 112.0
+    assert records[0].pnl is None
+    assert records[0].equity_after is None
     assert "externally" in records[0].exit_reason
 
 
@@ -37,6 +37,12 @@ def test_multiple_simultaneous_disappearances_are_unattributed():
     assert len(records) == 2
     assert all(r.pnl is None for r in records)
     assert all(r.equity_after is None for r in records)
+
+
+def test_multiple_closes_use_individual_contract_results_not_shared_balance():
+    tracked = {"1": _meta(), "2": _meta()}
+    records = _reconcile_closed_trades(tracked, set(), 9999, {1: 3.5, 2: -1.25})
+    assert {r.contract_id: r.pnl for r in records} == {1: 3.5, 2: -1.25}
 
 
 def test_only_disappeared_contracts_are_included():
@@ -59,15 +65,17 @@ def _leg(contract_id, instrument="frxXAUUSD", side="long"):
 def test_a_known_tracked_contract_is_neither_adopted_nor_foreign():
     positions = {"frxXAUUSD": [_leg(1)]}
     tracked_open = {"1": _meta()}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending_entries={})
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open, pending_entries={})
     assert adoptions == []
     assert foreign == []
+    assert ambiguous == []
 
 
 def test_unknown_contract_with_no_pending_entry_is_foreign():
     positions = {"frxXAUUSD": [_leg(1)]}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries={})
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries={})
     assert adoptions == []
+    assert ambiguous == []
     assert len(foreign) == 1
     assert foreign[0] == {"contract_id": 1, "instrument": "frxXAUUSD", "side": "long"}
 
@@ -75,20 +83,57 @@ def test_unknown_contract_with_no_pending_entry_is_foreign():
 def test_unknown_contract_matching_a_pending_entry_is_adopted():
     positions = {"frxXAUUSD": [_leg(1)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert foreign == []
+    assert ambiguous == []
     assert len(adoptions) == 1
     assert adoptions[0][0] == 1
     assert adoptions[0][1]["leg"] == "runner"
 
 
-def test_both_legs_of_a_split_entry_are_adopted_in_order():
+# 2026-09-25 review fix (issue #4): matching used to be by instrument
+# alone, popping whichever pending leg happened to be first in the list
+# -- so a pending Long leg could silently absorb a broker-reported Short
+# position (or vice versa) as long as they shared an instrument. Matching
+# is now gated on side too, and refuses to guess when side alone can't
+# uniquely identify the leg.
+
+def test_side_mismatch_is_never_blindly_adopted():
+    """The exact production bug this closes: a pending Long leg must
+    never absorb a broker-reported Short contract just because they share
+    an instrument."""
+    positions = {"frxXAUUSD": [_leg(1, side="short")]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="runner", side="long")]}}
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert adoptions == []
+    assert foreign == []
+    assert ambiguous == [{"contract_id": 1, "instrument": "frxXAUUSD", "side": "short"}]
+
+
+def test_opposite_side_legs_are_each_confidently_matched_to_the_correct_one():
+    """When sides DO differ, each unknown leg is matched to the pending
+    leg that actually agrees with it -- not by list position."""
+    positions = {"frxXAUUSD": [_leg(1, side="short"), _leg(2, side="long")]}
+    pending = {"frxXAUUSD": {"legs": [_meta(leg="long_leg", side="long"), _meta(leg="short_leg", side="short")]}}
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert foreign == []
+    assert ambiguous == []
+    by_contract = {contract_id: leg["leg"] for contract_id, leg in adoptions}
+    assert by_contract == {1: "short_leg", 2: "long_leg"}
+
+
+def test_split_entry_legs_sharing_the_same_side_are_ambiguous_not_guessed():
+    """A scalp+runner split shares one side by construction -- side alone
+    can't tell the two contracts apart (broker.py doesn't currently parse
+    stake or purchase_time either, see its open_positions_list
+    docstring), so both must be left unresolved rather than guessed at in
+    list order."""
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="scalp"), _meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    assert adoptions == []
     assert foreign == []
-    assert [a[1]["leg"] for a in adoptions] == ["scalp", "runner"]
-    assert [a[0] for a in adoptions] == [1, 2]
+    assert {a["contract_id"] for a in ambiguous} == {1, 2}
 
 
 def test_more_unknown_contracts_than_pending_legs_are_partly_foreign():
@@ -96,16 +141,18 @@ def test_more_unknown_contracts_than_pending_legs_are_partly_foreign():
     # turned up -- the extra one is never assumed to be ours too.
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert len(adoptions) == 1
     assert len(foreign) == 1
+    assert ambiguous == []
 
 
 def test_pending_entry_for_a_different_instrument_does_not_cover_this_one():
     positions = {"frxEURUSD": [_leg(1, instrument="frxEURUSD")]}
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open={}, pending_entries=pending)
     assert adoptions == []
+    assert ambiguous == []
     assert len(foreign) == 1
     assert foreign[0]["instrument"] == "frxEURUSD"
 
@@ -114,10 +161,11 @@ def test_mixed_known_and_unknown_legs_on_the_same_instrument():
     positions = {"frxXAUUSD": [_leg(1), _leg(2)]}
     tracked_open = {"1": _meta()}  # contract 1 already known
     pending = {"frxXAUUSD": {"legs": [_meta(leg="runner")]}}
-    adoptions, foreign = _reconcile_unknown_positions(positions, tracked_open, pending)
+    adoptions, foreign, ambiguous = _reconcile_unknown_positions(positions, tracked_open, pending)
     assert len(adoptions) == 1
     assert adoptions[0][0] == 2
     assert foreign == []
+    assert ambiguous == []
 
 
 # Revision 3 gap #3 (docs/ARCHITECTURE_AUDIT.md): an instrument can now
@@ -150,3 +198,39 @@ def test_legs_by_strategy_groups_untracked_legs_under_empty_tag():
     groups = _legs_by_strategy(legs, tracked_open={})
     assert set(groups.keys()) == {""}
     assert groups[""][0]["contract_id"] == 1
+
+
+def test_reserved_stake_counts_only_contracts_still_open():
+    tracked = {
+        "1": _meta(stake=1.0),
+        "2": _meta(stake=2.5),
+        "3": _meta(stake=4.0),
+    }
+    assert _reserved_stake_for_open_ids(tracked, {1, 3}) == 5.0
+
+
+def test_reserved_stake_restores_cash_equity_after_entry():
+    # Deriv cash falls from 10000 to 9999 after paying a $1 stake.
+    # Adding the still-open cost basis back means account equity remains
+    # 10000, so the virtual $100 ledger remains $100 until P&L is realized.
+    tracked = {"123": _meta(stake=1.0)}
+    broker_cash = 9999.0
+    reconstructed = broker_cash + _reserved_stake_for_open_ids(tracked, {123})
+    assert reconstructed == 10000.0
+
+
+# _owned_by keeps each isolated $100 account's positions invisible to every
+# other account's exit/entry/risk accounting -- without it, run_once() would
+# adopt a champion/research account's unrecognized strategy tag under its
+# own "sole ACTIVE strategy" fallback and mismanage a position it doesn't own.
+
+def test_owned_by_is_true_for_a_matching_virtual_account():
+    assert _owned_by(_meta(virtual_account_id="core_h1"), "core_h1") is True
+
+
+def test_owned_by_is_true_for_legacy_metadata_with_no_virtual_account_tag():
+    assert _owned_by(_meta(), "core_h1") is True
+
+
+def test_owned_by_is_false_for_a_different_virtual_account():
+    assert _owned_by(_meta(virtual_account_id="champion_m30"), "core_h1") is False

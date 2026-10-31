@@ -177,6 +177,29 @@ def main() -> None:
         "sourced placeholders (see support_resistance.py's docstring), not validated numbers.",
         regimes=["ranging"],
     )
+    _seed(
+        "london_breakout",
+        "v1",
+        {
+            "asian_start_hour": 0,
+            "asian_end_hour": 7,
+            "breakout_end_hour": 10,
+            "session_close_hour": 20,
+            "atr_window": 14,
+            "atr_stop_mult": 1.5,
+            "atr_target_mult": 3.0,
+        },
+        LifecycleState.CANDIDATE,
+        "Implemented (external-research angle requested alongside walk-forward validation and "
+        "meta-labeling -- see docs/DECISIONS.md), not yet run through "
+        "optimize_cfd_london_breakout.py's TRAIN/TEST + Deflated Sharpe Ratio validation -- same "
+        "starting point every other CFD strategy had before its own grid search. Structurally distinct "
+        "from both trend-following entries already registered: a time-of-day session breakout (Asian "
+        "range broken at London open), not an indicator crossover or a rolling price channel. Params "
+        "are reasonable, sourced placeholders (see london_breakout.py's docstring), not validated "
+        "numbers.",
+        regimes=["trending"],
+    )
 
 
 if __name__ == "__main__":
