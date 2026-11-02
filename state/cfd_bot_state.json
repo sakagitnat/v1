@@ -50,6 +50,26 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_meanrev_m5|frxEURUSD": {
+      "contract_id": -626,
+      "side": "short",
+      "entry_price": 1.12195,
+      "stop_price": 1.122707975345305,
+      "target_price": 1.1213815184910212,
+      "stake": 91.39,
+      "multiplier": 20,
+      "risk_amount": 1.23,
+      "entry_time": "2026-11-02T12:42:27.845219+00:00",
+      "equity_before": 123.48,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -63,7 +83,7 @@
     "virtual:iso_trend_m5": 103.74,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 625,
+  "paper_trade_counter": 626,
   "daily_risk_tracking": {
     "date": "2026-11-02",
     "start_equity": 107.0,
@@ -12962,11 +12982,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996455,
-    "quota_h1_forward": 498227,
-    "quota_h4_forward": 124556,
+    "quota_30m_forward": 996457,
+    "quota_h1_forward": 498228,
+    "quota_h4_forward": 124557,
     "quota_d1_forward": 20759,
-    "quota_h1_signal": 498227
+    "quota_h1_signal": 498228
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
