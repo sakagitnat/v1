@@ -27,6 +27,15 @@ def _default_cfd_instruments() -> list[str]:
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
+def _default_mt5_instruments() -> list[str]:
+    # XM's exact symbol spelling for an instrument (e.g. gold) varies by
+    # broker (XAUUSD, XAUUSD.s, GOLD, ...) -- MT5Broker.resolve_symbol()
+    # looks up the real name live rather than assuming one; this is just
+    # the search term.
+    raw = os.getenv("MT5_INSTRUMENTS", "XAUUSD")
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
 @dataclass
 class Settings:
     alpaca_api_key: str = field(default_factory=lambda: os.getenv("ALPACA_API_KEY", ""))
@@ -264,6 +273,30 @@ class Settings:
     meant as a rare catastrophic backstop, never the leg's real exit
     mechanism. See exit_manager.split_stake_for_partial_close's
     docstring."""
+
+    # XM (MetaTrader 5) -- runs locally on a Windows PC (see
+    # scripts/run_mt5_service.py and docs/xm_mt5_setup.md), NOT on GitHub
+    # Actions like the Deriv bot above: the official MetaTrader5 Python
+    # package only works on Windows and needs the MT5 terminal open on the
+    # same machine. A completely separate account/state/safety-gate from
+    # both the Alpaca stock system and the Deriv bot -- see mt5_broker.py
+    # and mt5_state.py.
+    mt5_login: str = field(default_factory=lambda: os.getenv("MT5_LOGIN", ""))
+    mt5_password: str = field(default_factory=lambda: os.getenv("MT5_PASSWORD", ""))
+    mt5_server: str = field(default_factory=lambda: os.getenv("MT5_SERVER", ""))
+    mt5_allow_live_trading: bool = field(
+        default_factory=lambda: _env_bool("MT5_ALLOW_LIVE_TRADING", False)
+    )
+    mt5_instruments: list[str] = field(default_factory=_default_mt5_instruments)
+    mt5_risk_per_trade: float = field(
+        default_factory=lambda: float(os.getenv("MT5_RISK_PER_TRADE", "0.01"))
+    )
+    mt5_max_open_positions: int = field(
+        default_factory=lambda: int(os.getenv("MT5_MAX_OPEN_POSITIONS", "3"))
+    )
+    mt5_max_daily_loss_pct: float = field(
+        default_factory=lambda: float(os.getenv("MT5_MAX_DAILY_LOSS_PCT", "0.03"))
+    )
 
     def is_live_trading_allowed(self) -> bool:
         return self.allow_live_trading and not self.alpaca_paper
