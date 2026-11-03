@@ -322,9 +322,23 @@ def test_open_positions_maps_by_symbol():
     broker = _broker(fake)
     positions = broker.open_positions()
     assert positions == {
-        "XAUUSD": {"ticket": 1, "side": "long", "lots": 0.1, "profit": 5.0},
-        "EURUSD": {"ticket": 2, "side": "short", "lots": 0.2, "profit": -2.5},
+        "XAUUSD": {"ticket": 1, "side": "long", "lots": 0.1, "profit": 5.0, "age_hours": None},
+        "EURUSD": {"ticket": 2, "side": "short", "lots": 0.2, "profit": -2.5, "age_hours": None},
     }
+
+
+def test_open_positions_reports_age_from_server_clock():
+    fake = FakeMT5()
+    fake.positions = [
+        types.SimpleNamespace(symbol="XAUUSD", ticket=1, type=fake.POSITION_TYPE_BUY, volume=0.1, profit=0.0, time=1_000_000)
+    ]
+    fake.ticks["XAUUSD"] = types.SimpleNamespace(time=1_000_000 + 3 * 3600)
+    assert _broker(fake).open_positions()["XAUUSD"]["age_hours"] == 3.0
+
+
+def test_get_candles_unknown_timeframe_raises():
+    with pytest.raises(MT5RequestError):
+        _broker(FakeMT5()).get_candles("XAUUSD", timeframe="M7")
 
 
 def test_open_positions_empty_when_none_returned():

@@ -42,6 +42,7 @@ from trading.cfd.mt5_broker import (  # noqa: E402
 from trading.cfd.mt5_state import append_trade_log, load_state, set_capital_floor  # noqa: E402
 from trading.cfd.risk import CfdRiskManager  # noqa: E402
 from trading.cfd.mean_reversion import MeanReversionStrategy  # noqa: E402
+from trading.cfd.regime import RANGING, classify_regime  # noqa: E402
 from trading.cfd.strategy import EmaCrossoverStrategy  # noqa: E402
 from trading.config import settings  # noqa: E402
 from trading.logging_utils import get_logger  # noqa: E402
@@ -50,6 +51,9 @@ from trading.strategy.base import Action  # noqa: E402
 logger = get_logger(__name__)
 
 CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
+# Regime is read from the next timeframe up, as in Deriv's virtual accounts
+# (context timeframes M15->M5, H1->M15, ...).
+_REGIME_TIMEFRAME = {"M1": "M5", "M5": "M15", "M15": "H1", "H1": "H4"}
 
 
 def _make_strategy(name: str):
@@ -138,7 +142,7 @@ def run_once() -> None:
                 logger.warning("%s: symbol lookup failed (%s) -- skipping this instrument.", requested_symbol, exc)
                 continue
 
-            bars = broker.get_candles(symbol, count=CANDLE_COUNT)
+            bars = broker.get_candles(symbol, count=CANDLE_COUNT, timeframe=settings.mt5_timeframe)
             if len(bars) < 2:
                 logger.debug("%s: not enough candles yet", symbol)
                 continue
@@ -154,7 +158,12 @@ def run_once() -> None:
                 is_exit = (in_position == "long" and signal.action == Action.SELL) or (
                     in_position == "short" and signal.action == Action.BUY
                 )
-                if is_exit:
+                age = position.get("age_hours")
+                max_hold = settings.mt5_max_hold_hours
+                timed_out = max_hold > 0 and age is not None and age >= max_hold
+                if timed_out and not is_exit:
+                    signal.reason = f"max hold time reached ({age:.1f}h >= {max_hold:g}h) -- day-trade flatten"
+                if is_exit or timed_out:
                     logger.info("%s: closing %s position (%s)", symbol, in_position, signal.reason)
                     pnl = position.get("profit", 0.0)  # live floating P&L at the moment of close -- see open_positions() docstring
                     result = broker.close_position({**position, "symbol": symbol})
@@ -167,6 +176,16 @@ def run_once() -> None:
             if signal.action == Action.HOLD:
                 logger.debug("%s: %s", symbol, signal.reason)
                 continue
+            if settings.mt5_strategy == "mean_reversion":
+                # Deriv's forward data: mean_reversion won ~65% in ranging
+                # markets but is only suited to those (suited_regimes in
+                # cfd_strategy_registry.json), so skip entries otherwise.
+                regime = classify_regime(
+                    broker.get_candles(symbol, count=CANDLE_COUNT, timeframe=_REGIME_TIMEFRAME.get(settings.mt5_timeframe.upper(), settings.mt5_timeframe))
+                )
+                if regime != RANGING:
+                    logger.info("Skipping %s entry: regime is %r, mean_reversion only trades 'ranging'", symbol, regime)
+                    continue
             if not _risk_gate_open(risk):
                 logger.info(
                     "Skipping %s: risk gate closed (halted=%s open_positions=%d/%d below_floor=%s)",

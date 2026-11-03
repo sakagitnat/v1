@@ -202,11 +202,15 @@ class MT5Broker:
             raise MT5RequestError(f"symbol_info_tick({symbol!r}) returned None ({self._lib().last_error()})")
         return float(tick.ask)
 
-    def get_candles(self, symbol: str, count: int = 200) -> pd.DataFrame:
-        """H1 (hourly) bars -- matches EmaCrossoverStrategy's validated
-        timeframe (see strategy.py's docstring)."""
+    def get_candles(self, symbol: str, count: int = 200, timeframe: str = "H1") -> pd.DataFrame:
+        """Bars for `timeframe` ("M5", "M15", "H1", "H4", ...). Defaults to
+        H1 (hourly), matching EmaCrossoverStrategy's validated timeframe
+        (see strategy.py's docstring)."""
         mt5 = self._lib()
-        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_H1, 0, count)
+        tf = getattr(mt5, f"TIMEFRAME_{timeframe.upper()}", None)
+        if tf is None:
+            raise MT5RequestError(f"Unknown MT5 timeframe {timeframe!r}")
+        rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
         if rates is None or len(rates) == 0:
             return pd.DataFrame(columns=["open", "high", "low", "close"])
         df = pd.DataFrame(rates)
@@ -330,5 +334,23 @@ class MT5Broker:
         result = {}
         for p in positions:
             side = "long" if p.type == mt5.POSITION_TYPE_BUY else "short"
-            result[p.symbol] = {"ticket": p.ticket, "side": side, "lots": p.volume, "profit": p.profit}
+            result[p.symbol] = {
+                "ticket": p.ticket,
+                "side": side,
+                "lots": p.volume,
+                "profit": p.profit,
+                "age_hours": self._position_age_hours(p),
+            }
         return result
+
+    def _position_age_hours(self, position) -> Optional[float]:
+        """Hours since the position opened, or None if unknown. Both
+        position.time and the symbol's latest tick time are in the broker
+        server's clock, so subtracting them is correct regardless of the
+        server's UTC offset (comparing against this PC's clock would not be)."""
+        opened = getattr(position, "time", None)
+        tick = self._lib().symbol_info_tick(position.symbol)
+        now = getattr(tick, "time", None) if tick is not None else None
+        if opened is None or now is None:
+            return None
+        return max(0.0, (now - opened) / 3600.0)

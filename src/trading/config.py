@@ -290,6 +290,11 @@ class Settings:
     # "ema_crossover" (the original, default) or "mean_reversion" -- see
     # run_mt5_service.py's _make_strategy().
     mt5_strategy: str = field(default_factory=lambda: os.getenv("MT5_STRATEGY", "ema_crossover"))
+    # Candle timeframe the strategy trades on ("H1" default; "M5" for day
+    # trading) and the longest a position may stay open before the bot
+    # closes it (0 = no limit) -- see run_mt5_service.py.
+    mt5_timeframe: str = field(default_factory=lambda: os.getenv("MT5_TIMEFRAME", "H1"))
+    mt5_max_hold_hours: float = field(default_factory=lambda: float(os.getenv("MT5_MAX_HOLD_HOURS", "0")))
     mt5_instruments: list[str] = field(default_factory=_default_mt5_instruments)
     mt5_risk_per_trade: float = field(
         default_factory=lambda: float(os.getenv("MT5_RISK_PER_TRADE", "0.01"))
