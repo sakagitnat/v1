@@ -33,7 +33,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from trading.cfd.mt5_broker import MT5Broker, MT5NotConnectedError, MT5RequestError  # noqa: E402
+from trading.cfd.mt5_broker import (  # noqa: E402
+    MT5Broker,
+    MT5LiveAccountError,
+    MT5NotConnectedError,
+    MT5RequestError,
+)
 from trading.cfd.mt5_state import append_trade_log, load_state, set_capital_floor  # noqa: E402
 from trading.cfd.risk import CfdRiskManager  # noqa: E402
 from trading.cfd.strategy import EmaCrossoverStrategy  # noqa: E402
@@ -78,6 +83,9 @@ def run_once() -> None:
         # treating this as a crash. The next scheduled tick (whenever the
         # PC is next on and MT5 is reachable) will try again.
         logger.info("MT5 not reachable this run (%s) -- will retry next scheduled tick.", exc)
+        return
+    except MT5LiveAccountError as exc:
+        logger.error("MT5 bot misconfigured: %s", exc)
         return
 
     try:

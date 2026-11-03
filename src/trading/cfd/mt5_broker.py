@@ -63,6 +63,12 @@ class MT5NotConnectedError(RuntimeError):
     scheduled tick", not a crash."""
 
 
+class MT5LiveAccountError(RuntimeError):
+    """Raised by connect() when the logged-in account is not a demo account
+    and MT5_ALLOW_LIVE_TRADING has not been set. A misconfiguration to
+    surface loudly, not a "try again next tick" condition."""
+
+
 class MT5Broker:
     def __init__(
         self,
@@ -85,16 +91,14 @@ class MT5Broker:
         except (TypeError, ValueError) as exc:
             raise RuntimeError(f"MT5_LOGIN must be numeric (got {self._login!r})") from exc
 
-        # XM (and MT5 brokers generally) separate demo/real by which server
-        # you log into (e.g. "XMGlobal-Demo" vs "XMGlobal-Real"), not by a
+        # XM separates demo/real by which account you log into, not by a
         # flag on a token the way Deriv's account model works (see
-        # broker.py's DerivBroker.connect) -- so the safety gate checks the
-        # server name instead.
-        if "demo" not in self._server.lower() and not self._allow_live_trading:
-            raise RuntimeError(
-                f"MT5_SERVER ({self._server!r}) does not look like a demo server. "
-                "Set MT5_ALLOW_LIVE_TRADING=true explicitly to trade with a real account."
-            )
+        # broker.py's DerivBroker.connect). A server named "...-Demo" is
+        # trusted as demo; but XM also hosts demo accounts on servers whose
+        # names say nothing (e.g. "XMGlobal-MT5 6"), so for those connect()
+        # asks the terminal itself (account_info().trade_mode) after login
+        # and refuses anything that is not a demo account.
+        self._verify_demo_on_connect = "demo" not in self._server.lower() and not self._allow_live_trading
 
         self._mt5 = mt5_module  # lazily imported real MetaTrader5 module if None
         self._connected = False
@@ -128,6 +132,15 @@ class MT5Broker:
         info = mt5.account_info()
         if info is None:
             raise MT5NotConnectedError(f"account_info() returned None right after login ({mt5.last_error()})")
+        if self._verify_demo_on_connect:
+            demo_mode = getattr(mt5, "ACCOUNT_TRADE_MODE_DEMO", 0)
+            if getattr(info, "trade_mode", None) != demo_mode:
+                self.close()
+                raise MT5LiveAccountError(
+                    f"MT5 account {info.login} on {self._server!r} is not a demo account "
+                    f"(trade_mode={getattr(info, 'trade_mode', None)!r}). "
+                    "Set MT5_ALLOW_LIVE_TRADING=true explicitly to trade with a real account."
+                )
         return {
             "login": info.login,
             "balance": info.balance,

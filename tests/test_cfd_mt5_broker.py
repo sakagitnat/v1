@@ -5,7 +5,7 @@ import types
 
 import pytest
 
-from trading.cfd.mt5_broker import MT5Broker, MT5NotConnectedError, MT5RequestError
+from trading.cfd.mt5_broker import MT5Broker, MT5LiveAccountError, MT5NotConnectedError, MT5RequestError
 
 
 def _symbol_info(**overrides):
@@ -33,12 +33,14 @@ class FakeMT5:
     POSITION_TYPE_BUY = 0
     POSITION_TYPE_SELL = 1
     TIMEFRAME_H1 = 16385
+    ACCOUNT_TRADE_MODE_DEMO = 0
+    ACCOUNT_TRADE_MODE_REAL = 2
 
     def __init__(self):
         self.initialize_result = True
         self.login_result = True
         self.account_info_result = types.SimpleNamespace(
-            login=12345, balance=1000.0, equity=1000.0, currency="USD"
+            login=12345, balance=1000.0, equity=1000.0, currency="USD", trade_mode=self.ACCOUNT_TRADE_MODE_DEMO
         )
         self.symbols = {}
         self.ticks = {}
@@ -105,9 +107,26 @@ def test_non_numeric_login_raises():
         MT5Broker(login="not-a-number", password="secret", server="XMGlobal-Demo", mt5_module=FakeMT5())
 
 
-def test_live_server_without_allow_flag_raises():
-    with pytest.raises(RuntimeError):
-        MT5Broker(login="12345", password="secret", server="XMGlobal-Real", mt5_module=FakeMT5())
+def test_live_account_on_non_demo_server_refused_at_connect():
+    fake = FakeMT5()
+    fake.account_info_result.trade_mode = fake.ACCOUNT_TRADE_MODE_REAL
+    broker = MT5Broker(login="12345", password="secret", server="XMGlobal-MT5 6", mt5_module=fake)
+    with pytest.raises(MT5LiveAccountError):
+        broker.connect()
+
+
+def test_demo_account_on_non_demo_named_server_is_permitted():
+    fake = FakeMT5()
+    broker = MT5Broker(login="12345", password="secret", server="XMGlobal-MT5 6", mt5_module=fake)
+    assert broker.connect()["server"] == "XMGlobal-MT5 6"
+
+
+def test_missing_trade_mode_on_non_demo_named_server_fails_closed():
+    fake = FakeMT5()
+    del fake.account_info_result.trade_mode
+    broker = MT5Broker(login="12345", password="secret", server="XMGlobal-MT5 6", mt5_module=fake)
+    with pytest.raises(MT5LiveAccountError):
+        broker.connect()
 
 
 def test_live_server_with_allow_flag_is_permitted():
