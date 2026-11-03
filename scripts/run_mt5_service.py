@@ -41,6 +41,7 @@ from trading.cfd.mt5_broker import (  # noqa: E402
 )
 from trading.cfd.mt5_state import append_trade_log, load_state, set_capital_floor  # noqa: E402
 from trading.cfd.risk import CfdRiskManager  # noqa: E402
+from trading.cfd.mean_reversion import MeanReversionStrategy  # noqa: E402
 from trading.cfd.strategy import EmaCrossoverStrategy  # noqa: E402
 from trading.config import settings  # noqa: E402
 from trading.logging_utils import get_logger  # noqa: E402
@@ -49,6 +50,17 @@ from trading.strategy.base import Action  # noqa: E402
 logger = get_logger(__name__)
 
 CANDLE_COUNT = 200  # comfortably more than slow_span=34 + atr_window=14 warmup
+
+
+def _make_strategy(name: str):
+    """MT5_STRATEGY picks the entry logic; both share prepare()/signal_for_row().
+    Unknown names raise (surfaced as a misconfiguration) rather than silently
+    falling back to a strategy the user didn't ask for."""
+    strategies = {"ema_crossover": EmaCrossoverStrategy, "mean_reversion": MeanReversionStrategy}
+    try:
+        return strategies[name]()
+    except KeyError:
+        raise RuntimeError(f"MT5_STRATEGY must be one of {sorted(strategies)} (got {name!r})") from None
 
 
 def _risk_gate_open(risk: CfdRiskManager) -> bool:
@@ -112,7 +124,8 @@ def run_once() -> None:
 
         excluded = state.get("excluded_instruments") or {}
         open_positions = broker.open_positions()
-        strategy = EmaCrossoverStrategy()
+        strategy = _make_strategy(settings.mt5_strategy)
+        logger.info("Strategy: %s", settings.mt5_strategy)
 
         for requested_symbol in settings.mt5_instruments:
             if requested_symbol in excluded:

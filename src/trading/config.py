@@ -287,6 +287,9 @@ class Settings:
     mt5_allow_live_trading: bool = field(
         default_factory=lambda: _env_bool("MT5_ALLOW_LIVE_TRADING", False)
     )
+    # "ema_crossover" (the original, default) or "mean_reversion" -- see
+    # run_mt5_service.py's _make_strategy().
+    mt5_strategy: str = field(default_factory=lambda: os.getenv("MT5_STRATEGY", "ema_crossover"))
     mt5_instruments: list[str] = field(default_factory=_default_mt5_instruments)
     mt5_risk_per_trade: float = field(
         default_factory=lambda: float(os.getenv("MT5_RISK_PER_TRADE", "0.01"))

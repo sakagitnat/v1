@@ -68,6 +68,7 @@ setx MT5_SERVER "XMGlobal-Demo"
 | `MT5_INSTRUMENTS` | `XAUUSD` | สัญลักษณ์ที่จะเทรด (คั่นด้วย comma ได้หลายตัว) — บอทจะค้นหาชื่อจริงใน MT5 ให้เอง ถ้า XM ใช้ชื่อแบบมี suffix เช่น `XAUUSD.s` |
 | `MT5_RISK_PER_TRADE` | `0.01` (1%) | ความเสี่ยงต่อออเดอร์ เทียบกับเงินทุนทั้งหมด |
 | `MT5_MAX_OPEN_POSITIONS` | `3` | จำนวน position เปิดพร้อมกันสูงสุด |
+| `MT5_STRATEGY` | `ema_crossover` | `ema_crossover` (ค่าเดิม) หรือ `mean_reversion` (สวนราคาที่หลุดแถบ Bollinger) — ยังไม่ผ่านการพิสูจน์ว่ามี edge ใช้เพื่อเก็บข้อมูลบนบัญชีเดโมเท่านั้น |
 | `MT5_MAX_DAILY_LOSS_PCT` | `0.03` (3%) | ขาดทุนสะสมต่อวันถึงเท่านี้แล้วบอทจะหยุดเปิดออเดอร์ใหม่ (reset ทุกวัน) |
 
 **ห้ามตั้ง `MT5_ALLOW_LIVE_TRADING=true`** เว้นแต่ตั้งใจเทรดเงินจริงจริง ๆ
