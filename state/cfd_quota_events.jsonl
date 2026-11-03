@@ -26578,3 +26578,4 @@
 {"timestamp": "2026-11-03T03:36:36.148038+00:00", "run_id": "41572386664", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h4_forward"}
 {"timestamp": "2026-11-03T03:36:36.154876+00:00", "run_id": "41572386664", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_d1_forward"}
 {"timestamp": "2026-11-03T03:36:36.161786+00:00", "run_id": "41572386664", "outcome": "RECOVERY_OR_PAUSE_BLOCKED", "account": "quota_h1_signal"}
+{"timestamp": "2026-11-03T03:40:16.580876+00:00", "run_id": "41572446299", "outcome": "ERROR", "error": "DerivRequestError"}
