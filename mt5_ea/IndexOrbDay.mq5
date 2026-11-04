@@ -19,7 +19,7 @@
 //|   exit  : flat at InpEndHour server time                         |
 //+------------------------------------------------------------------+
 #property copyright "sakagitnat/v1"
-#property version   "1.03"
+#property version   "1.04"
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -30,7 +30,11 @@ input int      InpRangeMinutes  = 0;      // 0 uses end hour; otherwise a multip
 input int      InpEndHour        = 22;     // Close any open position at this hour
 input double   InpTargetR        = 1.5;    // Take profit = N x stop distance
 input double   InpMinRangeATR    = 0.5;    // Skip if range < N x ATR(M15)
-input double   InpMaxRangeATR    = 3.0;    // Skip if range > N x ATR(M15)
+input double   InpMaxRangeATR    = 2.5;    // Skip if range > N x ATR(M15) (v1.04: 3.0 -> 2.5, wide-range days had no edge)
+input int      InpLastEntryHour  = 16;     // No new entries from this hour (server time)
+input double   InpMaxSpreadPts   = 3.5;    // Skip entry if spread > N index points (backtest median ~2.3)
+input double   InpMaxRiskEquityPct = 12.0; // Also cap risk at N% of current equity
+input double   InpMinEquity      = 40.0;   // Kill switch: no new trades if equity falls below this
 input int      InpATRPeriod      = 14;     // ATR period (M15)
 input double   InpRiskMoney      = 5.0;    // Target risk per trade in account currency
 input double   InpMaxRiskMoney   = 10.0;   // Skip the day if even the minimum lot risks more than this
@@ -105,6 +109,43 @@ bool EntryAccepted()
           result == TRADE_RETCODE_PLACED);
   }
 
+// True if this EA already opened a position today (survives EA/terminal restarts).
+bool TradedToday()
+  {
+   MqlDateTime n;
+   TimeToStruct(TimeCurrent(), n);
+   n.hour = 0; n.min = 0; n.sec = 0;
+   if(!HistorySelect(StructToTime(n), TimeCurrent() + 3600))
+      return(false);
+   for(int i = HistoryDealsTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = HistoryDealGetTicket(i);
+      if(HistoryDealGetInteger(tk, DEAL_MAGIC) == InpMagic &&
+         HistoryDealGetString(tk, DEAL_SYMBOL) == _Symbol &&
+         HistoryDealGetInteger(tk, DEAL_ENTRY) == DEAL_ENTRY_IN)
+         return(true);
+     }
+   return(false);
+  }
+
+// Pre-trade checks that do not depend on the signal side.
+bool TradingAllowed(double stopDistance)
+  {
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(equity < InpMinEquity)
+     {
+      PrintFormat("Kill switch: equity %.2f < %.2f, no new trades", equity, InpMinEquity);
+      return(false);
+     }
+   double spread = (double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD) * _Point;
+   if(spread > InpMaxSpreadPts)
+      return(false);                      // transient: try again next bar
+   double minDist = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * _Point;
+   if(stopDistance <= minDist)
+      return(false);
+   return(true);
+  }
+
 void OnTick()
   {
    MqlDateTime now;
@@ -129,10 +170,15 @@ void OnTick()
       return;
    lastBarTime = barTime;
 
-   if(now.hour * 60 + now.min < rangeEndMinute || now.hour >= InpEndHour)
+   if(now.hour * 60 + now.min < rangeEndMinute || now.hour >= InpEndHour || now.hour >= InpLastEntryHour)
       return;                       // before the range is complete, or after the session
    if(lastTradeDay == now.day_of_year || PositionSelect(_Symbol))
       return;                       // one trade per day; never stack on an existing position
+   if(TradedToday())
+     {
+      lastTradeDay = now.day_of_year;   // already traded today (e.g. EA restarted after the exit)
+      return;
+     }
 
    // Today's opening range from the closed M15 bars.
    MqlRates rates[];
@@ -180,7 +226,9 @@ void OnTick()
      {
       double price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
       double stop = lo, risk = price - stop;
-      double lots = LotsForRisk(InpRiskMoney, InpMaxRiskMoney, risk);
+      double lots = TradingAllowed(risk) ? LotsForRisk(InpRiskMoney, MathMin(InpMaxRiskMoney, AccountInfoDouble(ACCOUNT_EQUITY) * InpMaxRiskEquityPct / 100.0), risk) : -1.0;
+      if(lots < 0)
+         return;                    // not allowed right now (spread/stops level/kill switch): retry next bar
       if(lots <= 0)
         {
          PrintFormat("Skipping %s: minimum lot risks more than %.1f (stop %.1f points)", _Symbol, InpMaxRiskMoney, risk);
@@ -196,7 +244,9 @@ void OnTick()
      {
       double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double stop = hi, risk = stop - price;
-      double lots = LotsForRisk(InpRiskMoney, InpMaxRiskMoney, risk);
+      double lots = TradingAllowed(risk) ? LotsForRisk(InpRiskMoney, MathMin(InpMaxRiskMoney, AccountInfoDouble(ACCOUNT_EQUITY) * InpMaxRiskEquityPct / 100.0), risk) : -1.0;
+      if(lots < 0)
+         return;                    // not allowed right now (spread/stops level/kill switch): retry next bar
       if(lots <= 0)
         {
          PrintFormat("Skipping %s: minimum lot risks more than %.1f (stop %.1f points)", _Symbol, InpMaxRiskMoney, risk);
