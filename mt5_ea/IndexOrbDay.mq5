@@ -1,0 +1,189 @@
+//+------------------------------------------------------------------+
+//| IndexOrbDay.mq5                                                  |
+//| Opening-range breakout day trader for index CFDs, demo-only.     |
+//|                                                                  |
+//| Built for a ~$100 account: trades the broker's minimum lot and   |
+//| skips the day if that lot would risk more than InpMaxRiskMoney.  |
+//|                                                                  |
+//| EVIDENCE IS WEAK (read before trusting it): on XM M15 data,      |
+//| GER40Cash opening-range breakout was PF 1.25 (2022-24) and 1.20  |
+//| (2025-26), ~300 trades, but it was 1 of 66 strategy/index tests, |
+//| so a result this good is expected by chance ~2-3 times. Treat    |
+//| this as a forward test on a demo account, not a proven edge.     |
+//|                                                                  |
+//|   range : high/low of the M15 bars in [InpRangeStartHour,        |
+//|           InpRangeEndHour) server time, must be 0.5..3 x ATR     |
+//|   entry : first M15 close beyond the range -> trade, once a day  |
+//|   stop  : opposite side of the range                             |
+//|   target: InpTargetR x the stop distance                         |
+//|   exit  : flat at InpEndHour server time                         |
+//+------------------------------------------------------------------+
+#property copyright "sakagitnat/v1"
+#property version   "1.00"
+#property strict
+
+#include <Trade/Trade.mqh>
+
+input int      InpRangeStartHour = 10;     // Range start hour (server time); GER40 cash open
+input int      InpRangeEndHour   = 11;     // Range end hour (server time, exclusive)
+input int      InpEndHour        = 22;     // Close any open position at this hour
+input double   InpTargetR        = 1.5;    // Take profit = N x stop distance
+input double   InpMinRangeATR    = 0.5;    // Skip if range < N x ATR(M15)
+input double   InpMaxRangeATR    = 3.0;    // Skip if range > N x ATR(M15)
+input int      InpATRPeriod      = 14;     // ATR period (M15)
+input double   InpRiskMoney      = 5.0;    // Target risk per trade in account currency
+input double   InpMaxRiskMoney   = 10.0;   // Skip the day if even the minimum lot risks more than this
+input long     InpMagic          = 20261106; // Magic number
+input bool     InpAllowReal      = false;  // Allow trading a non-demo account (leave false)
+
+CTrade trade;
+int hATR = INVALID_HANDLE;
+datetime lastBarTime = 0;
+int lastTradeDay = -1;
+
+int OnInit()
+  {
+   if(AccountInfoInteger(ACCOUNT_TRADE_MODE) != ACCOUNT_TRADE_MODE_DEMO && !InpAllowReal)
+     {
+      Print("IndexOrbDay: account is not a demo account and InpAllowReal=false -- refusing to run.");
+      return(INIT_FAILED);
+     }
+   hATR = iATR(_Symbol, PERIOD_M15, InpATRPeriod);
+   if(hATR == INVALID_HANDLE)
+     {
+      Print("IndexOrbDay: failed to create ATR handle.");
+      return(INIT_FAILED);
+     }
+   trade.SetExpertMagicNumber(InpMagic);
+   trade.SetDeviationInPoints(100);
+   PrintFormat("IndexOrbDay started on %s, range %02d-%02d, end %02d, TP %.1fR, risk %.1f (max %.1f), magic %I64d",
+               _Symbol, InpRangeStartHour, InpRangeEndHour, InpEndHour, InpTargetR, InpRiskMoney, InpMaxRiskMoney, InpMagic);
+   return(INIT_SUCCEEDED);
+  }
+
+void OnDeinit(const int reason)
+  {
+   IndicatorRelease(hATR);
+  }
+
+bool SelectOwnPosition()
+  {
+   if(!PositionSelect(_Symbol))
+      return(false);
+   return(PositionGetInteger(POSITION_MAGIC) == InpMagic);
+  }
+
+// Lots for riskMoney; falls back to the minimum lot if that stays within maxRiskMoney.
+double LotsForRisk(double riskMoney, double maxRiskMoney, double stopDistance)
+  {
+   double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double step      = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   double minLot    = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   double maxLot    = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+   if(tickSize <= 0 || tickValue <= 0 || stopDistance <= 0 || step <= 0)
+      return(0.0);
+   double lossPerLot = stopDistance / tickSize * tickValue;
+   double lots = MathFloor(riskMoney / lossPerLot / step) * step;
+   if(lots < minLot)
+      return(minLot * lossPerLot <= maxRiskMoney ? minLot : 0.0);
+   return(MathMin(lots, maxLot));
+  }
+
+void OnTick()
+  {
+   MqlDateTime now;
+   TimeToStruct(TimeCurrent(), now);
+
+   // Day-trade flatten.
+   if(now.hour >= InpEndHour && SelectOwnPosition())
+     {
+      PrintFormat("Closing %s: end of day (%02d:00 server time)", _Symbol, InpEndHour);
+      trade.PositionClose(_Symbol);
+     }
+
+   datetime barTime = iTime(_Symbol, PERIOD_M15, 0);
+   if(barTime == lastBarTime || barTime == 0)
+      return;
+   lastBarTime = barTime;
+
+   if(now.hour < InpRangeEndHour || now.hour >= InpEndHour)
+      return;                       // before the range is complete, or after the session
+   if(lastTradeDay == now.day_of_year || PositionSelect(_Symbol))
+      return;                       // one trade per day; never stack on an existing position
+
+   // Today's opening range from the closed M15 bars.
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   int copied = CopyRates(_Symbol, PERIOD_M15, 0, 96, rates);
+   if(copied < 10)
+      return;
+   double hi = -DBL_MAX, lo = DBL_MAX;
+   int n = 0;
+   for(int i = 1; i < copied; i++)
+     {
+      MqlDateTime t;
+      TimeToStruct(rates[i].time, t);
+      if(t.day_of_year != now.day_of_year || t.year != now.year)
+         continue;
+      if(t.hour >= InpRangeStartHour && t.hour < InpRangeEndHour)
+        {
+         hi = MathMax(hi, rates[i].high);
+         lo = MathMin(lo, rates[i].low);
+         n++;
+        }
+     }
+   if(n < 3)
+      return;
+
+   double atr[1];
+   if(CopyBuffer(hATR, 0, 1, 1, atr) != 1 || atr[0] <= 0)
+      return;
+   double range = hi - lo;
+   if(range < InpMinRangeATR * atr[0] || range > InpMaxRangeATR * atr[0])
+     {
+      lastTradeDay = now.day_of_year;   // range unsuitable today: decided, don't re-check every bar
+      return;
+     }
+
+   double close1 = rates[1].close;      // last closed bar
+   bool wantBuy  = close1 > hi;
+   bool wantSell = close1 < lo;
+   if(!wantBuy && !wantSell)
+      return;
+
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   if(wantBuy)
+     {
+      double price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double stop = lo, risk = price - stop;
+      double lots = LotsForRisk(InpRiskMoney, InpMaxRiskMoney, risk);
+      if(lots <= 0)
+        {
+         PrintFormat("Skipping %s: minimum lot risks more than %.1f (stop %.1f points)", _Symbol, InpMaxRiskMoney, risk);
+         lastTradeDay = now.day_of_year;
+         return;
+        }
+      if(trade.Buy(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price + InpTargetR * risk, digits), "orb up"))
+         lastTradeDay = now.day_of_year;
+      else
+         PrintFormat("Buy failed: %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
+     }
+   else
+     {
+      double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double stop = hi, risk = stop - price;
+      double lots = LotsForRisk(InpRiskMoney, InpMaxRiskMoney, risk);
+      if(lots <= 0)
+        {
+         PrintFormat("Skipping %s: minimum lot risks more than %.1f (stop %.1f points)", _Symbol, InpMaxRiskMoney, risk);
+         lastTradeDay = now.day_of_year;
+         return;
+        }
+      if(trade.Sell(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price - InpTargetR * risk, digits), "orb down"))
+         lastTradeDay = now.day_of_year;
+      else
+         PrintFormat("Sell failed: %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
+     }
+  }
+//+------------------------------------------------------------------+
