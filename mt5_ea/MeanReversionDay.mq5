@@ -31,7 +31,8 @@ input int      InpADXPeriod       = 14;     // Regime ADX period
 input double   InpADXTrend        = 25.0;   // ADX >= this -> trending (no entries)
 input double   InpUnstableRatio   = 2.5;    // ATR% / median >= this -> unstable (no entries)
 input double   InpRiskPercent     = 1.0;    // Risk per trade, % of equity
-input double   InpMaxDailyLossPct = 3.0;    // Stop new entries after this % daily loss
+input double   InpMaxRiskPercentAtMinLot = 5.0; // Small accounts: trade the minimum lot if it risks at most this % of equity
+input double   InpMaxDailyLossPct = 6.0;    // Stop new entries after this % daily loss
 input double   InpMaxHoldHours    = 12.0;   // Close positions older than this (0 = off)
 input long     InpMagic           = 20261104; // Magic number
 input bool     InpAllowReal       = false;  // Allow trading a non-demo account (leave false)
@@ -148,7 +149,9 @@ double TodayRealisedProfit()
   }
 
 // Lots that lose about riskMoney if price moves stopDistance against us.
-double LotsForRisk(double riskMoney, double stopDistance)
+// If the budget is below the broker's minimum lot, the minimum lot is used
+// only when its own risk stays within maxRiskMoney; otherwise returns 0 (skip).
+double LotsForRisk(double riskMoney, double stopDistance, double maxRiskMoney)
   {
    double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
@@ -160,7 +163,11 @@ double LotsForRisk(double riskMoney, double stopDistance)
    double lossPerLot = stopDistance / tickSize * tickValue;
    double lots = MathFloor(riskMoney / lossPerLot / step) * step;
    if(lots < minLot)
-      return(0.0); // risk budget below the broker's minimum lot: skip, don't oversize
+     {
+      if(minLot * lossPerLot <= maxRiskMoney)
+         return(minLot);
+      return(0.0); // even the minimum lot risks more than the cap: skip, don't oversize
+     }
    return(MathMin(lots, maxLot));
   }
 
@@ -221,10 +228,10 @@ void OnTick()
      }
 
    double stopDist = InpStopATR * atr[0];
-   double lots = LotsForRisk(equity * InpRiskPercent / 100.0, stopDist);
+   double lots = LotsForRisk(equity * InpRiskPercent / 100.0, stopDist, equity * InpMaxRiskPercentAtMinLot / 100.0);
    if(lots <= 0)
      {
-      PrintFormat("Skipping %s entry: lot size is 0 (risk budget below the minimum lot)", _Symbol);
+      PrintFormat("Skipping %s entry: lot size is 0 (minimum lot risks more than %.1f%% of equity)", _Symbol, InpMaxRiskPercentAtMinLot);
       return;
      }
 
