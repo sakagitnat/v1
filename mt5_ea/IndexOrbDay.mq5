@@ -19,13 +19,14 @@
 //|   exit  : flat at InpEndHour server time                         |
 //+------------------------------------------------------------------+
 #property copyright "sakagitnat/v1"
-#property version   "1.00"
+#property version   "1.03"
 #property strict
 
 #include <Trade/Trade.mqh>
 
 input int      InpRangeStartHour = 10;     // Range start hour (server time); GER40 cash open
 input int      InpRangeEndHour   = 11;     // Range end hour (server time, exclusive)
+input int      InpRangeMinutes  = 0;      // 0 uses end hour; otherwise a multiple of 15
 input int      InpEndHour        = 22;     // Close any open position at this hour
 input double   InpTargetR        = 1.5;    // Take profit = N x stop distance
 input double   InpMinRangeATR    = 0.5;    // Skip if range < N x ATR(M15)
@@ -34,20 +35,26 @@ input int      InpATRPeriod      = 14;     // ATR period (M15)
 input double   InpRiskMoney      = 5.0;    // Target risk per trade in account currency
 input double   InpMaxRiskMoney   = 10.0;   // Skip the day if even the minimum lot risks more than this
 input long     InpMagic          = 20261106; // Magic number
-input bool     InpAllowReal      = false;  // Allow trading a non-demo account (leave false)
+
 
 CTrade trade;
 int hATR = INVALID_HANDLE;
 datetime lastBarTime = 0;
 int lastTradeDay = -1;
+int rangeStartMinute, rangeEndMinute;
 
 int OnInit()
   {
-   if(AccountInfoInteger(ACCOUNT_TRADE_MODE) != ACCOUNT_TRADE_MODE_DEMO && !InpAllowReal)
+   if(AccountInfoInteger(ACCOUNT_TRADE_MODE) != ACCOUNT_TRADE_MODE_DEMO)
      {
-      Print("IndexOrbDay: account is not a demo account and InpAllowReal=false -- refusing to run.");
+      Print("IndexOrbDay: account is not a demo account -- refusing to run.");
       return(INIT_FAILED);
      }
+   rangeStartMinute = 60 * InpRangeStartHour;
+   rangeEndMinute = InpRangeMinutes == 0 ? 60 * InpRangeEndHour : rangeStartMinute + InpRangeMinutes;
+   if(rangeStartMinute < 0 || rangeEndMinute <= rangeStartMinute ||
+      rangeEndMinute % 15 != 0 || rangeEndMinute >= 60 * InpEndHour || InpEndHour > 23)
+      return(INIT_PARAMETERS_INCORRECT);
    hATR = iATR(_Symbol, PERIOD_M15, InpATRPeriod);
    if(hATR == INVALID_HANDLE)
      {
@@ -55,9 +62,10 @@ int OnInit()
       return(INIT_FAILED);
      }
    trade.SetExpertMagicNumber(InpMagic);
+   trade.SetTypeFillingBySymbol(_Symbol);
    trade.SetDeviationInPoints(100);
-   PrintFormat("IndexOrbDay started on %s, range %02d-%02d, end %02d, TP %.1fR, risk %.1f (max %.1f), magic %I64d",
-               _Symbol, InpRangeStartHour, InpRangeEndHour, InpEndHour, InpTargetR, InpRiskMoney, InpMaxRiskMoney, InpMagic);
+   PrintFormat("IndexOrbDay started on %s, range %02d:%02d-%02d:%02d, end %02d, TP %.1fR, risk %.1f (max %.1f), magic %I64d",
+               _Symbol, rangeStartMinute / 60, rangeStartMinute % 60, rangeEndMinute / 60, rangeEndMinute % 60, InpEndHour, InpTargetR, InpRiskMoney, InpMaxRiskMoney, InpMagic);
    return(INIT_SUCCEEDED);
   }
 
@@ -90,16 +98,30 @@ double LotsForRisk(double riskMoney, double maxRiskMoney, double stopDistance)
    return(MathMin(lots, maxLot));
   }
 
+bool EntryAccepted()
+  {
+   uint result = trade.ResultRetcode();
+   return(result == TRADE_RETCODE_DONE || result == TRADE_RETCODE_DONE_PARTIAL ||
+          result == TRADE_RETCODE_PLACED);
+  }
+
 void OnTick()
   {
    MqlDateTime now;
    TimeToStruct(TimeCurrent(), now);
 
    // Day-trade flatten.
-   if(now.hour >= InpEndHour && SelectOwnPosition())
+   if(SelectOwnPosition())
      {
-      PrintFormat("Closing %s: end of day (%02d:00 server time)", _Symbol, InpEndHour);
-      trade.PositionClose(_Symbol);
+      MqlDateTime opened;
+      TimeToStruct((datetime)PositionGetInteger(POSITION_TIME), opened);
+      if(now.hour >= InpEndHour || opened.year != now.year || opened.day_of_year != now.day_of_year)
+        {
+         if(!trade.PositionClose((ulong)PositionGetInteger(POSITION_TICKET)) ||
+            trade.ResultRetcode() != TRADE_RETCODE_DONE)
+            PrintFormat("Close incomplete: %u %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
+        }
+      return;
      }
 
    datetime barTime = iTime(_Symbol, PERIOD_M15, 0);
@@ -107,7 +129,7 @@ void OnTick()
       return;
    lastBarTime = barTime;
 
-   if(now.hour < InpRangeEndHour || now.hour >= InpEndHour)
+   if(now.hour * 60 + now.min < rangeEndMinute || now.hour >= InpEndHour)
       return;                       // before the range is complete, or after the session
    if(lastTradeDay == now.day_of_year || PositionSelect(_Symbol))
       return;                       // one trade per day; never stack on an existing position
@@ -126,14 +148,15 @@ void OnTick()
       TimeToStruct(rates[i].time, t);
       if(t.day_of_year != now.day_of_year || t.year != now.year)
          continue;
-      if(t.hour >= InpRangeStartHour && t.hour < InpRangeEndHour)
+      int minute = t.hour * 60 + t.min;
+      if(minute >= rangeStartMinute && minute < rangeEndMinute)
         {
          hi = MathMax(hi, rates[i].high);
          lo = MathMin(lo, rates[i].low);
          n++;
         }
      }
-   if(n < 3)
+   if(n != (rangeEndMinute - rangeStartMinute) / 15)
       return;
 
    double atr[1];
@@ -164,7 +187,7 @@ void OnTick()
          lastTradeDay = now.day_of_year;
          return;
         }
-      if(trade.Buy(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price + InpTargetR * risk, digits), "orb up"))
+      if(trade.Buy(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price + InpTargetR * risk, digits), "orb up") && EntryAccepted())
          lastTradeDay = now.day_of_year;
       else
          PrintFormat("Buy failed: %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
@@ -180,10 +203,11 @@ void OnTick()
          lastTradeDay = now.day_of_year;
          return;
         }
-      if(trade.Sell(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price - InpTargetR * risk, digits), "orb down"))
+      if(trade.Sell(lots, _Symbol, price, NormalizeDouble(stop, digits), NormalizeDouble(price - InpTargetR * risk, digits), "orb down") && EntryAccepted())
          lastTradeDay = now.day_of_year;
       else
          PrintFormat("Sell failed: %d %s", trade.ResultRetcode(), trade.ResultRetcodeDescription());
      }
   }
 //+------------------------------------------------------------------+
+
