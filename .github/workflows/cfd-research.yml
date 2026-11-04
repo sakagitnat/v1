@@ -37,7 +37,7 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # three strategies' grid searches, sequentially, sharing one data fetch
+    timeout-minutes: 45  # seven strategy grids; bounded weekly research (no trade execution)
     steps:
       # Pinned explicitly -- see cfd-trading.yml's own checkout step for
       # why: a `schedule` trigger only ever fires the workflow file as it
@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: python scripts/research_cfd_strategies.py --granularity 3600 --source yfinance
+      - run: python -u scripts/research_cfd_strategies.py --granularity 3600 --source yfinance
         env:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
@@ -65,7 +65,8 @@ jobs:
           done
           if ! git diff --cached --quiet; then
             git commit -m "Update CFD strategy registry from weekly Research Lab run"
-            git push
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
           else
             echo "No state changes to commit."
           fi
