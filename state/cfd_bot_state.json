@@ -11,26 +11,6 @@
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
-    "virtual:breakout_h1|frxXAUUSD": {
-      "contract_id": -683,
-      "side": "long",
-      "entry_price": 4018.68,
-      "stop_price": 3967.1732766944033,
-      "target_price": 4101.090757288955,
-      "stake": 3.47,
-      "multiplier": 20,
-      "risk_amount": 0.89,
-      "entry_time": "2026-11-04T06:30:10.058540+00:00",
-      "equity_before": 88.99,
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
     "virtual:iso_breakout_m15|frxXAUUSD": {
       "contract_id": -693,
       "side": "long",
@@ -51,26 +31,6 @@
         "M15"
       ]
     },
-    "virtual:iso_meanrev_m15|frxEURUSD": {
-      "contract_id": -694,
-      "side": "short",
-      "entry_price": 1.124,
-      "stop_price": 1.1248942238029893,
-      "target_price": 1.1233293321477582,
-      "stake": 70.92,
-      "multiplier": 20,
-      "risk_amount": 1.13,
-      "entry_time": "2026-11-05T00:29:57.248905+00:00",
-      "equity_before": 112.84,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_meanrev_m15|frxGBPUSD": {
       "contract_id": -695,
       "side": "short",
@@ -81,26 +41,6 @@
       "multiplier": 20,
       "risk_amount": 1.13,
       "entry_time": "2026-11-05T00:29:57.297453+00:00",
-      "equity_before": 112.84,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
-    "virtual:iso_meanrev_m15|frxUSDJPY": {
-      "contract_id": -696,
-      "side": "long",
-      "entry_price": 158.311,
-      "stop_price": 158.17082814536408,
-      "target_price": 158.41612889097695,
-      "stake": 63.72,
-      "multiplier": 20,
-      "risk_amount": 1.13,
-      "entry_time": "2026-11-05T00:29:57.345977+00:00",
       "equity_before": 112.84,
       "regime": "ranging",
       "virtual_account_id": "iso_meanrev_m15",
@@ -135,9 +75,9 @@
   "paper_equity": {
     "virtual:iso_breakout_m15": 101.66,
     "virtual:iso_breakout_m5": 107.0,
-    "virtual:breakout_h1": 89.52,
+    "virtual:breakout_h1": 90.94,
     "virtual:iso_trend_h1": 101.0,
-    "virtual:iso_meanrev_m15": 112.84,
+    "virtual:iso_meanrev_m15": 110.58,
     "virtual:iso_meanrev_m5": 127.12,
     "virtual:iso_trend_m15": 96.16,
     "virtual:iso_trend_m5": 101.4,
@@ -217,13 +157,13 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 89.52,
+      "equity": 90.94,
       "high_water_mark": 104.99,
-      "realized_pnl": -10.48,
-      "closed_trades": 55,
-      "wins": 16,
+      "realized_pnl": -9.06,
+      "closed_trades": 56,
+      "wins": 17,
       "losses": 39,
-      "drawdown_from_start_pct": 10.48
+      "drawdown_from_start_pct": 9.06
     },
     "intraday_m15": {
       "account_id": "intraday_m15",
@@ -499,12 +439,12 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 112.84,
+      "equity": 110.58,
       "high_water_mark": 113.71,
-      "realized_pnl": 12.84,
-      "closed_trades": 148,
+      "realized_pnl": 10.58,
+      "closed_trades": 150,
       "wins": 93,
-      "losses": 55,
+      "losses": 57,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m5": {
@@ -13042,11 +12982,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996577,
-    "quota_h1_forward": 498288,
+    "quota_30m_forward": 996579,
+    "quota_h1_forward": 498289,
     "quota_h4_forward": 124572,
     "quota_d1_forward": 20762,
-    "quota_h1_signal": 498288
+    "quota_h1_signal": 498289
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
