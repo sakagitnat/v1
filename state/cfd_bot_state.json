@@ -70,74 +70,14 @@
         "M15",
         "M5"
       ]
-    },
-    "virtual:iso_meanrev_m15|frxXAUUSD": {
-      "contract_id": -708,
-      "side": "short",
-      "entry_price": 4133.5,
-      "stop_price": 4147.860229627089,
-      "target_price": 4122.729827779684,
-      "stake": 15.6,
-      "multiplier": 20,
-      "risk_amount": 1.08,
-      "entry_time": "2026-11-05T11:29:23.286967+00:00",
-      "equity_before": 108.36,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
-    "virtual:iso_breakout_m15|frxGBPUSD": {
-      "contract_id": -709,
-      "side": "short",
-      "entry_price": 1.34543,
-      "stop_price": 1.3470945017170795,
-      "target_price": 1.3427667972526727,
-      "stake": 41.75,
-      "multiplier": 20,
-      "risk_amount": 1.03,
-      "entry_time": "2026-11-05T11:34:21.653093+00:00",
-      "equity_before": 103.29,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
-    "virtual:iso_breakout_m5|frxGBPUSD": {
-      "contract_id": -710,
-      "side": "short",
-      "entry_price": 1.34543,
-      "stop_price": 1.3463926794513472,
-      "target_price": 1.343889712877844,
-      "stake": 75.97,
-      "multiplier": 20,
-      "risk_amount": 1.09,
-      "entry_time": "2026-11-05T11:34:21.855232+00:00",
-      "equity_before": 108.71,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
-    "virtual:iso_breakout_m15": 103.29,
-    "virtual:iso_breakout_m5": 108.71,
+    "virtual:iso_breakout_m15": 102.26,
+    "virtual:iso_breakout_m5": 107.62,
     "virtual:breakout_h1": 90.94,
     "virtual:iso_trend_h1": 101.0,
-    "virtual:iso_meanrev_m15": 108.36,
+    "virtual:iso_meanrev_m15": 109.07,
     "virtual:iso_meanrev_m5": 123.96,
     "virtual:iso_trend_m15": 97.12,
     "virtual:iso_trend_m5": 100.39,
@@ -440,12 +380,12 @@
         "M15"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 103.29,
+      "equity": 102.26,
       "high_water_mark": 108.59,
-      "realized_pnl": 3.29,
-      "closed_trades": 89,
+      "realized_pnl": 2.26,
+      "closed_trades": 90,
       "wins": 36,
-      "losses": 53,
+      "losses": 54,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m5": {
@@ -460,12 +400,12 @@
         "M5"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 108.71,
+      "equity": 107.62,
       "high_water_mark": 120.46,
-      "realized_pnl": 8.71,
-      "closed_trades": 139,
+      "realized_pnl": 7.62,
+      "closed_trades": 140,
       "wins": 60,
-      "losses": 79,
+      "losses": 80,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m1": {
@@ -499,11 +439,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 108.36,
+      "equity": 109.07,
       "high_water_mark": 113.71,
-      "realized_pnl": 8.36,
-      "closed_trades": 152,
-      "wins": 93,
+      "realized_pnl": 9.07,
+      "closed_trades": 153,
+      "wins": 94,
       "losses": 59,
       "drawdown_from_start_pct": 0.0
     },
@@ -13042,11 +12982,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996599,
-    "quota_h1_forward": 498299,
-    "quota_h4_forward": 124574,
+    "quota_30m_forward": 996600,
+    "quota_h1_forward": 498300,
+    "quota_h4_forward": 124575,
     "quota_d1_forward": 20762,
-    "quota_h1_signal": 498299
+    "quota_h1_signal": 498300
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
