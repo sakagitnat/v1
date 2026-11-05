@@ -110,6 +110,26 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_breakout_m5|frxXAUUSD": {
+      "contract_id": -697,
+      "side": "long",
+      "entry_price": 4091.13,
+      "stop_price": 4079.501197398664,
+      "target_price": 4109.7360841621385,
+      "stake": 18.82,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-11-05T00:34:57.111018+00:00",
+      "equity_before": 107.0,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -123,7 +143,7 @@
     "virtual:iso_trend_m5": 101.4,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 696,
+  "paper_trade_counter": 697,
   "daily_risk_tracking": {
     "date": "2026-11-05",
     "start_equity": 107.0,
