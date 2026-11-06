@@ -22,6 +22,7 @@ EAS = {
     20261105: ("GoldTrendH1", 1.05, None),
     20261106: ("IndexOrbDay", 1.31, 45),
     20261107: ("IndexOrbDaily (trade-every-day experiment)", 1.05, None),
+    20261108: ("DailyPlanExecutor (AI daily plan)", None, None),
 }
 MIN_TRADES = 30
 PAUSE_PF = 0.8
