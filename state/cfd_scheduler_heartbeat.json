@@ -1,12 +1,12 @@
 {
-  "event_name": "workflow_dispatch",
-  "last_completed_at": "2026-11-06T02:35:49.126967+00:00",
+  "event_name": "schedule",
+  "last_completed_at": "2026-11-06T02:39:16.488963+00:00",
   "last_failure_at": "2026-11-03T03:56:05.217690+00:00",
-  "last_started_at": "2026-11-06T02:35:47.508816+00:00",
-  "last_success_at": "2026-11-06T02:35:49.126967+00:00",
-  "last_update_at": "2026-11-06T02:35:49.126967+00:00",
+  "last_started_at": "2026-11-06T02:39:06.737357+00:00",
+  "last_success_at": "2026-11-06T02:39:16.488963+00:00",
+  "last_update_at": "2026-11-06T02:39:16.488963+00:00",
   "run_attempt": "1",
-  "run_id": "42150436244",
+  "run_id": "42150551883",
   "runtime_ref": "gpt/autonomous-demo-runner",
   "status": "success",
   "workflow": "CFD Trading (Deriv)"
