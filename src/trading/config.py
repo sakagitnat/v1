@@ -27,6 +27,15 @@ def _default_cfd_instruments() -> list[str]:
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
+def _default_mt5_instruments() -> list[str]:
+    # XM's exact symbol spelling for an instrument (e.g. gold) varies by
+    # broker (XAUUSD, XAUUSD.s, GOLD, ...) -- MT5Broker.resolve_symbol()
+    # looks up the real name live rather than assuming one; this is just
+    # the search term.
+    raw = os.getenv("MT5_INSTRUMENTS", "XAUUSD")
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
 @dataclass
 class Settings:
     alpaca_api_key: str = field(default_factory=lambda: os.getenv("ALPACA_API_KEY", ""))
@@ -80,6 +89,221 @@ class Settings:
     )
     cfd_max_daily_loss_pct: float = field(
         default_factory=lambda: float(os.getenv("CFD_MAX_DAILY_LOSS_PCT", "0.03"))
+    )
+    # Deriv's demo account balance is fixed at ~$10,000 with no API to reset
+    # it to an arbitrary amount; the user's real intended starting capital
+    # is $100. All demo-side risk sizing, drawdown, and performance tracking
+    # must use virtual equity rebased onto this number, never the raw demo
+    # balance -- see trading.cfd.capital and docs/VISION.md's "Capital
+    # model" section.
+    cfd_virtual_starting_capital: float = field(
+        default_factory=lambda: float(os.getenv("CFD_VIRTUAL_STARTING_CAPITAL", "100.0"))
+    )
+    cfd_min_stake: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MIN_STAKE", "1.0"))
+    )
+    """Deriv's confirmed live minimum stake for a Multipliers order (see
+    scripts/burn_demo_balance.py's MIN_STAKE, discovered the same way).
+    Used by CfdRiskManager to SKIP a trade rather than round its
+    risk-budgeted stake up past this floor, which would silently risk more
+    than risk_per_trade of equity on a small account."""
+    cfd_stake_safety_margin: float = field(
+        default_factory=lambda: float(os.getenv("CFD_STAKE_SAFETY_MARGIN", "0.97"))
+    )
+    """See risk.py's CfdRiskManager.stake_safety_margin -- 3% headroom by
+    default so a small unfavorable gap between a signal's computed price
+    and the actual Deriv fill price doesn't push realized risk over the
+    configured budget. A reasonable, stated default, not yet empirically
+    tuned against live fill data -- same status as the regime/ADX
+    thresholds elsewhere in this file."""
+    cfd_backtest_spread_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_BACKTEST_SPREAD_PCT", "0.0005"))
+    )
+    """See backtest.py's CfdBacktestEngine -- round-trip spread cost as a
+    fraction of notional exposure, charged once per closed trade. Not
+    confirmed against Deriv's actual live spread for any instrument; a
+    stated, reasonable placeholder."""
+    cfd_backtest_daily_financing_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_BACKTEST_DAILY_FINANCING_PCT", "0.00005"))
+    )
+    """See backtest.py's CfdBacktestEngine -- overnight financing cost as
+    a fraction of notional exposure, charged per full UTC calendar day a
+    position stays open. Not confirmed against Deriv's actual published
+    rate; a stated, reasonable placeholder -- matters more now that
+    Revision 3's exit philosophy explicitly allows multi-day holds."""
+
+    # Smoothed Equity / High-Water-Mark (see trading.cfd.smoothed_equity)
+    # and Automatic Drawdown-Tiered Risk Reduction (see trading.cfd.
+    # drawdown_monitor) -- docs/VISION.md's Revision 3 "Drawdown
+    # handling" section. Same reasonable-starting-default status as
+    # every other threshold in this file.
+    cfd_equity_smoothing_alpha: float = field(
+        default_factory=lambda: float(os.getenv("CFD_EQUITY_SMOOTHING_ALPHA", "0.3"))
+    )
+    """How much of the gap between the smoothed sizing-equity figure and
+    current raw equity closes each run on a GAIN -- 1.0 means no
+    smoothing, smaller values smooth harder. Never applies to a loss
+    (see smoothed_equity.py's docstring for why)."""
+    cfd_drawdown_moderate_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_MODERATE_PCT", "0.10"))
+    )
+    cfd_drawdown_deep_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_DEEP_PCT", "0.20"))
+    )
+    cfd_drawdown_severe_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_SEVERE_PCT", "0.30"))
+    )
+    """Drawdown-from-high-water-mark thresholds. Below moderate: no
+    change. At/above moderate: risk scales to cfd_drawdown_moderate_
+    multiplier. At/above deep: cfd_drawdown_deep_multiplier. At/above
+    severe: every new entry SKIP TRADEs (multiplier 0.0) until equity
+    recovers -- never a forced exit of an already-open position."""
+    cfd_drawdown_moderate_multiplier: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_MODERATE_MULTIPLIER", "0.75"))
+    )
+    cfd_drawdown_deep_multiplier: float = field(
+        default_factory=lambda: float(os.getenv("CFD_DRAWDOWN_DEEP_MULTIPLIER", "0.5"))
+    )
+
+    # Market Regime Engine (CFD) -- see trading.cfd.regime. ADX's
+    # conventional textbook cutoff for "trending" (Wilder's original
+    # interpretation); not yet walked through a TRAIN/TEST split the way
+    # strategy parameters are -- see docs/ARCHITECTURE_AUDIT.md.
+    cfd_regime_adx_window: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_ADX_WINDOW", "14"))
+    )
+    cfd_regime_trend_threshold: float = field(
+        default_factory=lambda: float(os.getenv("CFD_REGIME_TREND_THRESHOLD", "25.0"))
+    )
+    # Volatility dimension + the explicit UNSTABLE "don't trade" condition
+    # (docs/VISION.md's revised regime taxonomy) -- see trading.cfd.regime
+    # for how these combine with the ADX reading above. Same status as the
+    # ADX defaults: reasonable, sourced, not yet TRAIN/TEST-validated.
+    cfd_regime_atr_window: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_ATR_WINDOW", "14"))
+    )
+    cfd_regime_volatility_lookback: int = field(
+        default_factory=lambda: int(os.getenv("CFD_REGIME_VOLATILITY_LOOKBACK", "100"))
+    )
+    cfd_regime_unstable_volatility_ratio: float = field(
+        default_factory=lambda: float(os.getenv("CFD_REGIME_UNSTABLE_VOLATILITY_RATIO", "2.5"))
+    )
+
+    # Operating Modes (see trading.cfd.operating_mode) -- an ABSOLUTE
+    # ceiling on effective risk_per_trade no mode's multiplier may ever
+    # cross, regardless of CFD_RISK_PER_TRADE or which mode is active.
+    cfd_max_risk_per_trade_ceiling: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_RISK_PER_TRADE_CEILING", "0.03"))
+    )
+
+    # Portfolio Risk Governor (see trading.cfd.portfolio_risk) --
+    # docs/VISION.md's Revision 3 "Risk model" ceilings, all hard limits
+    # only a human may raise (same status as CFD_MAX_RISK_PER_TRADE_CEILING
+    # above -- reasonable, stated defaults, not yet empirically tuned).
+    # Every one is a fraction of equity except the leverage ceiling, which
+    # is a multiple of it.
+    cfd_max_thesis_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_THESIS_RISK_PCT", "0.02"))
+    )
+    """Cap on aggregate risk from positions that are the SAME underlying
+    bet (same instrument, same side) -- e.g. several long orders on
+    frxXAUUSD must never add up to more than this fraction of equity, no
+    matter how each individual order's own risk_per_trade looks in
+    isolation. See portfolio_risk.py's thesis_key()."""
+    cfd_max_correlated_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_CORRELATED_RISK_PCT", "0.03"))
+    )
+    """Cap on aggregate risk from positions correlated via a shared factor
+    (e.g. several different instruments that are all really a "USD
+    weakens" bet) -- capped separately from, and independently of, the
+    thesis ceiling above and the raw portfolio ceiling below. See
+    portfolio_risk.py's CORRELATION_FACTORS."""
+    cfd_max_portfolio_risk_pct: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_PORTFOLIO_RISK_PCT", "0.05"))
+    )
+    """Cap on aggregate risk across EVERY currently open position,
+    regardless of thesis or correlation -- the outermost ceiling. Matches
+    docs/VISION.md's own worked example: five independent $1 positions on
+    a $100 account is 5% total portfolio risk, and that's the target
+    ceiling for genuinely independent opportunities."""
+    cfd_max_exposure_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_MAX_EXPOSURE_MULTIPLE", "10.0"))
+    )
+    """Cap on aggregate NOTIONAL exposure (sum of stake * multiplier
+    across every open position) as a multiple of equity -- separate from
+    every risk-dollar ceiling above, because Deriv Multipliers' leverage
+    means notional exposure can be far larger than the dollar amount
+    actually at risk if a stop is hit. A starting, conservative default,
+    not yet empirically tuned -- same status as the regime/ADX defaults
+    elsewhere in this file."""
+
+    # Adaptive Exit Management (see trading.cfd.exit_manager) --
+    # docs/VISION.md's Revision 3 "exit philosophy": no uniform fixed
+    # take-profit, trailing stop + partial close required once
+    # meaningfully in profit. Same reasonable-starting-default status as
+    # every other threshold in this file.
+    cfd_partial_close_fraction: float = field(
+        default_factory=lambda: float(os.getenv("CFD_PARTIAL_CLOSE_FRACTION", "0.5"))
+    )
+    """Fraction of one entry's stake/risk that goes to the "scalp" leg
+    (locks in the strategy's own normal fixed target early); the
+    remainder is the "runner" leg (no effective fixed target, managed by
+    the trailing stop). If splitting would put either leg's stake below
+    CFD_MIN_STAKE, the entry falls back to a single runner-only leg at
+    full size instead of forcing an invalid sub-minimum order."""
+    cfd_trailing_activation_r_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_TRAILING_ACTIVATION_R_MULTIPLE", "1.0"))
+    )
+    """How many multiples of the ORIGINAL stop distance a position must
+    move favorably before the trailing stop activates -- before that, a
+    leg is protected only by Deriv's own initial stop_loss_amount, same
+    as every position was before this module existed."""
+    cfd_trailing_atr_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_TRAILING_ATR_MULTIPLE", "2.0"))
+    )
+    """How many ATRs behind the current price an ACTIVATED trailing stop
+    trails -- recomputed from the latest candles every run, so it adapts
+    to current volatility rather than staying frozen at entry-time ATR."""
+    cfd_runner_backstop_multiple: float = field(
+        default_factory=lambda: float(os.getenv("CFD_RUNNER_BACKSTOP_MULTIPLE", "10.0"))
+    )
+    """How much wider than its own proportional target the "runner"
+    leg's Deriv-side take-profit is set -- present (Deriv's proposal
+    hasn't been confirmed live to accept an omitted take-profit) but
+    meant as a rare catastrophic backstop, never the leg's real exit
+    mechanism. See exit_manager.split_stake_for_partial_close's
+    docstring."""
+
+    # XM (MetaTrader 5) -- runs locally on a Windows PC (see
+    # scripts/run_mt5_service.py and docs/xm_mt5_setup.md), NOT on GitHub
+    # Actions like the Deriv bot above: the official MetaTrader5 Python
+    # package only works on Windows and needs the MT5 terminal open on the
+    # same machine. A completely separate account/state/safety-gate from
+    # both the Alpaca stock system and the Deriv bot -- see mt5_broker.py
+    # and mt5_state.py.
+    mt5_login: str = field(default_factory=lambda: os.getenv("MT5_LOGIN", ""))
+    mt5_password: str = field(default_factory=lambda: os.getenv("MT5_PASSWORD", ""))
+    mt5_server: str = field(default_factory=lambda: os.getenv("MT5_SERVER", ""))
+    mt5_allow_live_trading: bool = field(
+        default_factory=lambda: _env_bool("MT5_ALLOW_LIVE_TRADING", False)
+    )
+    # "ema_crossover" (the original, default) or "mean_reversion" -- see
+    # run_mt5_service.py's _make_strategy().
+    mt5_strategy: str = field(default_factory=lambda: os.getenv("MT5_STRATEGY", "ema_crossover"))
+    # Candle timeframe the strategy trades on ("H1" default; "M5" for day
+    # trading) and the longest a position may stay open before the bot
+    # closes it (0 = no limit) -- see run_mt5_service.py.
+    mt5_timeframe: str = field(default_factory=lambda: os.getenv("MT5_TIMEFRAME", "H1"))
+    mt5_max_hold_hours: float = field(default_factory=lambda: float(os.getenv("MT5_MAX_HOLD_HOURS", "0")))
+    mt5_instruments: list[str] = field(default_factory=_default_mt5_instruments)
+    mt5_risk_per_trade: float = field(
+        default_factory=lambda: float(os.getenv("MT5_RISK_PER_TRADE", "0.01"))
+    )
+    mt5_max_open_positions: int = field(
+        default_factory=lambda: int(os.getenv("MT5_MAX_OPEN_POSITIONS", "3"))
+    )
+    mt5_max_daily_loss_pct: float = field(
+        default_factory=lambda: float(os.getenv("MT5_MAX_DAILY_LOSS_PCT", "0.03"))
     )
 
     def is_live_trading_allowed(self) -> bool:

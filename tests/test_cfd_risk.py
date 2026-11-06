@@ -55,9 +55,130 @@ def test_daily_loss_circuit_breaker_halts_further_entries():
     assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
 
 
+def test_skips_trade_when_risk_budgeted_stake_is_below_min_stake():
+    # $100 equity, 0.1% risk -> risk_amount=$0.10; a wide stop/low
+    # multiplier sizes the stake (0.40) well under Deriv's real minimum --
+    # must SKIP, not round the stake up to min_stake (which would risk far
+    # more than the configured 0.1%).
+    rm = CfdRiskManager(equity=100, risk_per_trade=0.001, multiplier=5, min_stake=1.0)
+    stake, stop_loss_amount, take_profit_amount = rm.stake_and_limits(
+        entry_price=100.0, stop_price=95.0, take_profit_price=110.0
+    )
+    assert (stake, stop_loss_amount, take_profit_amount) == (0.0, 0.0, 0.0)
+
+
+def test_trades_at_exactly_min_stake_are_not_skipped():
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20, min_stake=1.0)
+    stake, _, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert stake == 50.0  # comfortably above min_stake, sanity check the fixture itself
+    assert stake >= rm.min_stake
+
+
 def test_reset_day_clears_halt():
     rm = CfdRiskManager(equity=1000, max_daily_loss_pct=0.03)
     rm.register_open()
     rm.register_close(pnl=-40)
     rm.reset_day()
     assert rm.halted is False
+
+
+def test_daily_start_equity_defaults_to_equity_when_not_given():
+    rm = CfdRiskManager(equity=1000)
+    assert rm.daily_start_equity == 1000
+
+
+def test_daily_start_equity_can_be_carried_in_from_a_prior_run():
+    # Simulates the scheduler passing in a persisted start-of-day equity
+    # from an earlier run today -- a loss that alone wouldn't trip 3% of
+    # *current* equity should still trip the breaker against the day's
+    # actual starting equity.
+    rm = CfdRiskManager(equity=970, max_daily_loss_pct=0.03, daily_start_equity=1000)
+    rm.register_open()
+    rm.register_close(pnl=-1)  # equity now 969; (1000-969)/1000 = 3.1% >= 3%
+    assert rm.halted is True
+
+
+def test_risk_per_trade_override_scales_down_the_stake():
+    # trading.cfd.portfolio_allocator passes a smaller override for a
+    # lower-conviction ACTIVE strategy sharing a regime with others.
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    full_stake, full_risk, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    half_stake, half_risk, _ = rm.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0, risk_per_trade_override=0.005
+    )
+    assert half_risk == full_risk / 2
+    assert half_stake == full_stake / 2
+
+
+def test_risk_per_trade_override_can_never_exceed_the_configured_risk_per_trade():
+    # Autonomy boundaries: allocation can only ever shrink risk relative
+    # to what a human configured, never raise it -- enforced here, not
+    # just trusted of the caller.
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    capped_stake, capped_risk, _ = rm.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0, risk_per_trade_override=0.5
+    )
+    uncapped_stake, uncapped_risk, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert capped_risk == uncapped_risk
+    assert capped_stake == uncapped_stake
+
+
+def test_initially_halted_blocks_entries_from_the_first_call():
+    # Simulates the scheduler passing in "already halted earlier today"
+    # from persisted state -- must block immediately, not just after this
+    # run's own register_close.
+    rm = CfdRiskManager(equity=1000, initially_halted=True)
+    assert rm.halted is True
+    assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
+
+
+def test_halt_self_heals_from_equity_even_when_initially_halted_is_stale():
+    # 2026-09-24 review finding: a caller whose own end-of-run persist
+    # (trading.cfd.state's set_daily_risk_tracking /
+    # set_champion_daily_risk_tracking) never landed -- an exception
+    # partway through a run, after equity already moved -- could hand
+    # back initially_halted=False next run even though today's real loss
+    # already breached the threshold. Must not be maskable by a stale
+    # flag: recomputed from the numbers themselves at construction, not
+    # just trusted secondhand.
+    rm = CfdRiskManager(equity=96.0, max_daily_loss_pct=0.03, daily_start_equity=100.0, initially_halted=False)
+    assert rm.halted is True
+    assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
+
+
+def test_halt_self_heal_does_not_false_positive_under_the_threshold():
+    rm = CfdRiskManager(equity=99.0, max_daily_loss_pct=0.03, daily_start_equity=100.0, initially_halted=False)
+    assert rm.halted is False
+
+
+def test_stake_safety_margin_defaults_to_no_change():
+    rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    stake, risk_amount, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    assert risk_amount == 10.0  # unchanged from the pre-margin formula
+
+
+def test_stake_safety_margin_shrinks_stake_and_risk_amount_proportionally():
+    full = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
+    margined = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20, stake_safety_margin=0.95)
+    full_stake, full_risk, full_tp = full.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
+    margined_stake, margined_risk, margined_tp = margined.stake_and_limits(
+        entry_price=100.0, stop_price=99.0, take_profit_price=102.0
+    )
+    assert margined_risk == round(full_risk * 0.95, 2)
+    assert margined_stake == round(full_stake * 0.95, 2)
+    assert margined_tp == round(full_tp * 0.95, 2)
+
+
+def test_stake_safety_margin_can_push_a_marginal_stake_below_min_stake():
+    # A stake that would just barely clear min_stake at full size (here,
+    # unmargined stake = 1.0417) can be pushed to SKIP TRADE once the
+    # safety margin shrinks it -- exactly the intended effect, not a
+    # bug: never round back up past the margined risk budget to force a
+    # trade through.
+    unmargined = CfdRiskManager(equity=100, risk_per_trade=0.01, multiplier=20, min_stake=1.0)
+    stake, _, _ = unmargined.stake_and_limits(entry_price=100.0, stop_price=95.2, take_profit_price=110.0)
+    assert stake > 1.0  # sanity check the fixture itself clears min_stake unmargined
+
+    margined = CfdRiskManager(equity=100, risk_per_trade=0.01, multiplier=20, min_stake=1.0, stake_safety_margin=0.9)
+    result = margined.stake_and_limits(entry_price=100.0, stop_price=95.2, take_profit_price=110.0)
+    assert result == (0.0, 0.0, 0.0)

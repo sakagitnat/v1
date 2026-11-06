@@ -1,0 +1,5 @@
+# Windows-only. Install this on the Windows PC that runs
+# scripts/run_mt5_service.py (see docs/xm_mt5_setup.md) -- do NOT add it
+# to requirements.txt, which is also installed on the Linux GitHub
+# Actions runner for the Deriv bot, where this package cannot install.
+MetaTrader5>=5.0.45

@@ -1,0 +1,245 @@
+{
+  "ema_crossover@v1": {
+    "name": "ema_crossover",
+    "version": "v1",
+    "params": {
+      "fast_span": 15,
+      "slow_span": 34,
+      "atr_window": 14,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 2,
+      "adx_window": 14,
+      "adx_threshold": 0
+    },
+    "state": "ACTIVE",
+    "created_at": "2026-09-19T14:58:57.511512+00:00",
+    "updated_at": "2026-09-19T14:58:57.511533+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "ACTIVE",
+        "reason": "Grandfathered: already the live strategy before the registry existed; TRAIN/TEST-validated (see README).",
+        "at": "2026-09-19T14:58:57.511536+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
+  },
+  "donchian_breakout@v1": {
+    "name": "donchian_breakout",
+    "version": "v1",
+    "params": {
+      "entry_window": 30,
+      "exit_window": 10,
+      "atr_window": 14,
+      "atr_stop_mult": 2.5,
+      "atr_target_mult": 4
+    },
+    "state": "RETIRED",
+    "created_at": "2026-09-19T14:58:57.512109+00:00",
+    "updated_at": "2026-09-19T16:41:49.592229+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented, not yet run through optimize_cfd_breakout.py's TRAIN/TEST validation.",
+        "at": "2026-09-19T14:58:57.512128+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "Superseded by v2, registered with the parameters actually found and validated by optimize_cfd_breakout.py's grid search -- v1's params were always placeholders (see breakout.py's own docstring) and were never the ones tested.",
+        "at": "2026-09-19T16:41:49.592223+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
+  },
+  "donchian_breakout@v2": {
+    "name": "donchian_breakout",
+    "version": "v2",
+    "params": {
+      "entry_window": 80,
+      "exit_window": 15,
+      "atr_window": 14,
+      "atr_stop_mult": 3.5,
+      "atr_target_mult": 6
+    },
+    "state": "PAPER",
+    "created_at": "2026-09-19T16:41:49.591752+00:00",
+    "updated_at": "2026-09-21T02:31:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "VALIDATED",
+        "reason": "The actual robust candidate found by optimize_cfd_breakout.py's grid search (TRAIN cagr=7.9% maxdd=-22.4%, TEST cagr=9.8% maxdd=-17.6% -- the first candidate all session, breakout or EMA crossover, where TRAIN and TEST agreed in both sign and rough magnitude; see scripts/sweep_cfd_risk_breakout.py's docstring and git commit d1a86d4 for the full numbers). Not yet run through trading.cfd.research_lab's walk-forward/Monte Carlo gate specifically -- registered as VALIDATED on the strength of this real TRAIN/TEST result, same grandfathering basis as ema_crossover@v1 above, not a claim that every later gate has been checked too.",
+        "at": "2026-09-19T16:41:49.591792+00:00"
+      },
+      {
+        "from": "VALIDATED",
+        "to": "PAPER",
+        "reason": "User-approved forward-data collection to expand opportunity coverage without risking demo capital; keep ACTIVE promotion human-gated.",
+        "at": "2026-09-21T02:31:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
+  },
+  "mean_reversion@v1": {
+    "name": "mean_reversion",
+    "version": "v1",
+    "params": {
+      "band_window": 20,
+      "band_std": 2,
+      "atr_window": 14,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 1.5
+    },
+    "state": "RETIRED",
+    "created_at": "2026-09-20T07:19:38.805898+00:00",
+    "updated_at": "2026-09-20T07:44:48.226537+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented, not yet run through optimize_cfd_mean_reversion.py's TRAIN/TEST validation -- same starting point donchian_breakout@v1 had before its own grid search found v2. Params are reasonable, sourced placeholders (see mean_reversion.py's docstring), not validated numbers.",
+        "at": "2026-09-20T07:19:38.805948+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "optimize_cfd_mean_reversion.py's TRAIN/TEST grid search (81 combinations across band_window/band_std/atr_stop_mult/atr_target_mult) found zero combinations with positive CAGR and drawdown within the -25% cap on ~2 years of H1 forex/gold data (yfinance proxy feed). Baseline (default params) alone: TRAIN cagr=-83.8% maxdd=-97.8% sharpe=-6.37, TEST cagr=-81.2% maxdd=-76.8% sharpe=-6.03. This specific Bollinger-Band mean-reversion formulation shows no usable edge on this data -- retiring rather than leaving it as a misleadingly-still-viable CANDIDATE nobody is going to test further. The ranging regime is back to having zero suited ACTIVE or CANDIDATE strategy; a genuine open gap, not a solved one -- see docs/ARCHITECTURE_AUDIT.md gap #11.",
+        "at": "2026-09-20T07:44:48.226508+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging"
+    ]
+  },
+  "rsi_reversion@v1": {
+    "name": "rsi_reversion",
+    "version": "v1",
+    "params": {
+      "rsi_window": 14,
+      "rsi_oversold": 25,
+      "rsi_overbought": 75,
+      "adx_window": 14,
+      "adx_flat_threshold": 15,
+      "atr_window": 14,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 1.5
+    },
+    "state": "RETIRED",
+    "created_at": "2026-09-20T11:57:15.025025+00:00",
+    "updated_at": "2026-09-20T12:13:21.236508+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented (via a GitHub PR built to a spec from this session, reviewed and merged), not yet run through optimize_cfd_rsi_reversion.py's TRAIN/TEST validation -- same starting point every other CFD strategy had before its own grid search. A second, structurally distinct attempt at the 'ranging' regime after mean_reversion@v1's honest negative result: fades RSI momentum exhaustion behind an ADX flat-market gate, not Bollinger-band price deviation. Params are reasonable, sourced placeholders (see rsi_reversion.py's docstring), not validated numbers.",
+        "at": "2026-09-20T11:57:15.025045+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "optimize_cfd_rsi_reversion.py's TRAIN/TEST grid search (243 combinations) found only 1/108 TRAIN-qualifying candidates, and that one candidate (rsi_oversold=30, rsi_overbought=75, adx_flat_threshold=15, atr_stop_mult=1.5, atr_target_mult=2.5; TRAIN cagr=1.4% maxdd=-3.2%) failed out-of-sample: TEST cagr=-6.8% maxdd=-6.8% win_rate=14.3% (7 trades) -- OVERFIT, not robust. Baseline (default params) was mild rather than catastrophic (TRAIN cagr=-1.1%, TEST cagr=+1.9% on only 11/3 trades -- too few to mean anything). No combination held up out-of-sample -- retiring rather than leaving it as a misleadingly-still-viable CANDIDATE, same honest-negative-result treatment mean_reversion@v1 got. The ranging regime is still without a suited ACTIVE or CANDIDATE strategy; two structurally distinct approaches (Bollinger-band fade, RSI+ADX fade) have now been ruled out on this data, not just one.",
+        "at": "2026-09-20T12:13:21.236480+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging"
+    ]
+  },
+  "support_resistance@v1": {
+    "name": "support_resistance",
+    "version": "v1",
+    "params": {
+      "pivot_window": 5,
+      "touch_threshold_pct": 0.001,
+      "atr_window": 14,
+      "atr_stop_mult": 1.5,
+      "atr_target_mult": 2.5
+    },
+    "state": "RETIRED",
+    "created_at": "2026-09-20T12:54:23.399462+00:00",
+    "updated_at": "2026-09-20T13:19:39.284310+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "CANDIDATE",
+        "reason": "Implemented (proposed by GPT in GitHub issue #5's joint design discussion, built by this session), not yet run through optimize_cfd_support_resistance.py's TRAIN/TEST validation -- same starting point every other CFD strategy had before its own grid search. Third attempt at the 'ranging' regime, and the first with a genuinely different data representation from the first two: confirmed swing-high/swing-low price structure, not a derived statistic over closes (mean_reversion@v1's Bollinger bands, rsi_reversion@v1's RSI oscillator). Params are reasonable, sourced placeholders (see support_resistance.py's docstring), not validated numbers.",
+        "at": "2026-09-20T12:54:23.399497+00:00"
+      },
+      {
+        "from": "CANDIDATE",
+        "to": "RETIRED",
+        "reason": "Bug-fixed grid search (81 combinations, real TRAIN/TEST split, run 35512685177): 0/81 combinations cleared even the cheap TRAIN gate (min trades, CAGR>0, drawdown within -25% cap). Baseline itself TRAIN cagr=-91.8% maxdd=-99.5% win_rate=48.1% trades=2714, TEST cagr=-94.5% maxdd=-91.4% win_rate=45.4% trades=1172 -- near account wipeout on both splits. Third structurally distinct ranging-regime approach (after mean_reversion@v1 and rsi_reversion@v1, both also RETIRED) to be honestly ruled out on this data, not left as a misleadingly-still-viable CANDIDATE.",
+        "at": "2026-09-20T13:19:39.284293+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging"
+    ]
+  },
+  "volatility_expansion@v1": {
+    "name": "volatility_expansion",
+    "version": "v1",
+    "params": {
+      "channel_window": 20,
+      "bb_window": 20,
+      "bb_std": 2,
+      "compression_lookback": 100,
+      "compression_quantile": 0.25,
+      "atr_window": 14,
+      "atr_expansion_mult": 1.1,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 3
+    },
+    "state": "RESEARCH",
+    "created_at": "2026-09-21T02:34:00+00:00",
+    "updated_at": "2026-09-21T02:34:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "RESEARCH",
+        "reason": "New structurally distinct candidate to expand opportunity coverage: waits for volatility compression then requires ATR expansion plus channel breakout. Parameters are placeholders until TRAIN/TEST/OOS validation.",
+        "at": "2026-09-21T02:34:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "ranging",
+      "trending"
+    ]
+  },
+  "trend_pullback@v1": {
+    "name": "trend_pullback",
+    "version": "v1",
+    "params": {
+      "fast_span": 20,
+      "slow_span": 50,
+      "adx_window": 14,
+      "adx_threshold": 20,
+      "atr_window": 14,
+      "pullback_atr_tolerance": 0.5,
+      "atr_stop_mult": 2,
+      "atr_target_mult": 3
+    },
+    "state": "RESEARCH",
+    "created_at": "2026-09-21T03:05:00+00:00",
+    "updated_at": "2026-09-21T03:05:00+00:00",
+    "history": [
+      {
+        "from": null,
+        "to": "RESEARCH",
+        "reason": "Structurally distinct established-trend pullback candidate; waits for retracement and fast-EMA reclaim instead of a fresh EMA crossover. Parameters unvalidated.",
+        "at": "2026-09-21T03:05:00+00:00"
+      }
+    ],
+    "suited_regimes": [
+      "trending"
+    ]
+  }
+}
