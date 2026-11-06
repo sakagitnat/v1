@@ -188,8 +188,8 @@
           "instrument": "frxXAUUSD",
           "strategy": "ema_crossover@v1",
           "side": "short",
-          "entry_time": "2026-11-06T05:29:32.606061+00:00",
-          "entry_price": 4037.91,
+          "entry_time": "2026-11-06T05:43:53.893282+00:00",
+          "entry_price": 4041.82,
           "stake": 1.82,
           "risk_amount": 0.39,
           "multiplier": 20,
@@ -205,8 +205,8 @@
             "H1"
           ],
           "trailing_stop": {
-            "entry_price": 4037.91,
-            "initial_stop_price": 4081.1595105772576,
+            "entry_price": 4041.82,
+            "initial_stop_price": 4085.095224862972,
             "side": "short",
             "activated": false,
             "current_stop_price": null
@@ -13074,7 +13074,7 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996634,
+    "quota_30m_forward": 996635,
     "quota_h1_forward": 498317,
     "quota_h4_forward": 124579,
     "quota_d1_forward": 20763,
