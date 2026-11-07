@@ -13062,11 +13062,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996699,
-    "quota_h1_forward": 498349,
+    "quota_30m_forward": 996700,
+    "quota_h1_forward": 498350,
     "quota_h4_forward": 124587,
     "quota_d1_forward": 20764,
-    "quota_h1_signal": 498349
+    "quota_h1_signal": 498350
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
