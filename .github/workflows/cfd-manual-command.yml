@@ -16,7 +16,7 @@ on:
         description: "What to do"
         required: true
         type: choice
-        options: [status, performance, paper-performance, failures, manager-report, qualify-strategy, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy, optimize-mean-reversion, research-strategies, optimize-rsi-reversion, optimize-support-resistance, diagnose-regime]
+        options: [status, performance, paper-performance, failures, manager-report, qualify-strategy, list-strategies, promote-strategy, pause, resume, set-mode, set-floor, clear-floor, exclude-instrument, include-instrument, test-order, close-position, optimize-strategy, sweep-risk, list-symbols, backtest-crypto, sweep-risk-synthetic, optimize-breakout, sweep-risk-breakout, research-strategy, optimize-mean-reversion, research-strategies, optimize-rsi-reversion, optimize-support-resistance, optimize-volatility-expansion, optimize-london-breakout, train-meta-label, diagnose-regime]
       instrument:
         description: "Instrument (required for exclude-instrument/include-instrument; optional for test-order, e.g. frxXAUUSD). For close-position, put the contract_id here instead. For optimize-strategy/sweep-risk, put the history source here instead: deriv or yfinance. For list-symbols, put the filter substring here instead (e.g. crypto or BTC)."
         required: false
@@ -60,14 +60,23 @@ on:
         required: false
         type: string
         default: "20"
+      walk_forward_folds:
+        description: "For optimize-strategy/optimize-breakout/optimize-london-breakout: number of anchored walk-forward folds (see trading.cfd.walk_forward's module docstring) to run instead of the default single TRAIN/TEST split. 0 (default) keeps the single-split behavior."
+        required: false
+        type: string
+        default: "0"
 
 permissions:
   contents: write
 
+concurrency:
+  group: cfd-trading
+  cancel-in-progress: false
+
 jobs:
   run-command:
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # optimize-strategy/sweep-risk grid searches can take a few minutes; everything else finishes in well under one
+    timeout-minutes: 60  # a single-split optimize-strategy/sweep-risk grid search takes a few minutes; walk_forward_folds>0 re-runs that same grid search once per fold on a growing TRAIN window, which can take several times as long -- everything else finishes in well under one minute
     steps:
       # Pinned explicitly so a dispatch launched from the GitHub UI
       # without switching the branch dropdown off the default still
@@ -77,7 +86,7 @@ jobs:
       # trigger.
       - uses: actions/checkout@v4
         with:
-          ref: claude/ai-trading-manager-deriv-pmay2v
+          ref: gpt/autonomous-demo-runner
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -97,6 +106,7 @@ jobs:
           STRATEGY_STATE: ${{ inputs.strategy_state }}
           OPERATING_MODE: ${{ inputs.operating_mode }}
           AMOUNT: ${{ inputs.amount }}
+          WALK_FORWARD_FOLDS: ${{ inputs.walk_forward_folds }}
         run: |
           set -e
           case "$CMD" in
@@ -133,7 +143,7 @@ jobs:
               python scripts/cfd_cli.py close-position "$INSTRUMENT"
               ;;
             optimize-strategy)
-              python scripts/optimize_cfd_strategy.py --granularity "${MULTIPLIER:-900}" --source "${INSTRUMENT:-deriv}"
+              python scripts/optimize_cfd_strategy.py --granularity "${MULTIPLIER:-900}" --source "${INSTRUMENT:-deriv}" --walk-forward "${WALK_FORWARD_FOLDS:-0}"
               ;;
             sweep-risk)
               python scripts/sweep_cfd_risk.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
@@ -148,7 +158,13 @@ jobs:
               python scripts/sweep_cfd_risk_synthetic.py --granularity "${MULTIPLIER:-3600}"
               ;;
             optimize-breakout)
-              python scripts/optimize_cfd_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              python scripts/optimize_cfd_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}" --walk-forward "${WALK_FORWARD_FOLDS:-0}"
+              ;;
+            optimize-london-breakout)
+              python scripts/optimize_cfd_london_breakout.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            train-meta-label)
+              python scripts/train_cfd_meta_label.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
               ;;
             optimize-mean-reversion)
               python scripts/optimize_cfd_mean_reversion.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
@@ -158,6 +174,9 @@ jobs:
               ;;
             optimize-support-resistance)
               python scripts/optimize_cfd_support_resistance.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
+              ;;
+            optimize-volatility-expansion)
+              python scripts/research_cfd_volatility_expansion.py --granularity "${MULTIPLIER:-3600}" --source "${INSTRUMENT:-yfinance}"
               ;;
             diagnose-regime)
               python scripts/diagnose_cfd_regime.py --granularity "${MULTIPLIER:-3600}"

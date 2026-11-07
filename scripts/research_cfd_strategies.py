@@ -55,6 +55,7 @@ Usage: python scripts/research_cfd_strategies.py [--granularity 3600] [--source 
 import argparse
 import asyncio
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -66,14 +67,18 @@ from trading.cfd.mean_reversion import MeanReversionStrategy
 from trading.cfd.rsi_reversion import RsiReversionStrategy
 from trading.cfd.research_lab import evaluate_candidate, generate_candidate_params, register_if_passed
 from trading.cfd.strategy import EmaCrossoverStrategy
+from trading.cfd.trend_pullback import TrendPullbackStrategy
 from trading.cfd.strategy_registry import list_all
 from trading.cfd.support_resistance import SupportResistanceReversionStrategy
+from trading.cfd.volatility_expansion import VolatilityExpansionBreakoutStrategy
 from trading.config import settings
 
 from optimize_cfd_breakout import PARAM_GRID as BREAKOUT_PARAM_GRID
 from optimize_cfd_mean_reversion import PARAM_GRID as MEAN_REVERSION_PARAM_GRID
 from optimize_cfd_rsi_reversion import PARAM_GRID as RSI_REVERSION_PARAM_GRID
 from optimize_cfd_support_resistance import PARAM_GRID as SUPPORT_RESISTANCE_PARAM_GRID
+from research_cfd_volatility_expansion import PARAM_GRID as VOLATILITY_EXPANSION_PARAM_GRID
+from research_cfd_trend_pullback import PARAM_GRID as TREND_PULLBACK_PARAM_GRID
 from optimize_cfd_strategy import (
     MAX_DRAWDOWN_CAP,
     MIN_TRADES,
@@ -97,6 +102,13 @@ STRATEGY_SPECS = [
         "name": "ema_crossover",
         "cls": EmaCrossoverStrategy,
         "param_grid": EMA_PARAM_GRID,
+        "filter_fn": lambda c: c["fast_span"] < c["slow_span"],
+        "suited_regimes": ["trending"],
+    },
+    {
+        "name": "trend_pullback",
+        "cls": TrendPullbackStrategy,
+        "param_grid": TREND_PULLBACK_PARAM_GRID,
         "filter_fn": lambda c: c["fast_span"] < c["slow_span"],
         "suited_regimes": ["trending"],
     },
@@ -127,6 +139,13 @@ STRATEGY_SPECS = [
         "param_grid": SUPPORT_RESISTANCE_PARAM_GRID,
         "filter_fn": None,
         "suited_regimes": ["ranging"],
+    },
+    {
+        "name": "volatility_expansion",
+        "cls": VolatilityExpansionBreakoutStrategy,
+        "param_grid": VOLATILITY_EXPANSION_PARAM_GRID,
+        "filter_fn": None,
+        "suited_regimes": ["ranging", "trending"],
     },
 ]
 
@@ -159,17 +178,26 @@ def research_one_strategy(spec: dict, train_bars: dict, test_bars: dict) -> dict
     strategy's pass in the same run."""
     name = spec["name"]
     cls = spec["cls"]
+    started = time.monotonic()
     try:
+        print(f"RESEARCH_PROGRESS strategy={name} phase=baseline started", flush=True)
         baseline_test = run_backtest_full(cls, {}, test_bars)["metrics"]
         candidates = generate_candidate_params(spec["param_grid"], filter_fn=spec["filter_fn"])
         print(f"\n=== {name}: searching {len(candidates)} parameter combinations on TRAIN ===")
 
         ranked = []
-        for params in candidates:
+        for index, params in enumerate(candidates, start=1):
             m = run_backtest_full(cls, params, train_bars)["metrics"]
-            if m["num_trades"] < MIN_TRADES or m["cagr_pct"] <= 0 or m["max_drawdown_pct"] < MAX_DRAWDOWN_CAP:
-                continue
-            ranked.append((params, m))
+            if m["num_trades"] >= MIN_TRADES and m["cagr_pct"] > 0 and m["max_drawdown_pct"] >= MAX_DRAWDOWN_CAP:
+                ranked.append((params, m))
+            if index == 1 or index % 25 == 0 or index == len(candidates):
+                elapsed = time.monotonic() - started
+                print(
+                    f"RESEARCH_PROGRESS strategy={name} phase=train "
+                    f"tested={index}/{len(candidates)} train_pass={len(ranked)} "
+                    f"elapsed_seconds={elapsed:.1f}",
+                    flush=True,
+                )
         ranked.sort(key=lambda r: calmar(r[1]), reverse=True)
         print(f"  {len(ranked)}/{len(candidates)} cleared the cheap TRAIN gate.")
 
@@ -181,7 +209,12 @@ def research_one_strategy(spec: dict, train_bars: dict, test_bars: dict) -> dict
         next_version_num = len(existing_versions) + 1
 
         registered = []
-        for params, _train_m in top:
+        for rank, (params, _train_m) in enumerate(top, start=1):
+            print(
+                f"RESEARCH_PROGRESS strategy={name} phase=full_gate "
+                f"candidate={rank}/{len(top)} elapsed_seconds={time.monotonic() - started:.1f}",
+                flush=True,
+            )
             report = evaluate_candidate(lambda p, b, _cls=cls: run_backtest_full(_cls, p, b), train_bars, test_bars, params, baseline_test)
             if not report.passed:
                 print(f"  rejected {params}: {report.reasons}")
@@ -234,7 +267,17 @@ async def main(granularity_seconds: int, source: str):
     print(f"History: {train_start} to {test_end} ({TRAIN_FRACTION:.0%} TRAIN / {1 - TRAIN_FRACTION:.0%} TEST per instrument)")
     print(f"Researching {len(STRATEGY_SPECS)} strategies: {', '.join(s['name'] for s in STRATEGY_SPECS)}")
 
-    results = [research_one_strategy(spec, train_bars, test_bars) for spec in STRATEGY_SPECS]
+    results = []
+    for spec in STRATEGY_SPECS:
+        started = time.monotonic()
+        result = research_one_strategy(spec, train_bars, test_bars)
+        results.append(result)
+        print(
+            f"RESEARCH_PROGRESS strategy={spec['name']} phase=finished "
+            f"elapsed_seconds={time.monotonic() - started:.1f} "
+            f"registered={len(result['registered'])} note={result['note']!r}",
+            flush=True,
+        )
 
     print("\n=== Summary ===")
     any_registered = False
