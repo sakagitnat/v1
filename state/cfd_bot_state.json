@@ -10,7 +10,48 @@
   "open_trades": {},
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
-  "paper_positions": {},
+  "paper_positions": {
+    "virtual:iso_breakout_m15|frxGBPUSD": {
+      "contract_id": -767,
+      "side": "long",
+      "entry_price": 1.34216,
+      "stop_price": 1.3408770254987088,
+      "target_price": 1.344212759202066,
+      "stake": 55.66,
+      "multiplier": 20,
+      "risk_amount": 1.06,
+      "entry_time": "2026-11-09T10:29:37.856401+00:00",
+      "equity_before": 106.41,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m15",
+      "horizon": "isolated",
+      "entry_timeframe": "M15",
+      "context_timeframes": [
+        "H1",
+        "M15"
+      ]
+    },
+    "virtual:iso_breakout_m5|frxGBPUSD": {
+      "contract_id": -768,
+      "side": "long",
+      "entry_price": 1.34216,
+      "stop_price": 1.3413828072704574,
+      "target_price": 1.3434035083672682,
+      "stake": 89.13,
+      "multiplier": 20,
+      "risk_amount": 1.03,
+      "entry_time": "2026-11-09T10:29:37.974863+00:00",
+      "equity_before": 103.22,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
+    }
+  },
   "paper_equity": {
     "virtual:iso_breakout_m15": 106.41,
     "virtual:iso_breakout_m5": 103.22,
@@ -22,7 +63,7 @@
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 766,
+  "paper_trade_counter": 768,
   "daily_risk_tracking": {
     "date": "2026-11-09",
     "start_equity": 107.0,
@@ -12921,11 +12962,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996787,
-    "quota_h1_forward": 498393,
+    "quota_30m_forward": 996788,
+    "quota_h1_forward": 498394,
     "quota_h4_forward": 124598,
     "quota_d1_forward": 20766,
-    "quota_h1_signal": 498393
+    "quota_h1_signal": 498394
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
