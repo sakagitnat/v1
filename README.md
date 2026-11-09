@@ -12,6 +12,12 @@ by default, with backtesting on free historical data.
 > trading until you have reviewed weeks or months of paper-trading results
 > and are comfortable with the risk of loss.
 
+**The CFD/Deriv system below (see "CFD/forex trading (Deriv)") is being
+developed toward a larger goal: an AI Trading Manager, not a
+single-strategy bot.** See `docs/VISION.md` for that master vision and
+`docs/ARCHITECTURE_AUDIT.md` for what already exists vs. what's still
+missing.
+
 ## How it works
 
 1. **Strategies** (`src/trading/strategy/`) — six long-only strategies
@@ -430,24 +436,784 @@ dollar P&L *amounts*, not price levels the way Alpaca/OANDA do, so
 distance into a (stake, stop_loss_amount, take_profit_amount) triple
 sized so a stop-out loses about `CFD_RISK_PER_TRADE` of equity,
 regardless of the instrument's price scale. `.github/workflows/
-cfd-trading.yml` triggers a run roughly hourly on weekdays via
+cfd-trading.yml` triggers a run every 15 minutes on weekdays via
 `scripts/run_cfd_trading.py`, without needing an always-on server
-(GitHub Actions minutes are free for periodic runs like this).
+(GitHub Actions minutes are free for periodic runs like this). The
+candles evaluated are still H1 -- most 15-minute runs inside the same
+still-open hour see an unchanged candle and are a no-op re-check, not a
+new decision; what the faster schedule buys (Revision 3 gap #3,
+docs/ARCHITECTURE_AUDIT.md) is catching a signal exit or a ratcheting
+trailing stop within ~15 minutes instead of waiting up to the rest of
+the hour, and not leaving a newly-freed (or newly-available) position
+slot idle until the next hourly mark. A `concurrency` guard on the
+workflow queues a run rather than letting it overlap a still-running
+one, since idempotency alone was never meant to arbitrate two processes
+racing to open the same order.
 
 Default instruments: `frxXAUUSD` (gold) plus `frxEURUSD`, `frxGBPUSD`,
 `frxUSDJPY` -- change via `CFD_INSTRUMENTS` (Deriv's own mixed-case,
 case-sensitive symbol names). Manual control (`scripts/cfd_cli.py status`
-/ `pause` / `resume` / `exclude-instrument` / `include-instrument`, or
-the "CFD Manual Command" GitHub Actions workflow) mirrors the stock
-system's `cli.py`. `status` reports equity growth since the first run
-(`equity - initial_floor`) as a quick sanity check, but **the ground
-truth for actual trading results is the Deriv account dashboard
-itself** -- this project doesn't yet keep its own trade-by-trade P&L
-log (a good next addition once live trading has actually run for a
-while and there are real closed contracts to validate a `profit_table`
-API integration against, rather than guessing its field names ahead of
-time the way several other integration bugs here were only caught by
-reading real responses).
+/ `performance` / `pause` / `resume` / `exclude-instrument` /
+`include-instrument`, or the "CFD Manual Command" GitHub Actions
+workflow) mirrors the stock system's `cli.py`.
+
+**Capital model: virtual equity (demo).** Deriv's demo signup fixes the
+account balance at a **fixed ~$10,000, with no API to reset it to an
+arbitrary amount** -- but the real capital this system is meant for is
+**$100**. Sizing trades off the raw $10,000 demo balance would make every
+position ~100x larger than what a real $100 account could ever risk. So
+on a demo account, every risk/performance calculation is computed from a
+**virtual equity** (`trading/cfd/capital.py`) instead: the first time the
+bot ever runs, it records the broker's balance as a baseline
+(`broker_baseline`, in `state/cfd_bot_state.json`); from then on,
+`virtual_equity = CFD_VIRTUAL_STARTING_CAPITAL (default 100) +
+(broker_balance - broker_baseline)` -- so a $10 gain on the real $10,000
+balance shows up as a $10 gain on the $100 virtual one, exactly mirroring
+real P&L, never the raw balance itself. `cfd_cli.py status` prints both
+the raw broker balance and the virtual equity, labeled, so it's always
+clear which is which. Real (non-demo) accounts are unaffected -- real
+money is never rebased, it already is what it is.
+
+One consequence: if Deriv's minimum order size for an instrument would
+force a stake bigger than `CFD_RISK_PER_TRADE` of a small (e.g. $100)
+virtual account allows, `CfdRiskManager.stake_and_limits()` **skips the
+trade** rather than rounding the stake up past the configured risk --
+see `risk.py`'s `min_stake` (`CFD_MIN_STAKE`, default $1.00, Deriv's
+confirmed live minimum).
+
+(This replaces an earlier, deliberately-deprecated approach,
+`scripts/burn_demo_balance.py`, which tried to solve the same $10,000-vs-
+$100 mismatch by actually trading the demo balance down. That directly
+conflicts with this project's rule against deliberately trading a
+balance down or up to hit a target number -- see `docs/VISION.md` -- so
+it's kept only as documented history and refuses to run without an
+explicit override flag.)
+
+**Capital floor (opt-in, not automatic) and the daily-loss breaker
+(persisted, not per-run).** Two corrections made 2026-09-19 after a
+second, independent code review caught them:
+
+- `capital_floor` is **never set automatically**. An earlier version set
+  it to the exact starting virtual equity ($100) on the very first run --
+  but on a small account, one ordinary loss (e.g. -$1 at 1% risk) drops
+  equity below a floor set that tight, and with no way to adjust it, new
+  entries stayed blocked *forever*. `cfd_cli.py set-floor AMOUNT` /
+  `clear-floor` are now the only way a floor gets applied -- pick a
+  number with real cushion below your current virtual equity, not equal
+  to it. `status`'s "Growth since virtual start" line no longer depends
+  on a floor ever having been set -- it's computed directly from
+  `CFD_VIRTUAL_STARTING_CAPITAL`, which is always known.
+- The daily-loss circuit breaker (`CFD_MAX_DAILY_LOSS_PCT`) now actually
+  tracks loss across a real calendar day. `CfdRiskManager`'s start-of-day
+  equity and halted flag used to live only in memory, and a fresh
+  `CfdRiskManager` gets constructed every scheduler run (a new process
+  each time, on GitHub Actions) -- so the breaker silently reset every
+  ~hour and could never accumulate a full day's loss. `trading.cfd.state.
+  get_daily_risk_tracking`/`set_daily_risk_tracking` now persist both
+  values, keyed to the current UTC date, and `scheduler.py` feeds them
+  into `CfdRiskManager` explicitly each run.
+
+**Strategy Registry & lifecycle.** Every CFD strategy is a registered
+`name@version` tracked through the lifecycle `docs/VISION.md` defines --
+`RESEARCH -> CANDIDATE -> VALIDATED -> PAPER -> ACTIVE -> PAUSED ->
+RETIRED` (`trading/cfd/strategy_registry.py`, persisted to
+`state/cfd_strategy_registry.json`). The live scheduler no longer
+hardcodes which strategy it trades: each run it asks the registry for
+whichever single strategy is marked `ACTIVE` and refuses to guess if zero
+or more than one are (a real misconfiguration, not something to trade
+through silently). `scripts/seed_strategy_registry.py` seeded the
+strategies that already existed in code: `ema_crossover@v1` went straight
+into `ACTIVE` (grandfathered -- it was already the live strategy, backed
+by the real TRAIN/TEST validation in "Backtesting" below, just predating
+this registry). `donchian_breakout@v1` (placeholder, never-validated
+params) was initially seeded as `CANDIDATE` -- but the actually-validated
+params a real grid search found (`entry_window=80`, TRAIN cagr=7.9%,
+TEST cagr=9.8%, agreeing in sign and magnitude -- see "Backtesting"
+below) were never registered at all, an oversight only caught by a
+second, independent code review on 2026-09-19. Fixed the same day:
+`donchian_breakout@v2` now carries those actually-validated params as
+`VALIDATED`, and `v1` is `RETIRED` (superseded, not deleted -- the audit
+trail stays intact). Every *later* transition goes through `cfd_cli.py promote-strategy NAME
+VERSION STATE --reason "..."`, which enforces the pipeline order (one
+stage forward at a time -- no skipping straight to `ACTIVE`) and requires
+a stated reason, logged in the entry's audit trail
+(`cfd_cli.py list-strategies` to see it). This registry doesn't yet
+include the actual validation pipeline that's meant to gate each
+promotion (walk-forward, Monte Carlo/stress test, real paper trading) --
+promotion today is a deliberate manual, audited action, not an automatic
+gate; see `docs/ARCHITECTURE_AUDIT.md`'s later phases for that.
+
+**Market Regime Engine & Strategy Selector.** Each run, every instrument's
+own current candles (not a single reference symbol the way the stock
+system's `trading/regime.py` uses SPY -- there's no equivalent single
+"the market" reference across forex pairs, gold, and Deriv's synthetic
+indices) are classified as `trending`, `ranging`, `unstable`, or `unknown`
+(`trading/cfd/regime.py`, via ADX -- the same trend-strength indicator
+`EmaCrossoverStrategy`'s own optional chop filter already uses -- plus a
+volatility dimension). `unstable` is a genuine volatility spike (the
+latest bar's ATR as a fraction of price at least
+`CFD_REGIME_UNSTABLE_VOLATILITY_RATIO` -- 2.5x by default -- above its
+own recent median, compared as a *ratio* rather than a fixed number so a
+low-price-volatility forex pair and a high-volatility synthetic index
+both get judged against their own normal) landing without a strong
+enough trend (ADX below `CFD_REGIME_TREND_THRESHOLD`) to justify the
+risk -- distinct from ordinary `ranging` (calm, unremarkable volatility,
+just no clear direction). Whipsaw/choppy conditions like that are unsafe
+for the current trend-following pool the same way a directionless
+market is, so it's another explicit NO TRADE, not folded silently into
+`ranging`. `classify_volatility()` also exposes a standalone
+`low`/`normal`/`high` read (a gentler 1.5x/0.6x ratio band) purely for
+visibility -- not yet consulted by strategy selection, since no
+registered strategy declares a volatility preference; same status
+`ranging` had before any range-trading strategy existed.
+`trading/cfd/selector.py` matches the primary regime label against every
+`ACTIVE` registered strategy's `suited_regimes` -- **no match is an explicit NO
+TRADE, logged and skipped, not a fallback guess.** The two trend-following
+strategies (`ema_crossover`, `donchian_breakout`) are tagged
+`suited_regimes=["trending"]`; `mean_reversion` is tagged
+`suited_regimes=["ranging"]` but is still `CANDIDATE`, not yet `ACTIVE`
+(see `docs/ARCHITECTURE_AUDIT.md`), so a `ranging` market is still a NO
+TRADE gate today in practice, just no longer for lack of any registered
+strategy suited to it. More than one `ACTIVE` strategy can share a
+regime (`strategy_registry.set_state()`/`register()` no longer enforce
+"at most one `ACTIVE` per regime" -- see **Portfolio Allocation**
+below), and (closing Revision 3 gap #3) an instrument is no longer
+capped at one open position at a time either: `scheduler.py` groups an
+instrument's open legs by which strategy opened them
+(`_legs_by_strategy`), manages each group to its own exit independently,
+and still considers a NEW entry afterward as long as at least one
+`ACTIVE` strategy suited to the current regime doesn't already have a
+position open here (`select_for_entry`'s `exclude_tags` -- always
+includes every strategy already positioned on this instrument, so the
+SAME strategy can never double up its own thesis here, only a genuinely
+different one can open its own independent position). Among whichever
+strategies remain eligible, the selector still picks the one
+`trading/cfd/portfolio_allocator.py` currently weights highest.
+`CFD_MAX_OPEN_POSITIONS` now counts distinct (instrument, strategy)
+position slots across the whole portfolio, not distinct instruments.
+Two different strategies' positions on the same instrument are two
+theses, not one -- `trading/cfd/portfolio_risk.py`'s ceilings are keyed
+on instrument+side, never on strategy, so they already aggregate the
+risk correctly with no change needed there. Each already-open position
+is always managed to its exit by the *exact* strategy version that
+opened it (tagged in its trade metadata), never whatever happens to be
+`ACTIVE` by the time it closes -- so promoting or pausing a strategy can
+never retroactively change how an existing position gets closed out.
+
+**Portfolio Allocation.** `trading/cfd/portfolio_allocator.py`
+(`compute_allocations`, called by `scheduler.py` once per run, right
+after Autonomous Demotion below) gives every `ACTIVE` strategy a risk
+weight, summing to 1.0 across all of them: a strategy with at least 10
+of its own closed trades scores a small floor (0.05) plus its own
+non-negative recent expectancy; one with less history, or a losing one,
+sits at just the floor -- never starved to zero by this stage alone,
+since deciding a strategy shouldn't trade at all is Autonomous
+Demotion's job, not this one's. `risk_scale_factor()` turns that weight
+into a per-trade risk multiplier relative to an equal split, **capped at
+1.0** -- so a strategy can only ever have its risk redistributed *down*
+relative to the others, never raised past what `CFD_RISK_PER_TRADE`
+(scaled by the current Operating Mode) already allows; `risk.py`'s
+`stake_and_limits()` enforces that same cap itself, not just trusting
+the caller. This is docs/VISION.md's revised "Portfolio / Allocation
+Decision" pipeline stage: several strategies suited to the same regime
+genuinely run at once across the instrument universe (a different
+instrument can land on a different one of them the same run), weighted
+by which is actually working right now -- not a single hardcoded winner.
+Per "Autonomy boundaries," shifting the existing budget between
+strategies only ever lowers or holds any one strategy's risk, so -- like
+demotion -- it needs no human approval. `cfd_cli.py manager-report`
+prints the current weights (`allocation_summary`) for visibility.
+
+**Portfolio Risk Governor.** `trading/cfd/portfolio_risk.py`
+(`check_new_position`, called by `scheduler.py` for every candidate entry
+and by `backtest.py`'s `CfdBacktestEngine` in its own multi-symbol
+simulation loop) is the risk-model foundation docs/VISION.md's Revision 3
+requires -- deliberately **not** satisfiable by `max_open_positions`
+alone: four ceilings, all checked in real risk dollars (or notional, for
+leverage), and any breach **rejects** the entry (SKIP TRADE), never
+silently shrinks it.
+- **Per-thesis** (`CFD_MAX_THESIS_RISK_PCT`, 2%): `thesis_key(instrument,
+  side)` -- two positions are the same underlying bet only if they share
+  both. Five long orders on `frxXAUUSD` is one thesis, not five
+  independent opportunities, exactly the disguised risk-split
+  docs/VISION.md forbids.
+- **Correlated** (`CFD_MAX_CORRELATED_RISK_PCT`, 3%): a **static,
+  explicitly-documented-as-static** factor map (`CORRELATION_FACTORS` --
+  not a computed rolling correlation; this project has no market-data
+  infrastructure for that yet) gives each configured instrument a signed
+  exposure to a `"usd"` factor (long gold/EUR/GBP = bet against USD; long
+  USDJPY = bet USD strengthens, since USD is the pair's base currency).
+  Positions are grouped by the *signed direction* of that exposure, so a
+  natural hedge (opposite-signed bets on the same factor) is tracked
+  separately and never inflates the figure -- only genuinely same-direction
+  correlated bets (e.g. long gold *and* long EURUSD, both "USD weakens"
+  bets) get summed together.
+- **Total portfolio** (`CFD_MAX_PORTFOLIO_RISK_PCT`, 5%): every
+  currently-open position's risk, summed, regardless of thesis or
+  correlation -- matches docs/VISION.md's own worked example (five
+  genuinely independent $1 positions on a $100 account is 5%, and that's
+  fine).
+- **Leverage/exposure** (`CFD_MAX_EXPOSURE_MULTIPLE`, 10x equity): total
+  notional (stake × multiplier, summed) -- separate from every
+  risk-dollar ceiling above, since Deriv's leverage means notional
+  exposure can be far larger than the dollar amount actually at risk if a
+  stop is hit.
+
+All four are hard ceilings, same human-only-raisable status as
+`CFD_MAX_RISK_PER_TRADE_CEILING` -- stated, reasonable starting defaults,
+not yet empirically tuned. The snapshot of currently-open positions comes
+from `state.list_open_trades()` (persisted across runs, not just
+positions opened this run) and is kept up to date in place as positions
+open/close within the same scheduler run. `TradeRecord` now tags each
+trade with the `thesis_key` it counted against at entry time, and
+`cfd_cli.py manager-report` prints the current utilization of every
+ceiling (`portfolio_risk_summary`) for visibility.
+
+**Adaptive Exit Management.** `trading/cfd/exit_manager.py` closes the
+single biggest conflict Revision 3's gap analysis found: every registered
+strategy used to send Deriv a fixed R-multiple take-profit as a
+whole-position hard limit order, capping every winner at a small fixed
+multiple -- actively, in live trading, not just in theory. Now, an
+approved entry (past the Portfolio Risk Governor above) splits into:
+- a **`"scalp"` leg** (`CFD_PARTIAL_CLOSE_FRACTION`, 50% by default) --
+  keeps the strategy's own normal fixed target, locking in some profit
+  early, same mechanism as before just sized down.
+- a **`"runner"` leg** (the remainder) -- no *effective* fixed target.
+  Protected by Deriv's own initial stop-loss until the position has moved
+  favorably by `CFD_TRAILING_ACTIVATION_R_MULTIPLE` (1.0x) times its
+  original stop distance, at which point a trailing stop activates and
+  ratchets `CFD_TRAILING_ATR_MULTIPLE` (2.0x) ATRs behind price every
+  run -- recomputed from the latest candle's ATR each time, so it adapts
+  to current volatility, and it only ever tightens, never loosens. The
+  runner leg still gets a real (if very wide, `CFD_RUNNER_BACKSTOP_
+  MULTIPLE`=10x) take-profit sent to Deriv as a backstop -- Deriv's
+  proposal request accepting a limit order with take-profit omitted
+  entirely hasn't been confirmed live, and this project never assumes
+  unconfirmed behavior against a real account (see `broker.py`'s own
+  discipline) -- but under normal conditions that backstop is never what
+  actually closes the leg.
+
+Deriv Multipliers don't support a true partial sell of one contract, so
+this is two SEPARATE contracts from the same entry decision, not one
+contract closed halfway -- if splitting would put either leg's stake
+below `CFD_MIN_STAKE` (common on a small account), a single full-stake
+`"runner"` leg opens instead of forcing an invalid order; that's still a
+real fix (trailing-stop-managed, never capped at a small fixed R), just
+without the early-profit-lock a true split would add. `broker.py` gained
+`open_positions_list()` (every open contract as a flat list, never
+collapsed by symbol -- `open_positions()`'s dict form would silently
+hide one leg of a split position) and `scheduler.py`'s main loop now
+tracks `{instrument: [legs]}`, managing each leg independently but
+counting `max_open_positions` by distinct instruments, never raw
+contracts. `TradeRecord` tags each trade with its `leg`.
+
+**Known limitation, not yet fixed:** `backtest.py` and `paper_trading.py`
+still simulate the OLD single-fixed-target exit model -- their
+validation/forward-simulation numbers don't yet reflect this new exit
+behavior (still true after the execution-realism pass below -- see that
+section's own "known limitation" note).
+
+**Execution Realism, Sizing Buffer, and Attribution Integrity.** Closes
+Revision 3 gaps #6-9.
+- **Sizing buffer** (`CFD_STAKE_SAFETY_MARGIN`, default 0.97):
+  `CfdRiskManager.stake_safety_margin` shrinks the risk budget itself (not
+  just the derived stake) by 3% before sizing, so a small unfavorable gap
+  between a signal's computed price and the actual Deriv fill price never
+  pushes realized risk over what was configured. Live trading only --
+  `backtest.py` leaves it at the default (no change), since a backtest's
+  fill price *is* the signal price by construction.
+- **Backtest cost realism** (`CFD_BACKTEST_SPREAD_PCT`=0.05%,
+  `CFD_BACKTEST_DAILY_FINANCING_PCT`=0.005%/day): Deriv Multipliers
+  guarantee exact stop-loss/take-profit execution (see `broker.py`), so
+  "no slippage" on those fills was already correct, not an optimistic
+  simplification -- spread and overnight financing were the two real,
+  unmodeled costs. `CfdBacktestEngine` now deducts a spread cost once per
+  closed trade (from that trade's own `pnl`) and accrues financing
+  directly against equity at every UTC day boundary a position stays
+  open -- matters far more now that positions can run for days, not just
+  hours. Both default to 0.0 on the engine itself (every existing unit
+  test's exact-fill assertions stay unchanged), but every real script
+  (`research_cfd_strategy.py`, `optimize_cfd_strategy.py`, the
+  `sweep_cfd_risk*.py`/`optimize_cfd_breakout.py` family) now passes the
+  configured non-zero values, so real validation runs include these costs
+  by default. Neither number is confirmed against Deriv's actual live
+  rates -- stated, reasonable placeholders, same status as the ADX/regime
+  thresholds elsewhere in this project. No commission line is modeled: no
+  confirmed commission structure exists for this product beyond spread
+  and financing.
+- **Idempotency + foreign-position detection**, closed together with one
+  mechanism (`trading/cfd/state.py`'s `set_pending_entry`/
+  `get_pending_entries`/`clear_pending_entry`, `scheduler.py`'s
+  `_reconcile_unknown_positions`): before submitting any order,
+  `scheduler.py` now records exactly what it's about to open; it clears
+  that record right after, whether every leg succeeded or not. If the
+  process crashes in between -- or its state-file commit never lands (a
+  separate, later workflow step) -- the next run finds a contract open on
+  Deriv with no local metadata and checks it against that stale pending
+  record: a match is **adopted** (full strategy/thesis/risk_amount
+  attribution recovered, nothing lost), no match makes it **foreign**
+  (never opened by this bot's own tracked intent at all). A foreign
+  position is never silently absorbed into this bot's own attribution --
+  its instrument is auto-excluded from new entries (the existing
+  `excluded_instruments` mechanism, a risk-reducing action needing no
+  human approval) and logged loudly for a human to investigate. Virtual
+  equity is still balance-derived, so a foreign position's P&L impact
+  still reaches it (not solvable without a per-trade balance API Deriv
+  doesn't expose here) -- but it can no longer happen *silently*, which is
+  what this gap actually asked for.
+
+**Automatic Drawdown De-Risking + Smoothed Equity.** Closes Revision 3
+gaps #4-5. `trading/cfd/smoothed_equity.py` and
+`trading/cfd/drawdown_monitor.py`, both wired into `scheduler.py` once
+per run, right after virtual equity is computed.
+- **Smoothed equity** (`CFD_EQUITY_SMOOTHING_ALPHA`, default 0.3): an EMA
+  that's deliberately asymmetric -- it damps how fast the SIZING-equity
+  figure catches up to a GAIN, but is capped so it can never lag a LOSS
+  (any drop snaps immediately to current equity). Matches
+  docs/VISION.md's own framing directly: don't let recent profit be an
+  excuse to scale risk up fast, but never slow down how fast the system
+  reacts to an actual loss -- every other protective check here (capital
+  floor, daily-loss halt) already depends on reacting immediately.
+- **High-water-mark**: the highest virtual equity ever observed, a simple
+  ratchet, never decreasing -- what "drawdown" is actually measured
+  against (how far below the best ever done, not how far below the
+  starting balance).
+- **Drawdown tiers** (`CFD_DRAWDOWN_MODERATE_PCT`=10%, `_DEEP_PCT`=20%,
+  `_SEVERE_PCT`=30%, illustrative unvalidated defaults matching
+  docs/VISION.md's own example): normal/moderate/deep/severe, mapping to
+  a 1.0/0.75/0.5/0.0 risk multiplier
+  (`CFD_DRAWDOWN_MODERATE_MULTIPLIER`, `_DEEP_MULTIPLIER`). Severe means
+  every new entry's risk-budgeted stake computes to $0 and SKIP TRADEs --
+  the same mechanism the daily-loss/capital-floor halts already use, not
+  a new one. This is a risk-reducing autonomous action (docs/VISION.md's
+  "Autonomy boundaries") -- no human approval needed, the same authority
+  Autonomous Demotion already has. Deliberately does NOT try to
+  distinguish a losing streak from genuine strategy decay (that's
+  Autonomous Demotion's per-strategy job) -- this is a blunt,
+  portfolio-wide response to being below the high-water-mark, whatever
+  the cause. Neither mechanism ever forces an exit on an already-open
+  position -- only new entries are affected.
+
+Both multipliers stack into the SAME `risk_per_trade_override` mechanism
+Portfolio Allocation already uses, so they compose cleanly with
+per-strategy weighting, and `risk.py`'s existing hard-ceiling clamp still
+applies regardless of what they compute to. `cfd_cli.py status`/
+`manager-report` both print the current tier and equity figures.
+
+**Qualification Gate.** `trading/cfd/qualification_gate.py`
+(`cfd_cli.py qualify-strategy NAME VERSION`) closes Revision 3 gap #10:
+docs/VISION.md is explicit that the system must never simply *assert*
+it's ready for real money, so this consolidates its 9-item checklist
+into one read-only report per strategy version -- never a promotion,
+never an approval, `CFD_ALLOW_LIVE_TRADING` stays a human's own decision
+regardless of the verdict. Every criterion is checked against data this
+project actually persists in a structured form -- trade logs, paper
+trade logs, the Strategy Registry's own audit trail -- never an invented
+number: positive expectancy and drawdown-within-envelope (from live
+trade history once there are 20+ of the strategy's own priced trades,
+falling back to paper trades before that), regime diversity (from
+`compute_performance()`'s own `by_regime` grouping), out-of-sample
+evidence (scanned from the registry's audit-trail `history`), the
+strategy version having stayed frozen during qualification (always PASS,
+structurally guaranteed by `register()` refusing to overwrite an
+existing version -- explained, not just claimed), no autonomous
+demotion ever recorded against this version, and -- once `ACTIVE` --
+live-vs-paper win-rate divergence since promotion. Two of the vision's
+nine criteria (risk controls actually firing under test, no
+duplicate-execution incidents) are reported **`unverifiable`**, not
+silently passed: nothing in this codebase persists a structured,
+queryable log of a Portfolio Risk Governor rejection or a
+pending-entry/foreign-position event today, only GitHub Actions log
+lines -- a genuinely complete gate still needs that structured incident
+log, tracked as follow-up work rather than faked here. The overall
+verdict is `ready_for_human_review` only once every checkable criterion
+passes; anything less reads `not_yet`.
+
+**Strategy Pool Diversity.** `trading/cfd/mean_reversion.py`
+(`MeanReversionStrategy`) is an attempt at Revision 3 gap #11: both
+registered strategies (`ema_crossover`, `donchian_breakout`) are
+trend-following, so `trading.cfd.regime`'s `"ranging"` classification
+has zero registered strategies suited to it -- every ranging period is a
+`NO TRADE` by omission, not design. Mean reversion fades price extremes
+back toward a Bollinger Band mean instead of following a breakout or
+crossover -- a genuinely different structural bet, real diversification
+against the existing pool rather than another correlated trend-following
+variant, and it's structurally sound: 9 unit tests confirm the entry/
+exit signal logic fires exactly as designed. But `scripts/
+optimize_cfd_mean_reversion.py`'s TRAIN/TEST grid search (81 parameter
+combinations, ~2 years of H1 forex/gold history) found **zero**
+combinations with positive CAGR and drawdown within the -25% cap --
+baseline alone lost -83.8% CAGR on TRAIN, -81.2% on TEST. An honest
+negative result: `mean_reversion@v1` is `RETIRED` with the full numbers
+recorded in its registry history, not left as a misleadingly-still-live
+`CANDIDATE`. This rules out one specific formulation on this data, not
+mean-reversion generally -- a different indicator, instrument subset, or
+timeframe is still untried.
+
+A second attempt, `trading/cfd/rsi_reversion.py`
+(`RsiReversionStrategy`), was built by GPT to a spec from this session
+(the user asked for a second AI's independent input; with no direct
+Claude<->GPT integration available, the collaboration ran through a
+GitHub issue for discussion and a PR for the actual build) and reviewed
+before merge -- diff read in full, branch tested in an isolated
+worktree, full suite run there before and after merging. It fades RSI
+momentum exhaustion behind a strict ADX flat-market gate, structurally
+distinct from `mean_reversion`'s Bollinger-band price-deviation fade
+(different indicator, plus an explicit trend-strength gate baked into
+the entry itself). `scripts/optimize_cfd_rsi_reversion.py`'s TRAIN/TEST
+grid search (243 combinations) found only 1 candidate that cleared even
+the cheap TRAIN gate, and it failed out-of-sample (`TEST cagr=-6.8%`,
+`[OVERFIT]`) -- another honest negative result, so `rsi_reversion@v1` is
+`RETIRED` too, same treatment as `mean_reversion@v1`.
+
+A third attempt, `trading/cfd/support_resistance.py`
+(`SupportResistanceReversionStrategy`), was proposed by GPT in issue #5's
+joint design discussion and built this session. It's the first genuinely
+different data representation, not just a different formula over the
+same close-price input: confirmed swing-high/swing-low price structure
+(strict-inequality "fractal" pivots, `shift()`-confirmed so a pivot never
+informs a decision before it could genuinely have been known), not a
+derived statistic over closes the way `mean_reversion`'s Bollinger band
+and `rsi_reversion`'s RSI oscillator both are. A first live grid search
+came back with multi-million-percent CAGR -- self-evidently not a real
+result -- traced to a genuine strategy bug, not a fabricated one: the
+entry check (`row["low"] <= support * (1 + touch_threshold_pct)`) had no
+lower bound, so it stayed true for a low far *below* a stale, already-
+broken support (support only updates on a fresh confirmed pivot, which
+can lag well behind a real breakdown), firing a BUY on every single bar
+while flat instead of once on a genuine touch -- roughly 5x the trade
+count any other CFD strategy here produces on the same data, which
+percentage-of-equity position sizing then compounded into an impossible
+number. Fixed to a two-sided tolerance band (the low/high must land *in*
+the band around support/resistance, not merely at-or-beyond it), with two
+new regression tests (`test_flat_low_far_below_stale_support_does_not_
+open_long`, `test_flat_high_far_above_stale_resistance_does_not_open_
+short`) covering the exact case that produced the bad numbers. The
+absurd first run was never registered as a result -- same evidence-based
+discipline as `mean_reversion@v1` and `rsi_reversion@v1`'s honest
+negatives, just applied to a number that was too good rather than too
+bad to be true.
+
+The re-run against the fixed logic confirmed the fix (2,714 TRAIN /
+1,172 TEST trades -- sane, in line with every other CFD strategy here on
+this data) but delivered an honest failure: baseline `TRAIN cagr=-91.8%
+maxdd=-99.5% win_rate=48.1%`, `TEST cagr=-94.5% maxdd=-91.4%
+win_rate=45.4%` -- near account wipeout on both splits -- and **0/81**
+grid combinations cleared even the cheap TRAIN gate. `support_
+resistance@v1` is `RETIRED` too, same treatment as the other two.
+
+Three structurally distinct approaches (`mean_reversion`, `rsi_reversion`,
+`support_resistance`) are now ruled out on this data, not just one
+guess. The "ranging" regime gap in gap #11 is still open -- a
+session/time-of-day approach, a different timeframe, or a different data
+source are still untried.
+
+Before building a fourth fade on the same assumption, `scripts/
+diagnose_cfd_regime.py` checks the assumption itself: does
+`trading.cfd.regime`'s `RANGING` label actually mean "price reverts
+toward a level/mean" on this data, or is it mixing genuinely quiet
+consolidation with pre-breakout compression or noisy chop -- three
+structures a single fade has no business treating identically? It's
+descriptive, not a strategy: no parameters fitted, no CAGR reported,
+just regime composition (by instrument and rough session), episode
+persistence/transitions, and forward return/excursion after a `RANGING`
+episode starts, with no trading logic applied. Backed by two new
+vectorized functions in `trading/cfd/regime.py`
+(`classify_regime_series()`/`classify_volatility_series()` -- per-bar
+siblings of the existing live, last-bar-only classifiers, used only for
+this kind of research).
+
+Run live across all 4 instruments on full available history: `RANGING`
+is a fairly balanced ~45-55% of bars per instrument, doesn't skew by
+session, and forward return after a `RANGING` episode starts is close
+to zero at every horizon tested (5/10/20 H1 bars) with roughly
+symmetric MFE/MAE -- genuine two-sided price action, not a one-sided
+drift. The volatility-bucket split meant to test "quiet vs. compression
+vs. chop" didn't have enough data to be conclusive (85-97% of episode
+starts read as `normal` volatility under the existing thresholds; the
+`low`/`high` buckets had only 1-12 episodes each). Net read: no strong
+evidence `RANGING` is mixing multiple structures at this resolution --
+more likely, all three retired fades found a real but thin edge (MFE
+often just a few tenths of a percent over 20 bars) that this project's
+own modeled transaction costs (spread + financing) ate before it showed
+up as profit, rather than "no edge existed." Posted to GPT on issue #5
+for the joint read on what to build next given this.
+
+**CFD AI Demo Bridge (ChatGPT <-> Deriv mutual-failover coverage).** PR #6
+implements a narrow, DEMO-only bridge letting a specific GitHub issue #5
+comment (`AI_EXECUTE_DEMO command_id=<uuid> intent=evaluate`, exact
+grammar, repo-owner actor only) trigger one evaluation of the same
+deterministic scheduler `cfd-trading.yml` already runs hourly -- built at
+the user's explicit request as continuity coverage for when either AI
+(Claude or ChatGPT) is out of tokens/context, not as a human-approval
+gate (both post issue comments under the same account, so comment-author
+identity can't actually distinguish a human from either AI -- the real
+safety boundaries are `CFD_ALLOW_LIVE_TRADING=false` hardcoded twice,
+the narrow command grammar with no side/stake/leverage override,
+UUID replay protection reserved before any evaluation, and the existing
+deterministic risk pipeline itself). Developed on `gpt/deriv-demo-bridge`
+(GitHub only activates `issue_comment` workflows from the default
+branch, so this can't fire from a stray comment until deliberately
+synced to `main`) with review split between GPT (who designed and built
+the initial parser/workflow) and Claude, who found and closed two real
+activation blockers before any `main` sync: the bridge workflow's
+`concurrency.group` didn't match `cfd-trading.yml`'s (a bridge run and
+the real scheduled run could otherwise execute simultaneously against
+the same state files), and there was no way to see whether a triggered
+command actually did anything without reading Actions logs by hand.
+`trading/cfd/scheduler.run_once()` now optionally threads a
+`bridge_command_id` through and returns a per-instrument
+`TRADE`/`NO_TRADE`/`REJECTED`/`ERROR` summary (additive only -- the real
+hourly schedule discards the return value, unchanged behavior there);
+`scripts/run_cfd_trading.py` posts that summary back to issue #5 as a
+structured comment, reporting only an exception's class name on error,
+never its message text, since that could otherwise echo broker/library
+internals into a public comment. See `docs/ARCHITECTURE_AUDIT.md`'s
+progress log (2026-09-21) for the full before/after. Still not synced to
+`main`, no live trading enabled, and not yet live-smoke-tested (that
+needs the user's own explicit go-ahead, same as any real-execution-
+adjacent step in this project).
+
+**Timeframe-champion accounts (30m/1H/4H/1D, foundation built, not yet
+populated).** Between 2026-09-21 and 09-24 the user asked GPT to take
+over operating the bot autonomously while Claude was rate-limited (see
+issue #5's "STATUS CHECKPOINT" comments) -- a large, legitimate expansion
+under the user's own direction, not a rogue action, that grew into a
+41-virtual-account research lab (`trading/cfd/virtual_accounts.py`) on a
+new `gpt/autonomous-demo-runner` branch. On handback, the user specified
+a concrete structure for it: four isolated $100 "champion" accounts, one
+per timeframe (30m/1H/4H/1D), each running whichever strategy most
+recently cleared TRAIN/TEST/walk-forward at that timeframe's own
+granularity -- explicitly *not* a shared risk pool across the four.
+Exit is price-bound (ATR stop/target via Deriv's own `stop_loss`/
+`take_profit`, enforced server-side) or the strategy's own signal exit,
+never a timeframe-duration-based forced close -- an initial "allow up to
+2x the timeframe before force-closing" idea was replaced with this after
+a design discussion surfaced that time-based extension while losing is
+functionally the same trap issue #5 already forbids for sizing
+(refusing to accept a loss and hoping it turns around).
+
+H1's champion is `core_h1`, already wired into `scheduler.run_once()` by
+GPT's autonomous work (every `ema_crossover@v1` trade already tags
+`virtual_account_id="core_h1"`) -- no new code needed there. Building the
+other three surfaced a real cross-system bug first: `run_once()` had no
+filter for which isolated account owns an open Deriv contract, so a
+champion's position on an instrument `core_h1` also trades would get
+wrongly adopted under `core_h1`'s own exit/risk accounting (see
+`docs/ARCHITECTURE_AUDIT.md`'s 2026-09-24 entry for the full mechanism).
+Fixed via `scheduler._owned_by()` before any champion code went further.
+New `trading/cfd/timeframe_champion.py` (per-timeframe strategy
+assignment, kept deliberately separate from the H1-only
+`strategy_registry.py`) and `trading/cfd/champion_scheduler.py` (the
+M30/H4/D1 loop itself, reusing `CfdRiskManager`/`classify_regime`/the
+same broker order/settlement calls `core_h1` uses) are built, tested (26
+new tests, full suite 542 passed), and wired to run right after
+`run_once()` in the same process every cycle -- but all three champions
+start **unassigned**: nothing has cleared TRAIN/TEST/walk-forward at
+M30/H4/D1 yet, so this is a standing NO TRADE everywhere until the
+promotion pipeline (reusing the existing `optimize_cfd_*.py` scripts,
+whose `YFINANCE_INTERVAL_BY_GRANULARITY` map was also missing 30m/4h
+entries -- fixed the same session) actually assigns each one its first
+validated strategy. No live trading; `CFD_ALLOW_LIVE_TRADING=false`
+unchanged; not live-smoke-tested yet.
+
+A user review the same day, before any champion was ever assigned a
+strategy, found and fixed five bugs in `champion_scheduler.py`: no
+`paused`/`excluded_instruments` check (a champion could keep trading
+while the bot was supposedly fully stopped), a stale persisted daily-
+loss `halted` flag that could mask an already-breached day (now
+self-heals from equity vs. daily start equity in `CfdRiskManager`
+itself, benefiting `core_h1` too), no crash-recovery pending-entry
+marker before order submission (fixed with its own
+`champion_pending_entries` state namespace, deliberately not sharing
+`run_once()`'s `pending_entries` key -- see `docs/ARCHITECTURE_AUDIT.md`'s
+matching entry for why that would have silently defeated it), closed
+positions popping their open-trade tracking before the trade/equity
+record was durably persisted, and exit rebuilding the strategy with
+`{}` instead of the params actually used at entry. 15 new tests, full
+suite 558 passed. Still no champion assigned; no live trading.
+
+**Event Blackout (news-integration design in progress).** GitHub issues
+#4/#5 are a joint Claude/GPT design discussion on incorporating market/
+news context (the user asked for a second AI's independent input on
+this specifically). Both independently ranked the same approach
+highest: news as an event blackout / NO TRADE filter around scheduled
+high-impact releases (Fed/NFP/CPI), not a raw headline-to-signal system
+-- lowest infrastructure cost (a scheduled calendar, not freeform text
+needing NLP), only ever removes opportunity rather than adding a
+directional bet, and mirrors a working precedent already in this repo
+(the stock/Alpaca side's "Ongoing news monitoring" routine, further up
+this README). `trading/cfd/event_blackout.py` (`EconomicEvent`,
+`in_blackout_window()`) is the pure mechanism -- a timestamp check
+against a supplied event list -- with 12 unit tests, but **not yet
+wired into any live or backtest decision**: it still needs a concrete,
+reliably-timestamped economic calendar data source and a real TRAIN/TEST
+validation (does it actually improve expectancy/drawdown vs. a
+price-only baseline) before it can touch a real decision, the same bar
+every strategy in this pool has to clear. See issue #4 for the full
+failure-mode analysis and the proposed experiment design.
+
+**Failure Analysis.** `trading/cfd/failure_analysis.py`
+(`cfd_cli.py failures`) reads the Trade Database and classifies every
+losing trade as `normal_statistical_loss` (lost about its budgeted
+`risk_amount` -- the ordinary cost of the edge), `excessive_risk` (lost
+notably more than budgeted -- a gap, slippage, or sizing issue), or
+`regime_mismatch` (the regime recorded at entry wasn't in the strategy's
+`suited_regimes` -- only possible for a trade predating the Strategy
+Selector's regime gate). It also flags **strategy degradation**: a
+registered strategy whose most recent trades' expectancy has fallen
+sharply versus its own earlier history. Three of the vision's loss
+categories -- abnormal market/news event, execution problem, data
+problem -- are **never guessed at**: this project doesn't capture the
+news, latency, or data-quality signals they'd need, so a trade that might
+be one of those is classified `normal_statistical_loss` rather than a
+fabricated specific cause (see `docs/ARCHITECTURE_AUDIT.md`). A
+degradation flag on an `ACTIVE` strategy is acted on automatically, not
+just surfaced -- see **Autonomous Demotion** below.
+
+**Validation: Walk-Forward + Monte Carlo.** `trading/cfd/validation.py`
+adds the two checks docs/VISION.md's pipeline calls for beyond the
+TRAIN/TEST split `optimize_cfd_strategy.py`/`optimize_cfd_breakout.py`
+already do. **Walk-forward** (`run_walk_forward`) splits the TEST period
+into several sequential, non-overlapping folds and re-runs the backtest
+on each with the *same fixed params* (it doesn't re-optimize per fold --
+that would multiply the grid search's runtime by the fold count; it
+checks whether already-chosen params keep working across time, not what
+the best re-tuning per period would have been), reporting how many folds
+were profitable and the worst single fold's drawdown. **Monte Carlo**
+(`run_monte_carlo`) reshuffles a backtest's own realized trade P&Ls into
+thousands of random orders, to see whether the result depended on a
+lucky sequence, and reports a probability-of-ruin estimate (the fraction
+of simulated paths that ever dropped to half of starting equity) plus
+percentiles of final equity and max drawdown. Both are pure functions
+over data a backtest already produces -- no new market data or API calls.
+
+**Research Lab.** `trading/cfd/research_lab.py` automates running a
+strategy's parameter grid through the *entire* pipeline -- Backtest ->
+Out-of-Sample -> Walk-Forward -> Monte Carlo -- and auto-registers any
+candidate that clears every gate into the Strategy Registry as
+`VALIDATED`, **never higher**: the remaining steps (Paper Trading, then
+Promote) still need a human's explicit `promote-strategy` call, per
+docs/VISION.md's rule against promoting a strategy on backtest results
+alone. This doesn't invent new strategy logic -- "candidate" means a
+new, systematically-searched parameter set for an *existing* strategy
+class, the same grid search `optimize_cfd_breakout.py` already does by
+hand; what's new is that a passing result gets registered automatically,
+audit trail and all, instead of a human reading a printed table and
+typing the registration command themselves. `scripts/
+research_cfd_strategy.py` runs this for `donchian_breakout` alone, on
+demand (`research-strategy` command).
+
+**Autonomous weekly research (self-improvement loop).** `scripts/
+research_cfd_strategies.py` (plural) generalizes the above across
+*every* registered strategy class (`ema_crossover`, `donchian_breakout`,
+`mean_reversion`) in one pass, and `.github/workflows/cfd-research.yml`
+runs it **on its own, every Sunday, with no one having to trigger it**
+-- the self-improvement loop closing the gap where a grid search only
+ever ran when someone remembered to ask for one. Each run fetches fresh
+market history once and shares it across all three strategies' searches
+(rather than three separate fetches), wraps each strategy's pass in its
+own try/except so one strategy's data or logic problem can't abort the
+others, and prints a consolidated summary of what got registered (or
+didn't -- a run that finds nothing new is a normal, honestly-reported
+outcome, not a failure). The hard boundary is unchanged from every
+other automation in this project: it can register a new candidate at
+`VALIDATED` on its own, and **never** higher -- it can't promote to
+`PAPER`/`ACTIVE`, can't touch `CFD_ALLOW_LIVE_TRADING`, and can't change
+a risk ceiling. Those still need a deliberate, reasoned
+`promote-strategy` command a human types; this loop only removes the
+"someone has to remember to run the search" step, not the
+human-decides-to-trade-it step. Also runnable on demand via the "CFD
+Manual Command" workflow's `research-strategies` command. Extending it
+to a genuinely new strategy *structure* (not just new parameters for an
+existing one) still needs a person -- or Claude, asked -- to design and
+add it to `STRATEGY_SPECS`, the same way `mean_reversion.py` was added;
+this loop only automates re-searching parameter space for structures
+that already exist.
+
+**Operating Modes.** `trading/cfd/operating_mode.py`
+(`cfd_cli.py set-mode {defensive,normal,aggressive,recovery}`) scales
+`risk_per_trade` and `max_open_positions` by a fixed, pre-approved
+multiplier per mode -- never whether the bot trades at all (`pause`/
+`resume` still covers that). `defensive` and `recovery` deliberately use
+the *same* conservative 0.5x multiplier: Recovery means "trade smaller
+because equity is under strain," never "trade bigger to catch up on
+losses faster" -- the latter is exactly the revenge-trading/martingale
+pattern docs/VISION.md forbids outright. They're kept as distinct,
+separately-loggable states so *why* the bot is being cautious stays
+visible, even though the numeric effect is identical today. `aggressive`
+(1.5x) is still capped by `CFD_MAX_RISK_PER_TRADE_CEILING` -- an absolute
+ceiling no mode may ever cross, regardless of `CFD_RISK_PER_TRADE` or
+which mode is set.
+
+**Paper Trading.** `trading/cfd/paper_trading.py` runs every strategy
+sitting in the Strategy Registry's `PAPER` state through the same
+regime-gated Strategy Selector logic as `ACTIVE` strategies, on the same
+real-time candles the live scheduler already fetched -- but never places
+a real (or demo-account) Deriv order. A paper position's stop/target are
+checked against each new candle's high/low locally (the same no-slippage
+exact-fill logic `CfdBacktestEngine` uses for a historical backtest,
+just run incrementally live instead of once over history, since there's
+no real broker managing a paper position's stop-loss/take-profit). Each
+`PAPER` strategy tracks its own independent virtual equity, seeded at
+`CFD_VIRTUAL_STARTING_CAPITAL`, and its results land in a **separate**
+log (`state/cfd_paper_trades.jsonl`, `cfd_cli.py paper-performance`) --
+never mixed with the real Trade Database. This is genuinely the
+"Paper Trading" pipeline stage docs/VISION.md calls for -- real
+forward-looking validation on data no backtest ever saw, between
+automated validation (Research Lab, which only ever lands a candidate at
+`VALIDATED`) and a human's decision to promote to `ACTIVE`.
+
+**Autonomous Demotion.** `trading/cfd/decay_supervisor.py`
+(`run_autonomous_demotion`, called by `scheduler.py` at the start of
+every run, before it even connects to Deriv) checks every `ACTIVE`
+strategy against Failure Analysis's degradation signal and demotes it
+(`ACTIVE -> PAUSED`) automatically, through the same audited
+`set_state()` path a human's `promote-strategy` command uses, with the
+same required reason -- **no human approval needed for this specific
+direction.** Per `docs/VISION.md`'s "Autonomy boundaries": the AI may act
+on its own for anything that only *reduces* risk or exposure (strategy
+selection, demotion, pausing, cutting allocation) -- a human is only
+required for the reverse (raising a hard risk ceiling, enabling real
+money, promoting a strategy past `PAPER`, changing the safety
+architecture itself). Demotion never promotes anything and never
+re-validates a strategy on its own -- a demoted strategy sits `PAUSED`
+until a human or a future scheduled run sends it back through
+`scripts/research_cfd_strategy.py` for re-validation.
+
+**AI Trading Manager: Management Report.** `trading/cfd/manager_report.py`
+(`cfd_cli.py manager-report`) is the layer that ties everything above
+together: it reads the Trade Database, the Paper Trading log, and the
+Strategy Registry, and produces a consolidated report -- overall
+performance, the loss breakdown, every strategy grouped by lifecycle
+state, and **concrete, copy-pasteable commands** for whatever still needs
+a human (e.g. "this `VALIDATED` candidate is ready to start paper
+trading, run `promote-strategy ... PAPER`", "this `PAPER` strategy has 25
+trades and a positive expectancy, worth reviewing for `ACTIVE`"). A
+degraded `ACTIVE` strategy still shows up here too, but only as
+*informational* -- autonomous demotion above already handles it on the
+next scheduler run, so the report's command for that case is explicitly
+labeled optional, for a human who wants to act sooner than that. **This
+report itself never applies anything requiring approval** -- promoting
+past a boundary always goes through a human running the command
+themselves.
+
+**Trade Database & Performance Engine.** Every trade the live bot closes
+-- whether by its own signal-exit logic or by Deriv auto-closing a
+stop-loss/take-profit between runs -- is logged to
+`state/cfd_trades.jsonl` (`trading/cfd/trade_log.py`), all money fields
+in virtual-equity terms. `scripts/cfd_cli.py performance`
+(`trading/cfd/performance.py`) computes net return, expectancy, profit
+factor, win rate, average win/loss, average R multiple, Sharpe, Sortino,
+Calmar, max drawdown, longest losing streak, and breakdowns by strategy/
+regime/session/side from that log, entirely offline (no Deriv connection
+needed). A trade Deriv closed on its own between two runs can only be
+priced exactly when it's the *only* one that closed in that gap (the
+balance delta is unambiguous); if several closed at once, they're logged
+honestly with `pnl: null` ("unattributed") rather than a guessed split --
+excluded from every pnl-based average, never silently treated as a
+break-even trade. **The Deriv account dashboard is still the ground
+truth** for anything this log can't yet attribute precisely.
 
 **Safety model is different from Alpaca/OANDA's**, because Deriv's
 account model is: Alpaca/OANDA use one base URL with a paper/live flag
@@ -485,22 +1251,55 @@ markets are shut, as they were when this was run. Confirmed multiplier
 values differ by instrument yet again: `cryBTCUSD` accepts
 100/200/300/500/800, not `risk.py`'s default of 20.
 
-**Still not validated:** the real forex/gold instruments in
-`CFD_INSTRUMENTS` (`frxXAUUSD` etc.) *themselves* -- testing happened
-on a weekend, so those markets were closed before an actual order
-could be placed there specifically (confirmed as far as the request
-being schema-valid, via a "market closed" response rather than a
-validation error). Deriv caps which `multiplier` values it accepts per
-instrument, unchecked for these specific instruments. The order
-*mechanism* is proven correct now (crypto test above), so this
-remaining gap is narrower than before: forex/gold's own market hours
-and multiplier values, not an unproven code path. The cron schedule in
-`cfd-trading.yml` stays commented out until this is checked. (Crypto
-itself isn't a drop-in fix for this -- `EmaCrossoverStrategy`'s
-parameters were validated on forex/gold data only, not crypto's
-different volatility profile, so `cryBTCUSD`/`cryETHUSD` need their
-own backtest before joining `CFD_INSTRUMENTS` for real trading, even
-though their order mechanism already works.)
+**Update 2026-09-19: forex/gold instruments confirmed too.** Two full
+scheduler runs (`scripts/run_cfd_trading.py`, via the `CFD Trading`
+workflow's manual dispatch) against the real configured instruments
+(`frxXAUUSD` etc.) completed cleanly -- candle fetches succeeded, no
+"market closed" errors, no exceptions. The first run also confirmed the
+virtual-equity baseline capture (`trading.cfd.capital`) and capital
+floor set correctly against the live account; the second run's
+set-once baseline logic correctly made no changes. The `cfd-trading.yml`
+cron schedule is now enabled on that basis (previously commented out --
+see git history for that earlier caution, from before this system had
+the virtual equity model, Trade Database, or any of the safety layers
+described above it in this section). Deriv's per-instrument `multiplier`
+caps are still discovered empirically as each one is actually used
+(same "confirm against a live response, never guess" discipline as
+everywhere else in this file), not exhaustively pre-verified. (Crypto
+isn't a drop-in fix for forex/gold's own validated parameters --
+`EmaCrossoverStrategy`'s params were validated on forex/gold data only,
+not crypto's different volatility profile, so `cryBTCUSD`/`cryETHUSD`
+still need their own backtest before joining `CFD_INSTRUMENTS`, even
+though their order mechanism works.)
+
+**Update 2026-09-26: crypto research accounts (`crypto_btc_h1`,
+`crypto_eth_h1`), SHADOW tier, live forward data collection.** The
+backtest above is still unrun (needs the "CFD Manual Command" workflow's
+network access, which this environment doesn't have), but crypto trades
+24/7 unlike forex/gold, which sits idle every weekend -- so rather than
+wait on that one historical backtest, two new SHADOW virtual accounts
+now collect **live forward** signal/regime observations on `cryBTCUSD`/
+`cryETHUSD` every scheduler run, same mechanism `intraday_m15`/
+`intraday_m5` already use for forex: real candles, all three built-in
+strategies' signals logged to `state/cfd_lab_observations.jsonl`, no
+simulated fills (SHADOW, not PAPER) and no broker orders -- see
+`paper_trading.run_virtual_account_paper`'s own docstring for why only
+PAPER tier ever reaches the broker at all. `VirtualAccountSpec` gained an
+`instruments` field (default `None` on every pre-existing spec, meaning
+"scan `CFD_INSTRUMENTS` as before") so these two accounts can declare
+their own instrument instead of widening the global list --
+`trading/cfd/lab_collector.py`'s fetch loop now scans `spec.instruments
+or instruments` per account rather than one flat list for everyone. This
+was a deliberate scoping choice: `CFD_INSTRUMENTS` is also read directly
+by `scheduler.py`'s, `champion_scheduler.py`'s, and `quota.py`'s real
+(ACTIVE_DEMO) order-placing loops, all of which only ever run
+forex/gold-validated strategies -- adding crypto there would have put
+unvalidated params in the real order path, exactly what the backtest
+above exists to gate against. This way stays strictly additive: nothing
+about the existing 41 accounts or `CFD_INSTRUMENTS` changed, crypto data
+accumulates in parallel, and the eventual TRAIN/TEST backtest (once
+network access allows running it) gets real Deriv forward data to
+cross-check against yfinance's, not just yfinance alone.
 
 **Backtesting: `scripts/optimize_cfd_strategy.py` (`CfdBacktestEngine`
 in `src/trading/cfd/backtest.py`)** mirrors `optimize_strategy.py`'s
@@ -620,11 +1419,26 @@ src/trading/
     positions.py             # tracked stop/target prices (+ owning bucket) for open fractional positions
     buckets.py                # safe/risk virtual sub-accounts, active once the withdrawal milestone hits
   cfd/                        # separate CFD/forex (Deriv) system -- see "CFD/forex trading" above
-    broker.py                   # Deriv WebSocket API calls -- UNTESTED against a real account as of writing
-    strategy.py                   # intraday EMA crossover, long or short
-    risk.py                        # stake/multiplier sizing, capital floor, daily-loss circuit breaker
-    scheduler.py                    # one strategy evaluation + order pass, every ~20 min (async)
-    state.py                         # paused flag, capital floor, excluded instruments -- own state file
+    broker.py                   # Deriv WebSocket API calls -- confirmed live against a real demo account
+    strategy.py                   # intraday EMA crossover, long or short (validated)
+    breakout.py                    # Donchian channel breakout, long or short (unvalidated as of writing)
+    mean_reversion.py               # Bollinger Band mean-reversion, targets the "ranging" regime (RETIRED as of writing -- see "Strategy Pool Diversity" above)
+    capital.py                      # virtual equity model -- rebases demo P&L onto $100, see "Capital model" above
+    risk.py                          # stake/multiplier sizing, capital floor, daily-loss circuit breaker, min-stake SKIP TRADE guard
+    strategy_registry.py              # Strategy Registry -- name@version, lifecycle states, promotion audit trail
+    regime.py                          # Market Regime Engine -- per-instrument trending/ranging/unknown via ADX
+    selector.py                         # Strategy Selector -- matches regime against ACTIVE strategies' suited_regimes
+    failure_analysis.py                  # Failure Analysis -- loss classification + strategy degradation detection
+    validation.py                         # Walk-Forward + Monte Carlo / Stress Test
+    research_lab.py                        # Research Lab -- candidate generation/evaluation, auto-registers passing ones as VALIDATED
+    operating_mode.py                       # Defensive/Normal/Aggressive/Recovery risk-sizing multipliers, hard-capped
+    paper_trading.py                         # Paper Trading -- runs PAPER-state strategies on live candles, no real orders
+    manager_report.py                         # AI Trading Manager report -- consolidated view + recommended commands, never auto-applied
+    trade_log.py                       # Trade Database -- append-only JSONL log of closed trades
+    performance.py                      # Performance Engine -- metrics computed from the trade log
+    scheduler.py                         # one strategy evaluation + order pass, every ~15min (async)
+    state.py                              # paused flag, capital floor, broker baseline, open-trade tracking, excluded instruments
+    backtest.py                            # CfdBacktestEngine -- TRAIN/TEST discipline, mirrors backtest/engine.py
 scripts/
   run_backtest.py
   compare_strategies.py       # all strategies x several market regimes
@@ -633,6 +1447,8 @@ scripts/
   cli.py                         # status / pause / resume / buy / sell / set-floor / cancel -- used by manual-command.yml
   run_cfd_trading.py               # used by cfd-trading.yml
   cfd_cli.py                         # status / pause / resume / exclude-instrument -- used by cfd-manual-command.yml
+  research_cfd_strategy.py            # Research Lab driver, donchian_breakout only, on demand
+  research_cfd_strategies.py           # Research Lab driver, every registered strategy class -- used by cfd-research.yml
 .github/workflows/
   daily-trading.yml
   manual-command.yml
@@ -641,11 +1457,18 @@ scripts/
   optimize-strategy.yml
   cfd-trading.yml
   cfd-manual-command.yml
+  cfd-research.yml                 # weekly autonomous multi-strategy Research Lab run
 state/
   bot_state.json
   positions.json
   buckets.json
   cfd_bot_state.json
+  cfd_trades.jsonl        # Trade Database -- see "Trade Database & Performance Engine" above
+  cfd_paper_trades.jsonl   # Paper Trading log -- separate from the real Trade Database, see "Paper Trading" above
+  cfd_strategy_registry.json  # Strategy Registry -- see "Strategy Registry & lifecycle" above
+docs/
+  VISION.md                # master vision for the AI Trading Manager -- read this first
+  ARCHITECTURE_AUDIT.md      # what exists vs. the vision, and what's still missing
 tests/
 ```
 
