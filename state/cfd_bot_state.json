@@ -131,26 +131,6 @@
         "H1"
       ]
     },
-    "virtual:iso_breakout_m15|frxGBPUSD": {
-      "contract_id": -809,
-      "side": "short",
-      "entry_price": 1.33176,
-      "stop_price": 1.3342576700824103,
-      "target_price": 1.327763727868144,
-      "stake": 29.12,
-      "multiplier": 20,
-      "risk_amount": 1.09,
-      "entry_time": "2026-11-10T16:34:59.684946+00:00",
-      "equity_before": 109.23,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:iso_breakout_m5|frxUSDJPY": {
       "contract_id": -811,
       "side": "long",
@@ -170,10 +150,30 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_breakout_m5|frxGBPUSD": {
+      "contract_id": -812,
+      "side": "long",
+      "entry_price": 1.33396,
+      "stop_price": 1.333057739755901,
+      "target_price": 1.3354036163905587,
+      "stake": 78.91,
+      "multiplier": 20,
+      "risk_amount": 1.07,
+      "entry_time": "2026-11-10T18:34:36.618734+00:00",
+      "equity_before": 106.75,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
-    "virtual:iso_breakout_m15": 110.99,
+    "virtual:iso_breakout_m15": 110.03,
     "virtual:iso_breakout_m5": 106.75,
     "virtual:breakout_h1": 91.22,
     "virtual:iso_trend_h1": 100.99,
@@ -183,7 +183,7 @@
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 811,
+  "paper_trade_counter": 812,
   "daily_risk_tracking": {
     "date": "2026-11-10",
     "start_equity": 107.0,
@@ -480,12 +480,12 @@
         "M15"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 110.99,
+      "equity": 110.03,
       "high_water_mark": 110.99,
-      "realized_pnl": 10.99,
-      "closed_trades": 109,
+      "realized_pnl": 10.03,
+      "closed_trades": 110,
       "wins": 47,
-      "losses": 62,
+      "losses": 63,
       "drawdown_from_start_pct": 0.0
     },
     "iso_breakout_m5": {
