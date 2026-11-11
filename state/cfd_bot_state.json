@@ -130,26 +130,6 @@
         "H4",
         "H1"
       ]
-    },
-    "virtual:iso_meanrev_m15|frxEURUSD": {
-      "contract_id": -815,
-      "side": "short",
-      "entry_price": 1.11695,
-      "stop_price": 1.117588729331712,
-      "target_price": 1.1164709530012162,
-      "stake": 96.71,
-      "multiplier": 20,
-      "risk_amount": 1.11,
-      "entry_time": "2026-11-10T23:30:44.024861+00:00",
-      "equity_before": 110.61,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
     }
   },
   "paper_equity": {
@@ -157,7 +137,7 @@
     "virtual:iso_breakout_m5": 105.9,
     "virtual:breakout_h1": 91.22,
     "virtual:iso_trend_h1": 100.99,
-    "virtual:iso_meanrev_m15": 110.61,
+    "virtual:iso_meanrev_m15": 111.27,
     "virtual:iso_meanrev_m5": 118.25,
     "virtual:iso_trend_m15": 97.12,
     "virtual:iso_trend_m5": 99.39,
@@ -519,11 +499,11 @@
         "M15"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 110.61,
+      "equity": 111.27,
       "high_water_mark": 113.71,
-      "realized_pnl": 10.61,
-      "closed_trades": 168,
-      "wins": 104,
+      "realized_pnl": 11.27,
+      "closed_trades": 169,
+      "wins": 105,
       "losses": 64,
       "drawdown_from_start_pct": 0.0
     },
