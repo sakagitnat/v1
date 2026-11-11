@@ -11,86 +11,6 @@
   "operating_mode": "defensive",
   "operating_mode_reason": "auto defensive: moderate drawdown",
   "paper_positions": {
-    "virtual:breakout_h1|frxEURUSD": {
-      "contract_id": -804,
-      "side": "short",
-      "entry_price": 1.11491,
-      "stop_price": 1.1183032381452638,
-      "target_price": 1.109480818967578,
-      "stake": 14.75,
-      "multiplier": 20,
-      "risk_amount": 0.9,
-      "entry_time": "2026-11-10T16:29:59.420182+00:00",
-      "equity_before": 89.78,
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
-    "virtual:iso_trend_h1|frxEURUSD": {
-      "contract_id": -805,
-      "side": "short",
-      "entry_price": 1.11491,
-      "stop_price": 1.117624590516211,
-      "target_price": 1.1121954094837891,
-      "stake": 20.74,
-      "multiplier": 20,
-      "risk_amount": 1.01,
-      "entry_time": "2026-11-10T16:30:00.004348+00:00",
-      "equity_before": 100.99,
-      "regime": "trending",
-      "virtual_account_id": "iso_trend_h1",
-      "horizon": "isolated",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
-    "virtual:breakout_h1|frxUSDJPY": {
-      "contract_id": -813,
-      "side": "long",
-      "entry_price": 158.849,
-      "stop_price": 158.48112755729198,
-      "target_price": 159.43759590833278,
-      "stake": 19.69,
-      "multiplier": 20,
-      "risk_amount": 0.91,
-      "entry_time": "2026-11-10T19:34:41.336176+00:00",
-      "equity_before": 91.22,
-      "regime": "trending",
-      "virtual_account_id": "breakout_h1",
-      "horizon": "swing",
-      "entry_timeframe": "H1",
-      "context_timeframes": [
-        "H4",
-        "H1"
-      ]
-    },
-    "virtual:iso_breakout_m15|frxEURUSD": {
-      "contract_id": -829,
-      "side": "short",
-      "entry_price": 1.11388,
-      "stop_price": 1.115140154115959,
-      "target_price": 1.1118637534144655,
-      "stake": 48.17,
-      "multiplier": 20,
-      "risk_amount": 1.09,
-      "entry_time": "2026-11-11T09:29:59.631701+00:00",
-      "equity_before": 109.0,
-      "regime": "trending",
-      "virtual_account_id": "iso_breakout_m15",
-      "horizon": "isolated",
-      "entry_timeframe": "M15",
-      "context_timeframes": [
-        "H1",
-        "M15"
-      ]
-    },
     "virtual:breakout_h1|frxGBPUSD": {
       "contract_id": -832,
       "side": "short",
@@ -111,17 +31,17 @@
         "H1"
       ]
     },
-    "virtual:iso_breakout_m15|frxGBPUSD": {
-      "contract_id": -833,
-      "side": "short",
-      "entry_price": 1.33101,
-      "stop_price": 1.332492950604895,
-      "target_price": 1.328637279032168,
-      "stake": 48.92,
+    "virtual:iso_breakout_m15|frxUSDJPY": {
+      "contract_id": -835,
+      "side": "long",
+      "entry_price": 159.63,
+      "stop_price": 159.43432857627158,
+      "target_price": 159.94307427796545,
+      "stake": 45.88,
       "multiplier": 20,
-      "risk_amount": 1.09,
-      "entry_time": "2026-11-11T11:35:22.123751+00:00",
-      "equity_before": 109.0,
+      "risk_amount": 1.12,
+      "entry_time": "2026-11-11T14:29:59.823729+00:00",
+      "equity_before": 112.48,
       "regime": "trending",
       "virtual_account_id": "iso_breakout_m15",
       "horizon": "isolated",
@@ -130,20 +50,40 @@
         "H1",
         "M15"
       ]
+    },
+    "virtual:iso_breakout_m5|frxUSDJPY": {
+      "contract_id": -836,
+      "side": "long",
+      "entry_price": 159.629,
+      "stop_price": 159.51940472745957,
+      "target_price": 159.80435243606465,
+      "stake": 79.34,
+      "multiplier": 20,
+      "risk_amount": 1.09,
+      "entry_time": "2026-11-11T14:29:59.896846+00:00",
+      "equity_before": 108.94,
+      "regime": "trending",
+      "virtual_account_id": "iso_breakout_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
-    "virtual:iso_breakout_m15": 109.0,
+    "virtual:iso_breakout_m15": 112.48,
     "virtual:iso_breakout_m5": 108.94,
-    "virtual:breakout_h1": 89.76,
-    "virtual:iso_trend_h1": 100.99,
+    "virtual:breakout_h1": 92.66,
+    "virtual:iso_trend_h1": 102.0,
     "virtual:iso_meanrev_m15": 109.86,
     "virtual:iso_meanrev_m5": 120.33,
     "virtual:iso_trend_m15": 97.12,
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 834,
+  "paper_trade_counter": 836,
   "daily_risk_tracking": {
     "date": "2026-11-11",
     "start_equity": 107.0,
@@ -217,13 +157,13 @@
         "H1"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 89.76,
+      "equity": 92.66,
       "high_water_mark": 104.99,
-      "realized_pnl": -10.24,
-      "closed_trades": 66,
-      "wins": 21,
+      "realized_pnl": -7.34,
+      "closed_trades": 68,
+      "wins": 23,
       "losses": 45,
-      "drawdown_from_start_pct": 10.24
+      "drawdown_from_start_pct": 7.34
     },
     "intraday_m15": {
       "account_id": "intraday_m15",
@@ -380,11 +320,11 @@
         "H1"
       ],
       "strategy_tag": "ema_crossover@v1",
-      "equity": 100.99,
+      "equity": 102.0,
       "high_water_mark": 104.06,
-      "realized_pnl": 0.99,
-      "closed_trades": 14,
-      "wins": 7,
+      "realized_pnl": 2.0,
+      "closed_trades": 15,
+      "wins": 8,
       "losses": 7,
       "drawdown_from_start_pct": 0.0
     },
@@ -440,11 +380,11 @@
         "M15"
       ],
       "strategy_tag": "donchian_breakout@v2",
-      "equity": 109.0,
-      "high_water_mark": 110.99,
-      "realized_pnl": 9.0,
-      "closed_trades": 114,
-      "wins": 49,
+      "equity": 112.48,
+      "high_water_mark": 112.48,
+      "realized_pnl": 12.48,
+      "closed_trades": 116,
+      "wins": 51,
       "losses": 65,
       "drawdown_from_start_pct": 0.0
     },
@@ -13042,11 +12982,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996890,
-    "quota_h1_forward": 498445,
+    "quota_30m_forward": 996892,
+    "quota_h1_forward": 498446,
     "quota_h4_forward": 124611,
     "quota_d1_forward": 20768,
-    "quota_h1_signal": 498445
+    "quota_h1_signal": 498446
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
