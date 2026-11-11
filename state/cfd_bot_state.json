@@ -90,46 +90,6 @@
         "H1",
         "M15"
       ]
-    },
-    "virtual:iso_meanrev_m5|frxXAUUSD": {
-      "contract_id": -830,
-      "side": "long",
-      "entry_price": 4049.44,
-      "stop_price": 4043.0285255853305,
-      "target_price": 4054.248605811002,
-      "stake": 37.45,
-      "multiplier": 20,
-      "risk_amount": 1.19,
-      "entry_time": "2026-11-11T09:29:59.896877+00:00",
-      "equity_before": 118.58,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
-    },
-    "virtual:iso_meanrev_m5|frxGBPUSD": {
-      "contract_id": -831,
-      "side": "short",
-      "entry_price": 1.33286,
-      "stop_price": 1.3336217065628235,
-      "target_price": 1.3322887200778821,
-      "stake": 103.75,
-      "multiplier": 20,
-      "risk_amount": 1.19,
-      "entry_time": "2026-11-11T10:29:53.626760+00:00",
-      "equity_before": 118.58,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
@@ -138,7 +98,7 @@
     "virtual:breakout_h1": 89.76,
     "virtual:iso_trend_h1": 100.99,
     "virtual:iso_meanrev_m15": 109.86,
-    "virtual:iso_meanrev_m5": 118.58,
+    "virtual:iso_meanrev_m5": 120.33,
     "virtual:iso_trend_m15": 97.12,
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
@@ -519,11 +479,11 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 118.58,
+      "equity": 120.33,
       "high_water_mark": 129.53,
-      "realized_pnl": 18.58,
-      "closed_trades": 225,
-      "wins": 141,
+      "realized_pnl": 20.33,
+      "closed_trades": 227,
+      "wins": 143,
       "losses": 84,
       "drawdown_from_start_pct": 0.0
     },
@@ -13042,11 +13002,11 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996885,
-    "quota_h1_forward": 498442,
+    "quota_30m_forward": 996887,
+    "quota_h1_forward": 498443,
     "quota_h4_forward": 124610,
     "quota_d1_forward": 20768,
-    "quota_h1_signal": 498442
+    "quota_h1_signal": 498443
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
