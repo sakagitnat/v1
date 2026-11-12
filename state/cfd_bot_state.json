@@ -110,26 +110,6 @@
         "H1",
         "M15"
       ]
-    },
-    "virtual:iso_meanrev_m5|frxXAUUSD": {
-      "contract_id": -843,
-      "side": "long",
-      "entry_price": 3980.28,
-      "stop_price": 3974.4589273446595,
-      "target_price": 3984.6458044915057,
-      "stake": 41.14,
-      "multiplier": 20,
-      "risk_amount": 1.2,
-      "entry_time": "2026-11-11T23:34:57.801125+00:00",
-      "equity_before": 120.33,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
@@ -138,14 +118,14 @@
     "virtual:breakout_h1": 92.66,
     "virtual:iso_trend_h1": 102.0,
     "virtual:iso_meanrev_m15": 109.86,
-    "virtual:iso_meanrev_m5": 120.33,
+    "virtual:iso_meanrev_m5": 121.23,
     "virtual:iso_trend_m15": 97.12,
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
   "paper_trade_counter": 843,
   "daily_risk_tracking": {
-    "date": "2026-11-11",
+    "date": "2026-11-12",
     "start_equity": 107.0,
     "halted": false
   },
@@ -519,11 +499,11 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 120.33,
+      "equity": 121.23,
       "high_water_mark": 129.53,
-      "realized_pnl": 20.33,
-      "closed_trades": 227,
-      "wins": 143,
+      "realized_pnl": 21.23,
+      "closed_trades": 228,
+      "wins": 144,
       "losses": 84,
       "drawdown_from_start_pct": 0.0
     },
@@ -13042,26 +13022,26 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996911,
-    "quota_h1_forward": 498455,
-    "quota_h4_forward": 124613,
-    "quota_d1_forward": 20768,
-    "quota_h1_signal": 498455
+    "quota_30m_forward": 996912,
+    "quota_h1_forward": 498456,
+    "quota_h4_forward": 124614,
+    "quota_d1_forward": 20769,
+    "quota_h1_signal": 498456
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
     "champion_m30": {
-      "date": "2026-11-11",
+      "date": "2026-11-12",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_h4": {
-      "date": "2026-11-11",
+      "date": "2026-11-12",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_d1": {
-      "date": "2026-11-11",
+      "date": "2026-11-12",
       "start_equity": 100.0,
       "halted": false
     }
