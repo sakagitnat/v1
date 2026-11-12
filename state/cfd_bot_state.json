@@ -130,6 +130,26 @@
         "M15",
         "M5"
       ]
+    },
+    "virtual:iso_meanrev_m5|frxEURUSD": {
+      "contract_id": -858,
+      "side": "long",
+      "entry_price": 1.1053,
+      "stop_price": 1.10497465198489,
+      "target_price": 1.1055440110113324,
+      "stake": 119.65,
+      "multiplier": 20,
+      "risk_amount": 1.2,
+      "entry_time": "2026-11-12T21:34:51.816382+00:00",
+      "equity_before": 119.65,
+      "regime": "ranging",
+      "virtual_account_id": "iso_meanrev_m5",
+      "horizon": "isolated",
+      "entry_timeframe": "M5",
+      "context_timeframes": [
+        "M15",
+        "M5"
+      ]
     }
   },
   "paper_equity": {
@@ -143,7 +163,7 @@
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
-  "paper_trade_counter": 857,
+  "paper_trade_counter": 858,
   "daily_risk_tracking": {
     "date": "2026-11-12",
     "start_equity": 107.0,
