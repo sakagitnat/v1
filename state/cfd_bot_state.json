@@ -130,26 +130,6 @@
         "M15",
         "M5"
       ]
-    },
-    "virtual:iso_meanrev_m5|frxEURUSD": {
-      "contract_id": -859,
-      "side": "long",
-      "entry_price": 1.10533,
-      "stop_price": 1.1050828651009896,
-      "target_price": 1.1055153511742577,
-      "stake": 120.15,
-      "multiplier": 20,
-      "risk_amount": 1.2,
-      "entry_time": "2026-11-12T23:24:10.005406+00:00",
-      "equity_before": 120.15,
-      "regime": "ranging",
-      "virtual_account_id": "iso_meanrev_m5",
-      "horizon": "isolated",
-      "entry_timeframe": "M5",
-      "context_timeframes": [
-        "M15",
-        "M5"
-      ]
     }
   },
   "paper_equity": {
@@ -158,14 +138,14 @@
     "virtual:breakout_h1": 95.58,
     "virtual:iso_trend_h1": 102.0,
     "virtual:iso_meanrev_m15": 108.76,
-    "virtual:iso_meanrev_m5": 120.15,
+    "virtual:iso_meanrev_m5": 119.93,
     "virtual:iso_trend_m15": 96.17,
     "virtual:iso_trend_m5": 99.39,
     "donchian_breakout@v2": 97.01
   },
   "paper_trade_counter": 859,
   "daily_risk_tracking": {
-    "date": "2026-11-12",
+    "date": "2026-11-13",
     "start_equity": 107.0,
     "halted": false
   },
@@ -539,12 +519,12 @@
         "M5"
       ],
       "strategy_tag": "mean_reversion@v1",
-      "equity": 120.15,
+      "equity": 119.93,
       "high_water_mark": 129.53,
-      "realized_pnl": 20.15,
-      "closed_trades": 232,
+      "realized_pnl": 19.93,
+      "closed_trades": 233,
       "wins": 146,
-      "losses": 86,
+      "losses": 87,
       "drawdown_from_start_pct": 0.0
     },
     "iso_meanrev_m1": {
@@ -13062,26 +13042,26 @@
     }
   },
   "quota_evaluation_windows": {
-    "quota_30m_forward": 996958,
-    "quota_h1_forward": 498479,
-    "quota_h4_forward": 124619,
-    "quota_d1_forward": 20769,
-    "quota_h1_signal": 498479
+    "quota_30m_forward": 996961,
+    "quota_h1_forward": 498480,
+    "quota_h4_forward": 124620,
+    "quota_d1_forward": 20770,
+    "quota_h1_signal": 498480
   },
   "timeframe_champions": {},
   "champion_daily_risk_tracking": {
     "champion_m30": {
-      "date": "2026-11-12",
+      "date": "2026-11-13",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_h4": {
-      "date": "2026-11-12",
+      "date": "2026-11-13",
       "start_equity": 100.0,
       "halted": false
     },
     "champion_d1": {
-      "date": "2026-11-12",
+      "date": "2026-11-13",
       "start_equity": 100.0,
       "halted": false
     }
