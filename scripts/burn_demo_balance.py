@@ -1,4 +1,29 @@
-"""One-off utility: brings the DEMO account's balance down from Deriv's
+"""DEPRECATED -- do not run this again. Kept only as documented history.
+
+The project's master vision (docs/VISION.md) now explicitly forbids
+deliberately trading an account's balance down or up to hit a target
+number -- exactly what this script does. It predates that rule and was a
+deliberate, transparent workaround at the time (see docs/
+ARCHITECTURE_AUDIT.md for the full writeup), but the problem it solved
+(sizing positions realistically against ~$100 instead of Deriv's fixed
+~$10,000 demo default) is now solved the correct way instead:
+trading.cfd.capital rebases every risk/performance calculation onto a
+*virtual* equity derived from the real balance, without ever touching the
+real balance itself. Use that -- see scheduler.py and cfd_cli.py status.
+
+Left in the repo, unchanged below, only because it's real documented
+history of a genuine Deriv API constraint (no API to reset a demo account
+to an arbitrary balance) that a future contributor might otherwise
+rediscover the hard way. Running it now requires an explicit
+--i-understand-this-is-deprecated flag specifically so nothing (human or
+automated) can invoke it by accident; it is also no longer offered as a
+choice in the "CFD Manual Command" GitHub Actions workflow.
+
+---
+
+Original docstring, for the history described above:
+
+One-off utility: brings the DEMO account's balance down from Deriv's
 fixed $10,000 default to roughly TARGET_BALANCE, so Monday's real
 order-placement validation (and the live bot's first real runs after
 that) size positions against a realistic ~$100 starting balance instead
@@ -190,5 +215,20 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=float, default=100.0)
     parser.add_argument("--tolerance", type=float, default=30.0)
     parser.add_argument("--multiplier", type=int, default=400, help="R_100's highest accepted multiplier (confirmed earlier: 40/100/200/300/400)")
+    parser.add_argument(
+        "--i-understand-this-is-deprecated",
+        action="store_true",
+        help="Required. This script is deprecated -- see its module docstring. "
+        "trading.cfd.capital's virtual equity model is the correct replacement.",
+    )
     args = parser.parse_args()
+    if not args.i_understand_this_is_deprecated:
+        print(
+            "Refusing to run: this script is DEPRECATED (see its module docstring and "
+            "docs/VISION.md's prohibition on deliberately trading a balance down or up "
+            "to hit a target). Use trading.cfd.capital's virtual equity model instead. "
+            "Pass --i-understand-this-is-deprecated to run it anyway.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     asyncio.run(main(args.target, args.tolerance, args.multiplier))

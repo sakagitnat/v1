@@ -11,8 +11,18 @@ Instrument names are Deriv's own, mixed-case and case-sensitive
 
 Usage:
   python scripts/cfd_cli.py status
+  python scripts/cfd_cli.py performance
+  python scripts/cfd_cli.py paper-performance
+  python scripts/cfd_cli.py failures
+  python scripts/cfd_cli.py manager-report
+  python scripts/cfd_cli.py qualify-strategy NAME VERSION
+  python scripts/cfd_cli.py list-strategies
+  python scripts/cfd_cli.py promote-strategy NAME VERSION STATE --reason "..."
   python scripts/cfd_cli.py pause [--reason "..."]
   python scripts/cfd_cli.py resume
+  python scripts/cfd_cli.py set-mode {defensive,normal,aggressive,recovery} [--reason "..."]
+  python scripts/cfd_cli.py set-floor AMOUNT
+  python scripts/cfd_cli.py clear-floor
   python scripts/cfd_cli.py exclude-instrument frxXAUUSD [--reason "..."]
   python scripts/cfd_cli.py include-instrument frxXAUUSD
   python scripts/cfd_cli.py test-order [--instrument frxXAUUSD] [--side long]
@@ -26,42 +36,290 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading.cfd.broker import DerivBroker
+from trading.cfd.capital import equity_for_account
+from trading.cfd.failure_analysis import detect_degradation, summarize_losses
+from trading.cfd.manager_report import build_report
+from trading.cfd.qualification_gate import qualify
+from trading.cfd.operating_mode import VALID_MODES
+from trading.cfd.paper_trading import PAPER_LOG_PATH
+from trading.cfd.performance import compute_performance
+from trading.cfd.drawdown_monitor import DrawdownThresholds, classify_drawdown_tier, drawdown_risk_multiplier
 from trading.cfd.state import (
     exclude_instrument,
+    get_equity_tracking,
     include_instrument,
+    list_open_trades,
     load_state,
+    set_capital_floor,
+    set_operating_mode,
     set_paused,
 )
+from trading.cfd.strategy_registry import LifecycleState, list_all, set_state
+from trading.cfd.trade_log import load_trades
 from trading.config import settings
 
 
 async def cmd_status(_args):
     broker = DerivBroker()
     try:
-        await broker.connect()
+        account = await broker.connect()
         state = load_state()
-        equity = await broker.account_equity()
-        positions = await broker.open_positions()
+        broker_balance = await broker.account_equity()
+        broker_baseline = state.get("broker_baseline")
+        equity = equity_for_account(
+            broker_balance, account.get("account_type"), broker_baseline, settings.cfd_virtual_starting_capital
+        )
+        # open_positions_list(), not open_positions() -- a partial-close
+        # split (trading.cfd.exit_manager) can leave two simultaneous
+        # legs open on the same instrument, which open_positions()'s
+        # symbol-collapsed dict would silently hide one of.
+        positions = await broker.open_positions_list()
 
         pause_note = f" ({state.get('pause_reason')})" if state.get("paused") and state.get("pause_reason") else ""
         print(f"Paused: {state.get('paused', False)}{pause_note}")
-        print(f"Equity: {equity:.2f}")
-        print(f"Capital floor: {state.get('capital_floor')}")
-        initial_floor = state.get("initial_floor")
-        if initial_floor is not None:
-            growth = equity - initial_floor
-            growth_pct = (growth / initial_floor * 100) if initial_floor > 0 else 0.0
-            print(f"Growth since first run: {growth:+.2f} ({growth_pct:+.1f}%) -- started at {initial_floor:.2f}")
+        mode = state.get("operating_mode", "normal")
+        mode_note = f" ({state.get('operating_mode_reason')})" if state.get("operating_mode_reason") else ""
+        print(f"Operating mode: {mode}{mode_note}")
+        if account.get("account_type") == "demo" and broker_baseline is not None:
+            print(f"Broker balance (raw demo, not the real number): {broker_balance:.2f}")
+            print(f"Broker baseline (recorded at first run): {broker_baseline:.2f}")
+            print(f"Virtual equity (use this one): {equity:.2f}")
+        else:
+            print(f"Equity: {equity:.2f}")
+        floor = state.get("capital_floor")
+        print(f"Capital floor (virtual equity terms): {floor if floor is not None else 'none set -- see set-floor'}")
+        start = settings.cfd_virtual_starting_capital
+        growth = equity - start
+        growth_pct = (growth / start * 100) if start > 0 else 0.0
+        print(f"Growth since virtual start: {growth:+.2f} ({growth_pct:+.1f}%) -- virtual starting capital {start:.2f}")
+
+        equity_tracking = get_equity_tracking()
+        hwm = equity_tracking.get("high_water_mark")
+        thresholds = DrawdownThresholds(
+            moderate_pct=settings.cfd_drawdown_moderate_pct,
+            deep_pct=settings.cfd_drawdown_deep_pct,
+            severe_pct=settings.cfd_drawdown_severe_pct,
+            moderate_multiplier=settings.cfd_drawdown_moderate_multiplier,
+            deep_multiplier=settings.cfd_drawdown_deep_multiplier,
+        )
+        tier = classify_drawdown_tier(equity, hwm or 0.0, thresholds)
+        print(
+            f"Drawdown tier: {tier} (new-entry risk multiplier {drawdown_risk_multiplier(tier, thresholds):.2f}x) "
+            f"-- high-water-mark {hwm}, smoothed equity {equity_tracking.get('smoothed_equity')}"
+        )
 
         excluded = state.get("excluded_instruments") or {}
         if excluded:
             print(f"Excluded instruments: {excluded}")
 
+        tracked_open = list_open_trades()
         print(f"Open positions ({len(positions)}):")
-        for instrument, pos in positions.items():
-            print(f"  {instrument}: {pos['side']} (contract {pos['contract_id']})")
+        for pos in positions:
+            meta = tracked_open.get(str(pos["contract_id"])) or {}
+            leg_note = f", leg={meta['leg']}" if meta.get("leg") else ""
+            print(f"  {pos['instrument']}: {pos['side']} (contract {pos['contract_id']}{leg_note})")
     finally:
         await broker.close()
+
+
+def cmd_performance(_args):
+    """Prints the Performance Engine's metrics computed from the Trade
+    Database (state/cfd_trades.jsonl) -- see trading.cfd.performance.
+    Synchronous and offline: reads the local trade log only, no Deriv
+    connection needed."""
+    trades = load_trades()
+    if not trades:
+        print("No trades recorded yet (state/cfd_trades.jsonl is empty or missing).")
+        return
+    metrics = compute_performance(trades, starting_equity=settings.cfd_virtual_starting_capital)
+    print(f"Trades: {metrics['trade_count']} ({metrics['priced_trade_count']} priced, {metrics['unattributed_trade_count']} unattributed)")
+    print(f"Net return: {metrics['net_return']:+.2f} (starting capital {settings.cfd_virtual_starting_capital:.2f})")
+    print(f"Expectancy: {metrics['expectancy']:+.2f} per trade")
+    print(f"Win rate: {metrics['win_rate_pct']:.1f}%  Profit factor: {metrics['profit_factor']}")
+    print(f"Avg win: {metrics['avg_win']:+.2f}  Avg loss: {metrics['avg_loss']:+.2f}  Avg R: {metrics['avg_r_multiple']}")
+    print(f"Sharpe: {metrics['sharpe']}  Sortino: {metrics['sortino']}  Calmar: {metrics['calmar']}")
+    print(f"Max drawdown: {metrics['max_drawdown_pct']:.2f}%  Longest losing streak: {metrics['longest_losing_streak']}")
+    print(f"Exposure: {metrics['exposure_pct']}%")
+    for label, key in [("strategy", "by_strategy"), ("regime", "by_regime"), ("session", "by_session"), ("side", "by_side")]:
+        print(f"By {label}:")
+        for name, stats in metrics[key].items():
+            print(f"  {name}: {stats}")
+
+
+def cmd_paper_performance(_args):
+    """Same as `performance`, but for the separate Paper Trading log
+    (state/cfd_paper_trades.jsonl) -- see trading.cfd.paper_trading.
+    Every PAPER-state strategy's simulated results, never mixed with the
+    real Trade Database."""
+    trades = load_trades(PAPER_LOG_PATH)
+    if not trades:
+        print("No paper trades recorded yet (no strategy is in PAPER state, or none has traded yet).")
+        return
+    metrics = compute_performance(trades, starting_equity=settings.cfd_virtual_starting_capital)
+    print(f"Paper trades: {metrics['trade_count']} ({metrics['priced_trade_count']} priced)")
+    print(f"Net return: {metrics['net_return']:+.2f}  Expectancy: {metrics['expectancy']:+.2f} per trade")
+    print(f"Win rate: {metrics['win_rate_pct']:.1f}%  Profit factor: {metrics['profit_factor']}")
+    print(f"Max drawdown: {metrics['max_drawdown_pct']:.2f}%")
+    print("By strategy:")
+    for name, stats in metrics["by_strategy"].items():
+        print(f"  {name}: {stats}")
+
+
+def cmd_manager_report(_args):
+    """Prints the AI Trading Manager's consolidated report
+    (trading.cfd.manager_report): overall performance, loss breakdown,
+    every registered strategy grouped by lifecycle state, the current
+    Portfolio Allocation weight per ACTIVE strategy and Portfolio Risk
+    Governor ceiling utilization (trading.cfd.portfolio_allocator /
+    portfolio_risk -- the live scheduler already applies both every run,
+    this just makes them visible), and concrete recommended cfd_cli.py
+    commands -- never applied automatically. See that module's docstring
+    for why lifecycle changes always stay a human's deliberate, audited
+    decision."""
+    trades = load_trades()
+    paper_trades = load_trades(PAPER_LOG_PATH)
+    report = build_report(trades, paper_trades)
+
+    perf = report["overall_performance"]
+    print(f"Overall: {perf['trade_count']} trades, net return {perf['net_return']:+.2f}, expectancy {perf['expectancy']:+.2f}")
+
+    print("\nRegistry summary:")
+    for state_name, tags in report["registry_summary"].items():
+        if tags:
+            print(f"  {state_name}: {', '.join(tags)}")
+
+    print("\nPortfolio allocation (current risk weight per ACTIVE strategy):")
+    if not report["allocation_summary"]:
+        print("  (no ACTIVE strategies)")
+    for tag, weight in report["allocation_summary"].items():
+        print(f"  {tag}: {weight:.2%}")
+
+    risk_summary = report["portfolio_risk_summary"]
+    ceilings = risk_summary["ceilings"]
+    print(f"\nPortfolio Risk Governor (equity basis: ${risk_summary['equity_basis']:.2f}, {risk_summary['equity_basis_note']}):")
+    print(f"  Open positions: {risk_summary['open_position_count']}")
+    print(f"  Total portfolio risk: ${risk_summary['total_portfolio_risk']:.2f} (ceiling {ceilings['max_portfolio_risk_pct']:.2%} of equity)")
+    print(f"  Total notional exposure: ${risk_summary['total_notional_exposure']:.2f} (ceiling {ceilings['max_exposure_multiple']:.2f}x equity)")
+    if risk_summary["thesis_risk"]:
+        print("  By thesis:")
+        for key, amount in risk_summary["thesis_risk"].items():
+            print(f"    {key}: ${amount:.2f} (ceiling {ceilings['max_thesis_risk_pct']:.2%} of equity)")
+    if risk_summary["correlated_risk"]:
+        print("  By correlated factor group:")
+        for key, amount in risk_summary["correlated_risk"].items():
+            print(f"    {key}: ${amount:.2f} (ceiling {ceilings['max_correlated_risk_pct']:.2%} of equity)")
+
+    dd = report["drawdown_summary"]
+    print(f"\nDrawdown tier: {dd['tier']} (new-entry risk multiplier {dd['risk_multiplier']:.2f}x)")
+    print(f"  High-water-mark: {dd['high_water_mark']}, smoothed equity: {dd['smoothed_equity']}")
+
+    print("\nLoss breakdown:")
+    if not report["loss_breakdown"]:
+        print("  (no losing trades yet)")
+    for category, stats in report["loss_breakdown"].items():
+        print(f"  {category}: {stats['count']} trade(s), total {stats['total_pnl']:+.2f}")
+
+    print("\nRecommendations:")
+    if not report["recommendations"]:
+        print("  (none -- nothing needs attention right now)")
+    for rec in report["recommendations"]:
+        print(f"  [{rec['type']}] {rec['strategy']}: {rec['reason']}")
+        print(f"    -> {rec['command']}")
+
+
+def cmd_qualify_strategy(args):
+    """Prints the Qualification Gate report (trading.cfd.
+    qualification_gate) for one registered strategy version -- every
+    piece of evidence docs/VISION.md's "Qualification Gate before real
+    money" section asks for, consolidated into one place. Read-only:
+    never promotes anything, never enables real money -- CFD_ALLOW_LIVE_
+    TRADING is always a human's own decision, whatever this reports.
+    Offline: no Deriv connection needed."""
+    report = qualify(args.name, args.version)
+    if report.verdict == "unknown_strategy":
+        print(f"{args.name}@{args.version} is not registered -- see `cfd_cli.py list-strategies`.")
+        return
+
+    print(f"Qualification Gate: {report.strategy}")
+    print(f"Verdict: {report.verdict}")
+    if report.verdict == "ready_for_human_review":
+        print("  (every checkable criterion passed -- still needs a human's own decision, never automatic)")
+    print()
+    for c in report.criteria:
+        print(f"  [{c.status}] {c.name}")
+        print(f"    {c.detail}")
+
+
+def cmd_failures(_args):
+    """Prints the Failure Analysis breakdown (trading.cfd.failure_analysis)
+    computed from the Trade Database: why losing trades lost, and whether
+    any registered strategy's recent performance looks degraded versus
+    its own history. Offline: no Deriv connection needed. Never changes
+    anything -- a degradation flag here is a prompt to look, not an
+    automatic pause; use `promote-strategy ... PAUSED` yourself if it
+    warrants it."""
+    trades = load_trades()
+    if not trades:
+        print("No trades recorded yet.")
+        return
+
+    summary = summarize_losses(trades)
+    if not summary:
+        print("No losing trades yet.")
+    else:
+        print("Loss breakdown:")
+        for category, stats in sorted(summary.items(), key=lambda kv: kv[1]["total_pnl"]):
+            print(f"  {category}: {stats['count']} trade(s), total {stats['total_pnl']:+.2f}, contracts={stats['contract_ids']}")
+
+    print("\nStrategy degradation check:")
+    strategy_tags = sorted({t["strategy"] for t in trades if t.get("strategy")})
+    if not strategy_tags:
+        print("  (no tagged trades yet)")
+    for tag in strategy_tags:
+        result = detect_degradation(trades, tag)
+        if result is None:
+            print(f"  {tag}: not enough history yet")
+        elif result["degraded"]:
+            print(f"  {tag}: DEGRADED -- {result['reason']}")
+        else:
+            print(f"  {tag}: OK (recent expectancy {result['recent_expectancy']:+.2f} vs prior {result['prior_expectancy']:+.2f})")
+
+
+def cmd_list_strategies(_args):
+    """Prints every strategy registered in the Strategy Registry
+    (state/cfd_strategy_registry.json) with its current lifecycle state --
+    see trading.cfd.strategy_registry and docs/VISION.md's "Strategy
+    lifecycle" section. Offline: no Deriv connection needed."""
+    entries = list_all()
+    if not entries:
+        print("No strategies registered yet. Run scripts/seed_strategy_registry.py first.")
+        return
+    for e in sorted(entries, key=lambda e: (e.name, e.version)):
+        print(f"{e.name}@{e.version}: {e.state}  (updated {e.updated_at})")
+        print(f"  params: {e.params}")
+        last = e.history[-1] if e.history else None
+        if last:
+            print(f"  last change: {last['from']} -> {last['to']} ({last['reason']})")
+
+
+def cmd_promote_strategy(args):
+    """Transitions a registered strategy to a new lifecycle state. Enforces
+    the pipeline order (RESEARCH -> CANDIDATE -> VALIDATED -> PAPER ->
+    ACTIVE, one stage at a time; PAUSED only from/to ACTIVE; RETIRED from
+    anywhere but nowhere back out of it) -- see trading.cfd.
+    strategy_registry.set_state()'s docstring. A reason is required."""
+    try:
+        target_state = LifecycleState(args.state)
+    except ValueError:
+        valid = ", ".join(s.value for s in LifecycleState)
+        print(f"Invalid state {args.state!r} -- must be one of: {valid}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        entry = set_state(args.name, args.version, target_state, args.reason)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"{entry.name}@{entry.version} is now {entry.state}.")
 
 
 async def cmd_list_symbols(args):
@@ -166,6 +424,41 @@ def cmd_resume(_args):
     print("Resumed. The CFD bot will trade again.")
 
 
+def cmd_set_mode(args):
+    """Sets the operating mode (defensive/normal/aggressive/recovery --
+    see trading.cfd.operating_mode). Scales risk_per_trade and
+    max_open_positions only -- never whether the bot trades at all
+    (use pause/resume for that), and never past
+    CFD_MAX_RISK_PER_TRADE_CEILING regardless of mode."""
+    try:
+        set_operating_mode(args.mode, args.reason or "")
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"Operating mode set to {args.mode}.")
+
+
+def cmd_set_floor(args):
+    """Sets the capital floor (virtual equity terms) -- see
+    CfdRiskManager.capital_floor's docstring. No floor is set
+    automatically; this is the only way one gets applied. Pick a number
+    below your current virtual equity -- setting it AT your current
+    equity means one ordinary loss immediately blocks all new entries
+    until equity recovers back above it on its own (no open position to
+    do that from, if you're flat, means it never will) -- use clear-floor
+    to remove it if that happens."""
+    set_capital_floor(args.amount)
+    print(
+        f"Capital floor set to {args.amount:.2f} (virtual equity terms). New entries stop while "
+        f"equity is genuinely below this; existing positions still close normally."
+    )
+
+
+def cmd_clear_floor(_args):
+    set_capital_floor(None)
+    print("Capital floor cleared. No floor protection is active until you set-floor again.")
+
+
 def cmd_exclude_instrument(args):
     exclude_instrument(args.instrument, args.reason or "")
     print(f"{args.instrument} excluded from new entries until included again. Existing open positions are unaffected.")
@@ -182,6 +475,28 @@ def main():
 
     sub.add_parser("status").set_defaults(func=cmd_status, is_async=True)
 
+    sub.add_parser("performance").set_defaults(func=cmd_performance, is_async=False)
+
+    sub.add_parser("paper-performance").set_defaults(func=cmd_paper_performance, is_async=False)
+
+    sub.add_parser("failures").set_defaults(func=cmd_failures, is_async=False)
+
+    sub.add_parser("manager-report").set_defaults(func=cmd_manager_report, is_async=False)
+
+    qualify_parser = sub.add_parser("qualify-strategy")
+    qualify_parser.add_argument("name")
+    qualify_parser.add_argument("version")
+    qualify_parser.set_defaults(func=cmd_qualify_strategy, is_async=False)
+
+    sub.add_parser("list-strategies").set_defaults(func=cmd_list_strategies, is_async=False)
+
+    promote_parser = sub.add_parser("promote-strategy")
+    promote_parser.add_argument("name")
+    promote_parser.add_argument("version")
+    promote_parser.add_argument("state", help="Target lifecycle state: RESEARCH, CANDIDATE, VALIDATED, PAPER, ACTIVE, PAUSED, or RETIRED")
+    promote_parser.add_argument("--reason", required=True)
+    promote_parser.set_defaults(func=cmd_promote_strategy, is_async=False)
+
     list_symbols_parser = sub.add_parser("list-symbols")
     list_symbols_parser.add_argument("--filter", default="", help="Case-insensitive substring match against symbol/display_name/market/submarket")
     list_symbols_parser.set_defaults(func=cmd_list_symbols, is_async=True)
@@ -191,6 +506,17 @@ def main():
     pause_parser.set_defaults(func=cmd_pause, is_async=False)
 
     sub.add_parser("resume").set_defaults(func=cmd_resume, is_async=False)
+
+    set_mode_parser = sub.add_parser("set-mode")
+    set_mode_parser.add_argument("mode", choices=list(VALID_MODES))
+    set_mode_parser.add_argument("--reason", default="")
+    set_mode_parser.set_defaults(func=cmd_set_mode, is_async=False)
+
+    floor_parser = sub.add_parser("set-floor")
+    floor_parser.add_argument("amount", type=float)
+    floor_parser.set_defaults(func=cmd_set_floor, is_async=False)
+
+    sub.add_parser("clear-floor").set_defaults(func=cmd_clear_floor, is_async=False)
 
     exclude_parser = sub.add_parser("exclude-instrument")
     exclude_parser.add_argument("instrument")

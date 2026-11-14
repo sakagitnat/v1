@@ -1,11 +1,31 @@
+import asyncio
 import itertools
 import json
+import math
 
 import pandas as pd
 
 from trading.config import settings
 
 OPTIONS_API_BASE = "https://api.derivws.com/trading/v1/options"
+
+
+class DerivRequestError(RuntimeError):
+    """Same RuntimeError callers already catch, plus which request stage
+    failed (`stage`, the payload's own top-level key: "proposal", "buy",
+    "sell", ...) -- lets a caller that submits an order in two stages
+    (request a price, then buy it) tell "the price request itself failed,
+    nothing was risked" (stage == "proposal") apart from "the buy request
+    failed or its result is unknown" (stage == "buy", genuinely ambiguous:
+    Deriv may have processed it before the error/timeout). See quota.py's
+    run_quotas() for why that distinction matters -- treating both the
+    same way either leaves a stuck pending-entry marker after a definitely-
+    safe proposal rejection, or (worse) silently discards genuinely
+    unresolved order state."""
+
+    def __init__(self, stage: str, message: str):
+        self.stage = stage
+        super().__init__(f"Deriv API error ({stage}): {message}")
 
 
 class DerivBroker:
@@ -101,16 +121,42 @@ class DerivBroker:
     def _auth_headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token}", "Deriv-App-ID": self._app_id}
 
-    async def connect(self) -> dict:
+    async def _bootstrap_request(self, method: str, path: str):
+        """Retry connection bootstrap only, NEVER buy/sell requests.
+
+        An OTP request may mint an unused credential after an ambiguous
+        response, but cannot place a trade. Each retry requests a fresh OTP.
+        Transport failures are bounded; auth, rate-limit and other HTTP
+        errors fail immediately. Do not expose response bodies or OTP URLs.
+        """
         import requests
+
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(
+                    requests.request, method, f"{OPTIONS_API_BASE}{path}",
+                    headers=self._auth_headers(), timeout=(5, 15),
+                    allow_redirects=False,
+                )
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                if attempt == 2:
+                    raise RuntimeError("Deriv bootstrap transport failed after 3 attempts") from None
+                await asyncio.sleep(2 ** attempt)
+                continue
+            if not 200 <= response.status_code < 300:
+                status = response.status_code
+                response.close()
+                raise RuntimeError(f"Deriv bootstrap HTTP {status}")
+            return response
+
+    async def connect(self) -> dict:
         import websockets
 
-        accounts_resp = requests.get(f"{OPTIONS_API_BASE}/accounts", headers=self._auth_headers())
-        if not accounts_resp.ok:
-            raise RuntimeError(
-                f"Deriv API error (GET /accounts): HTTP {accounts_resp.status_code} -- {accounts_resp.text}"
-            )
-        accounts = accounts_resp.json().get("data") or []
+        accounts_resp = await self._bootstrap_request("GET", "/accounts")
+        try:
+            accounts = accounts_resp.json().get("data") or []
+        finally:
+            accounts_resp.close()
         if not accounts:
             raise RuntimeError("Deriv API: no accounts found for this token (GET /accounts returned none)")
 
@@ -134,14 +180,13 @@ class DerivBroker:
             )
         account_id = account["account_id"]
 
-        otp_resp = requests.post(f"{OPTIONS_API_BASE}/accounts/{account_id}/otp", headers=self._auth_headers())
-        if not otp_resp.ok:
-            raise RuntimeError(
-                f"Deriv API error (POST /accounts/{account_id}/otp): HTTP {otp_resp.status_code} -- {otp_resp.text}"
-            )
-        ws_url = otp_resp.json()["data"]["url"]
+        otp_resp = await self._bootstrap_request("POST", f"/accounts/{account_id}/otp")
+        try:
+            ws_url = otp_resp.json()["data"]["url"]
+        finally:
+            otp_resp.close()
 
-        self._ws = await websockets.connect(ws_url)
+        self._ws = await websockets.connect(ws_url, open_timeout=15, close_timeout=5)
         return account
 
     async def close(self) -> None:
@@ -157,7 +202,7 @@ class DerivBroker:
             if resp.get("req_id") != req_id:
                 continue  # a message for a different in-flight request; keep waiting
             if "error" in resp:
-                raise RuntimeError(f"Deriv API error ({list(payload)[0]}): {resp['error'].get('message')}")
+                raise DerivRequestError(list(payload)[0], resp["error"].get("message"))
             return resp
 
     async def account_equity(self) -> float:
@@ -166,13 +211,18 @@ class DerivBroker:
 
     async def open_positions(self) -> dict:
         """Returns {symbol: {"contract_id": int, "side": "long"|"short"}}
-        for every open multiplier contract. Assumes at most one open
-        contract per symbol (true for the live strategy's own trading,
-        which never opens a second position in a symbol it's already
-        in) -- for anything that might hold several simultaneous
-        contracts on the SAME symbol (e.g. scripts/burn_demo_balance.py),
-        use open_contract_ids() instead, which doesn't collapse by
-        symbol."""
+        for every open multiplier contract -- COLLAPSES to at most one
+        entry per symbol, silently keeping only one contract's data if
+        more than one is open on the same symbol. No longer safe for
+        trading.cfd.scheduler's main loop to rely on for position
+        tracking: partial-close (see trading.cfd.exit_manager) means a
+        symbol can legitimately hold two simultaneous contracts (a
+        "scalp" leg and a "runner" leg) -- use open_positions_list() (a
+        flat, never-collapsed list) or open_contract_ids() (bare ids
+        only) for anything that needs to see every contract, not just
+        one per symbol. Kept only for callers that genuinely never hold
+        more than one contract per symbol (e.g.
+        scripts/burn_demo_balance.py)."""
         resp = await self._request({"portfolio": 1})
         positions = {}
         for c in resp["portfolio"]["contracts"]:
@@ -183,6 +233,28 @@ class DerivBroker:
                 "contract_id": c["contract_id"],
                 "side": "long" if c["contract_type"] == "MULTUP" else "short",
             }
+        return positions
+
+    async def open_positions_list(self) -> list[dict]:
+        """Like open_positions(), but returns every open contract as a
+        flat list, never collapsed by symbol -- for a caller that may
+        legitimately hold more than one simultaneous contract on the
+        same instrument, e.g. scheduler.py's partial-close "scalp"/
+        "runner" leg split (see trading.cfd.exit_manager). Each dict is
+        {"contract_id": int, "instrument": str, "side": "long"|"short"} --
+        same field parsing as open_positions(), just not keyed/collapsed
+        by symbol."""
+        resp = await self._request({"portfolio": 1})
+        positions = []
+        for c in resp["portfolio"]["contracts"]:
+            symbol = c.get("underlying_symbol", c.get("symbol"))
+            if symbol is None:
+                raise RuntimeError(f"Deriv API: portfolio contract has neither underlying_symbol nor symbol: {c!r}")
+            positions.append({
+                "contract_id": c["contract_id"],
+                "instrument": symbol,
+                "side": "long" if c["contract_type"] == "MULTUP" else "short",
+            })
         return positions
 
     async def open_contract_ids(self) -> set[int]:
@@ -219,6 +291,27 @@ class DerivBroker:
             return pd.DataFrame(columns=["open", "high", "low", "close"])
         return pd.DataFrame(rows).set_index("time").sort_index()
 
+    async def get_ticks(self, symbol: str, count: int = 500, end: str | int = "latest") -> pd.DataFrame:
+        """Return raw tick history for sub-minute/seconds research.
+
+        Deriv candles bottom out at 60 seconds, so seconds-level research
+        must use tick data rather than inventing unsupported 5s/10s candles.
+        The returned frame has UTC time index and one price column.
+        """
+        resp = await self._request(
+            {"ticks_history": symbol, "style": "ticks", "count": count, "end": end}
+        )
+        history = resp.get("history") or {}
+        times = history.get("times") or []
+        prices = history.get("prices") or []
+        rows = [
+            {"time": pd.Timestamp(int(t), unit="s", tz="UTC"), "price": float(p)}
+            for t, p in zip(times, prices)
+        ]
+        if not rows:
+            return pd.DataFrame(columns=["price"])
+        return pd.DataFrame(rows).set_index("time").sort_index()
+
     async def submit_multiplier_order(
         self, symbol: str, side: str, stake: float, multiplier: int, stop_loss_amount: float, take_profit_amount: float
     ) -> dict:
@@ -252,6 +345,31 @@ class DerivBroker:
 
     async def close_position(self, contract_id: int) -> dict:
         return await self._request({"sell": contract_id, "price": 0})
+
+    async def settled_profit(self, contract_id: int) -> float:
+        """Read contract-level realized profit; never infer it from balance.
+
+        Fail closed if settlement is not yet visible or the response cannot
+        be attributed to this USD contract. The caller retains metadata.
+        """
+        response = await asyncio.wait_for(
+            self._request({"proposal_open_contract": 1, "contract_id": contract_id}),
+            timeout=20,
+        )
+        data = response.get("proposal_open_contract") or {}
+        if (str(data.get("contract_id")) != str(contract_id)
+                or data.get("is_sold") not in (1, True, "1")
+                or data.get("currency") != "USD"):
+            raise RuntimeError("Contract settlement not confirmed")
+        try:
+            if isinstance(data.get("profit"), bool):
+                raise ValueError
+            profit = float(data["profit"])
+        except (KeyError, ValueError, TypeError):
+            raise RuntimeError("Contract settlement profit is missing or invalid") from None
+        if not math.isfinite(profit):
+            raise RuntimeError("Contract settlement profit is not finite")
+        return round(profit, 2)
 
     async def list_active_symbols(self) -> list[dict]:
         """Returns Deriv's own list of tradable symbols -- used to

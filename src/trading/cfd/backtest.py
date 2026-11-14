@@ -1,6 +1,8 @@
 import pandas as pd
 
+from trading.cfd.portfolio_risk import OpenRiskPosition, PortfolioRiskCeilings, check_new_position
 from trading.cfd.risk import CfdRiskManager
+from trading.config import settings
 from trading.strategy.base import Action
 
 
@@ -66,7 +68,38 @@ class CfdBacktestEngine:
     level, no slippage -- matching Deriv's own guaranteed-stop-out
     behavior for Multipliers (the real product's stop/take-profit levels
     are dollar P&L triggers Deriv itself executes exactly, not orders
-    resting in a market that can gap past them)."""
+    resting in a market that can gap past them). This means the "no
+    slippage" part of Revision 3 gap #6 (docs/ARCHITECTURE_AUDIT.md) was
+    never actually a modeling gap for THIS product -- it's the correct
+    behavior, not an optimistic simplification.
+
+    Spread and overnight financing ARE real, unmodeled costs this class
+    now supports via spread_pct/daily_financing_pct (both default 0.0,
+    preserving every existing caller/test's exact-fill assertions unless
+    explicitly opted in -- see scripts/research_cfd_strategy.py etc. for
+    where real validation runs pass the configured, non-zero settings
+    values). spread_pct is charged once per round trip at close
+    (notional * spread_pct, deducted from that trade's own pnl) --
+    modeling "crossing the spread" to open and close. daily_financing_pct
+    is charged directly against equity for every full UTC calendar day a
+    position stays open (notional * daily_financing_pct per day) --
+    modeling the leveraged holding cost real Multipliers charge, which
+    matters far more now that Revision 3's exit philosophy explicitly
+    allows multi-hour/multi-day holds. Neither Deriv's actual live spread
+    nor its actual financing rate is confirmed against real numbers here
+    -- these are stated, reasonable placeholders (same status as the
+    ADX/regime threshold defaults elsewhere in this project), not
+    calibrated to live data. No separate commission line is modeled: no
+    confirmed commission structure exists for this product beyond spread
+    and financing, and this project never invents an unconfirmed number.
+
+    Every new entry also passes trading.cfd.portfolio_risk.
+    check_new_position() -- the same Portfolio Risk Governor
+    trading.cfd.scheduler applies live (per-thesis, correlated,
+    portfolio, and leverage ceilings), so a backtest across several
+    symbols at once can't validate a result live trading's own risk
+    ceilings would actually have rejected. ceilings defaults to the
+    configured settings (same values live trading uses) if not given."""
 
     def __init__(
         self,
@@ -76,6 +109,9 @@ class CfdBacktestEngine:
         max_open_positions: int = 3,
         max_daily_loss_pct: float = 0.03,
         multiplier: int = 20,
+        ceilings: PortfolioRiskCeilings = None,
+        spread_pct: float = 0.0,
+        daily_financing_pct: float = 0.0,
     ):
         self.strategy = strategy
         self.risk = CfdRiskManager(
@@ -85,6 +121,14 @@ class CfdBacktestEngine:
             max_daily_loss_pct=max_daily_loss_pct,
             multiplier=multiplier,
         )
+        self.ceilings = ceilings or PortfolioRiskCeilings(
+            max_thesis_risk_pct=settings.cfd_max_thesis_risk_pct,
+            max_correlated_risk_pct=settings.cfd_max_correlated_risk_pct,
+            max_portfolio_risk_pct=settings.cfd_max_portfolio_risk_pct,
+            max_exposure_multiple=settings.cfd_max_exposure_multiple,
+        )
+        self.spread_pct = spread_pct
+        self.daily_financing_pct = daily_financing_pct
 
     @staticmethod
     def _pnl(side: str, entry: float, exit_price: float, stake: float, multiplier: int) -> float:
@@ -106,6 +150,9 @@ class CfdBacktestEngine:
 
         for date in all_dates:
             if last_date is not None and date.date() != last_date.date():
+                if self.daily_financing_pct > 0:
+                    for pos in positions.values():
+                        self.risk.equity -= pos["stake"] * pos["multiplier"] * self.daily_financing_pct
                 self.risk.reset_day()
             last_date = date
 
@@ -136,6 +183,8 @@ class CfdBacktestEngine:
                     if is_exit_signal or hit_stop or hit_target:
                         exit_price = pos["stop"] if hit_stop else (pos["target"] if hit_target else row["close"])
                         pnl = self._pnl(pos["side"], pos["entry"], exit_price, pos["stake"], pos["multiplier"])
+                        spread_cost = pos["stake"] * pos["multiplier"] * self.spread_pct
+                        pnl -= spread_cost
                         trades.append(
                             {
                                 "symbol": sym,
@@ -146,6 +195,7 @@ class CfdBacktestEngine:
                                 "exit": exit_price,
                                 "stake": pos["stake"],
                                 "pnl": pnl,
+                                "spread_cost": round(spread_cost, 4),
                             }
                         )
                         self.risk.register_close(pnl)
@@ -153,18 +203,31 @@ class CfdBacktestEngine:
 
                 elif signal.action in (Action.BUY, Action.SELL) and not self.risk.halted:
                     side = "long" if signal.action == Action.BUY else "short"
-                    stake, _, _ = self.risk.stake_and_limits(signal.price, signal.stop_price, signal.take_profit_price)
+                    stake, risk_amount, _ = self.risk.stake_and_limits(signal.price, signal.stop_price, signal.take_profit_price)
                     if stake > 0:
-                        positions[sym] = {
-                            "side": side,
-                            "entry": signal.price,
-                            "stop": signal.stop_price,
-                            "target": signal.take_profit_price,
-                            "stake": stake,
-                            "multiplier": self.risk.multiplier,
-                            "entry_date": date,
-                        }
-                        self.risk.register_open()
+                        notional = stake * self.risk.multiplier
+                        open_risk_positions = [
+                            OpenRiskPosition(
+                                contract_id=0, instrument=other_sym, side=pos["side"],
+                                risk_amount=pos["risk_amount"], notional=pos["stake"] * pos["multiplier"],
+                            )
+                            for other_sym, pos in positions.items()
+                        ]
+                        rejection = check_new_position(
+                            open_risk_positions, sym, side, risk_amount, notional, self.risk.equity, self.ceilings,
+                        )
+                        if rejection is None:
+                            positions[sym] = {
+                                "side": side,
+                                "entry": signal.price,
+                                "stop": signal.stop_price,
+                                "target": signal.take_profit_price,
+                                "stake": stake,
+                                "risk_amount": risk_amount,
+                                "multiplier": self.risk.multiplier,
+                                "entry_date": date,
+                            }
+                            self.risk.register_open()
 
             unrealized = 0.0
             for sym, pos in positions.items():

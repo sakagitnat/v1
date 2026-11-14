@@ -7,7 +7,17 @@ def test_load_state_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
     assert state.load_state() == {
         "paused": False, "pause_reason": "", "capital_floor": None, "initial_floor": None,
-        "excluded_instruments": {},
+        "excluded_instruments": {}, "broker_baseline": None, "open_trades": {},
+        "operating_mode": "normal", "operating_mode_reason": "",
+        "paper_positions": {}, "paper_equity": {}, "paper_trade_counter": 0,
+        "daily_risk_tracking": {"date": None, "start_equity": None, "halted": False},
+        "pending_entries": {},
+        "smoothed_equity": None,
+        "high_water_mark": None,
+        "virtual_accounts": {},
+        "timeframe_champions": {},
+        "champion_daily_risk_tracking": {},
+        "champion_pending_entries": {},
     }
 
 
@@ -41,6 +51,79 @@ def test_exclude_and_include_instrument_roundtrip(tmp_path, monkeypatch):
     assert state.load_state()["excluded_instruments"] == {}
 
 
+def test_set_operating_mode_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_operating_mode("defensive", "spread widening on gold")
+    result = state.load_state()
+    assert result["operating_mode"] == "defensive"
+    assert result["operating_mode_reason"] == "spread widening on gold"
+
+
+def test_set_operating_mode_rejects_unknown_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    import pytest
+
+    with pytest.raises(ValueError):
+        state.set_operating_mode("yolo")
+    assert state.load_state()["operating_mode"] == "normal"  # unchanged
+
+
+def test_next_paper_contract_id_is_negative_and_increments(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    first = state.next_paper_contract_id()
+    second = state.next_paper_contract_id()
+    assert first == -1
+    assert second == -2
+
+
+def test_paper_equity_defaults_then_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_paper_equity("ema_crossover@v1", default=100.0) == 100.0
+    state.set_paper_equity("ema_crossover@v1", 110.5)
+    assert state.get_paper_equity("ema_crossover@v1", default=100.0) == 110.5
+    assert state.get_paper_equity("other@v1", default=100.0) == 100.0
+
+
+def test_paper_position_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") is None
+    state.set_paper_position("ema_crossover@v1", "frxXAUUSD", {"side": "long"})
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") == {"side": "long"}
+    popped = state.pop_paper_position("ema_crossover@v1", "frxXAUUSD")
+    assert popped == {"side": "long"}
+    assert state.get_paper_position("ema_crossover@v1", "frxXAUUSD") is None
+
+
+def test_daily_risk_tracking_defaults_then_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_daily_risk_tracking() == {"date": None, "start_equity": None, "halted": False}
+    state.set_daily_risk_tracking("2026-01-01", 100.0, True)
+    assert state.get_daily_risk_tracking() == {"date": "2026-01-01", "start_equity": 100.0, "halted": True}
+
+
+def test_set_broker_baseline_only_sets_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_broker_baseline(10000.0)
+    assert state.load_state()["broker_baseline"] == 10000.0
+    state.set_broker_baseline(9500.0)  # a later run must not move the anchor
+    assert state.load_state()["broker_baseline"] == 10000.0
+
+
+def test_record_open_trade_then_pop_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.record_open_trade(12345, {"instrument": "frxXAUUSD", "side": "long"})
+    assert state.list_open_trades() == {"12345": {"instrument": "frxXAUUSD", "side": "long"}}
+
+    popped = state.pop_open_trade(12345)
+    assert popped == {"instrument": "frxXAUUSD", "side": "long"}
+    assert state.list_open_trades() == {}
+
+
+def test_pop_open_trade_missing_returns_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.pop_open_trade(999) is None
+
+
 def test_state_file_is_valid_json(tmp_path, monkeypatch):
     path = tmp_path / "cfd_bot_state.json"
     monkeypatch.setattr(state, "_STATE_PATH", path)
@@ -58,3 +141,62 @@ def test_load_state_does_not_leak_defaults_across_instances(tmp_path, monkeypatc
 
     monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "b" / "cfd_bot_state.json")
     assert state.load_state()["excluded_instruments"] == {}
+
+
+def test_pending_entry_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_pending_entry("frxXAUUSD", {"legs": [{"side": "long", "leg": "runner"}]})
+    assert state.get_pending_entries() == {"frxXAUUSD": {"legs": [{"side": "long", "leg": "runner"}]}}
+
+
+def test_clear_pending_entry_removes_only_that_instrument(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_pending_entry("frxXAUUSD", {"legs": []})
+    state.set_pending_entry("frxEURUSD", {"legs": []})
+    state.clear_pending_entry("frxXAUUSD")
+    assert state.get_pending_entries() == {"frxEURUSD": {"legs": []}}
+
+
+def test_clear_pending_entry_on_missing_instrument_is_a_noop(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.clear_pending_entry("frxXAUUSD")  # never set -- must not raise
+    assert state.get_pending_entries() == {}
+
+
+def test_equity_tracking_defaults_to_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_equity_tracking() == {"smoothed_equity": None, "high_water_mark": None}
+
+
+def test_equity_tracking_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_equity_tracking(smoothed_equity=105.0, high_water_mark=110.0)
+    assert state.get_equity_tracking() == {"smoothed_equity": 105.0, "high_water_mark": 110.0}
+
+
+def test_virtual_accounts_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_virtual_accounts({"core_h1": {"equity": 100.0}})
+    assert state.get_virtual_accounts() == {"core_h1": {"equity": 100.0}}
+
+
+def test_champion_pending_entry_roundtrips(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    assert state.get_champion_pending_entries() == {}
+    state.set_champion_pending_entry("champion_m30:frxXAUUSD", {"side": "long"})
+    assert state.get_champion_pending_entries() == {"champion_m30:frxXAUUSD": {"side": "long"}}
+    state.clear_champion_pending_entry("champion_m30:frxXAUUSD")
+    assert state.get_champion_pending_entries() == {}
+
+
+def test_champion_pending_entries_are_isolated_from_pending_entries(tmp_path, monkeypatch):
+    # run_once() unconditionally sweeps every entry in "pending_entries"
+    # it doesn't adopt at the end of every run -- champions must never
+    # share that key, or their own markers would be wiped before the
+    # champion scheduler (which always runs after run_once() in the same
+    # process) gets a chance to reconcile them.
+    monkeypatch.setattr(state, "_STATE_PATH", tmp_path / "cfd_bot_state.json")
+    state.set_champion_pending_entry("champion_m30:frxXAUUSD", {"side": "long"})
+    assert state.get_pending_entries() == {}
+    state.set_pending_entry("frxXAUUSD", {"legs": []})
+    assert state.get_champion_pending_entries() == {"champion_m30:frxXAUUSD": {"side": "long"}}
