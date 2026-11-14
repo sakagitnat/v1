@@ -1,0 +1,1 @@
+2026-09-21T02:05:00Z emergency demo-only kick; CFD_ALLOW_LIVE_TRADING=false.

@@ -1,102 +1,123 @@
 name: CFD Trading (Deriv)
 
-# Runs the CFD/forex strategy every 15 minutes on weekdays -- the
-# candles it evaluates are still H1 (matching EmaCrossoverStrategy's
-# granularity, see its docstring for why H1, not the originally-intended
-# M15), so most runs inside the same still-open hour see an unchanged
-# candle and act as a no-op re-check, not a new decision. What running
-# more often than the candle itself actually buys (Revision 3 gap #3,
-# docs/ARCHITECTURE_AUDIT.md's "decision cadence" half): a signal exit
-# or a ratcheting trailing stop is caught within ~15 minutes of firing
-# instead of waiting up to the rest of the hour, and a new entry into a
-# slot freed up (or newly available -- see scheduler.py's per-strategy
-# position slots) mid-hour doesn't sit idle until the next hourly mark.
-# Never causes a duplicate decision on the same closed candle: nothing
-# here re-evaluates a still-open position's own entry logic, and a flat
-# instrument's entry decision is driven by the latest *completed* H1
-# candle, unchanged however many times this workflow re-reads it before
-# a new one closes. Forex/Deriv Multipliers trade ~24 hours a day Sunday
-# evening through Friday evening UTC, so this misses a few hours at each
-# end of that window (Mon-Fri only) -- a known simplification, not a
-# full 24/5 schedule.
-#
-# Safety: unlike Alpaca/OANDA, Deriv doesn't have a separate practice/live
-# base URL to force via an env var -- an API token is already scoped to
-# whichever account (demo or real) it was created from. The actual safety
-# check happens at runtime in broker.py's connect(): it picks the account
-# whose account_type is "demo" and refuses a real account unless
-# CFD_ALLOW_LIVE_TRADING is true. CFD_ALLOW_LIVE_TRADING is still hardcoded
-# to "false" below as defense-in-depth, same protective intent as
-# ALPACA_PAPER/OANDA_PRACTICE being hardcoded in the stock system's
-# workflows -- so even a token for the wrong (real) account gets refused.
-#
-# Connection and order flow (connect, buy, portfolio read, sell) are
-# confirmed end-to-end against a real Deriv demo account -- see
-# src/trading/cfd/broker.py's docstring. Two manual (workflow_dispatch)
-# runs against the real configured instruments (frxXAUUSD etc, not just
-# a synthetic index) completed cleanly on 2026-09-19: first run recorded
-# the virtual-equity baseline correctly (see trading.cfd.capital) and set
-# the capital floor; second run made no unwanted state changes (baseline
-# is set-once, as designed) and took no action (no ACTIVE strategy's
-# suited_regimes matched at that moment -- a correct NO TRADE, not an
-# error). No errors, no market-closed failures. Schedule enabled on that
-# basis.
+# Autonomous DEMO runner. The schedule follows the conservative XAUUSD
+# trading window in UTC/GMT and stays out of the published daily break.
+# The code/state source of truth for this handoff is pinned explicitly.
 on:
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [.github/workflows/cfd-trading.yml]
   schedule:
-    - cron: "*/15 * * * 1-5"
+    # Sunday open: XAUUSD published open is 22:10 GMT.
+    - cron: "15,45 22 * * 0"
+    - cron: "*/30 23 * * 0"
+    # Monday-Thursday, excluding the XAUUSD daily break around 20:59-22:05 GMT.
+    - cron: "3,33 0-20 * * 1-4"
+    - cron: "15,45 22 * * 1-4"
+    - cron: "3,33 23 * * 1-4"
+    # Friday through the published 20:45 GMT close.
+    - cron: "3,33 0-20 * * 5"
 
 permissions:
   contents: write
 
-# Serializes runs -- at 15-minute intervals, a run that's still going
-# when the next one is due (a slow Deriv API response, a big candle
-# fetch) would otherwise start a second scheduler.py process concurrently
-# with the first. Idempotency (scheduler.py's set_pending_entry/
-# _reconcile_unknown_positions) recovers attribution after ONE process
-# crashing mid-run; it was never meant to arbitrate two processes racing
-# to open the same order at once. queue (not cancel-in-progress) so a
-# run already submitting orders is never killed mid-flight -- the next
-# scheduled run just waits and starts once it's done.
 concurrency:
   group: cfd-trading
   cancel-in-progress: false
 
+env:
+  CFD_RUNTIME_REF: gpt/autonomous-demo-runner
+
 jobs:
   trade:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      # Pinned explicitly: a `schedule` trigger only ever fires the copy
-      # of THIS FILE that lives on the repo's default branch, and with no
-      # `ref` here `actions/checkout` would default to checking out that
-      # same default branch's CODE too -- silently running stale, possibly
-      # months-old application code on a real schedule, never this
-      # actively-developed branch. Pinning ref here is what makes a
-      # schedule-triggered run actually execute this project's current
-      # code regardless of which branch's copy of the workflow file GitHub
-      # used to fire it.
       - uses: actions/checkout@v4
         with:
-          ref: claude/ai-trading-manager-deriv-pmay2v
+          ref: gpt/autonomous-demo-runner
+          fetch-depth: 0
+
+      - name: Mark scheduler started
+        run: python3 scripts/cfd_scheduler_heartbeat.py started
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - run: python scripts/run_cfd_trading.py
+
+      - name: Install dependencies
+        id: deps
+        run: pip install -r requirements.txt
+
+      # 2026-09-24: was --minutes 180. The cron above already fires every
+      # ~15 minutes during market hours; a 180-minute run meant this job
+      # stayed "in_progress" almost continuously, so the concurrency group
+      # (cfd-trading) queued essentially every scheduled tick behind
+      # whichever run was already active. schedule: is documented as
+      # best-effort and can be delayed under load -- this repo's own
+      # scheduled events (this workflow, the watchdog, and the probe) went
+      # silent for ~4.5 hours while push/workflow_dispatch kept working
+      # normally, consistent with GitHub deprioritizing a workflow that
+      # looks perpetually busy.
+      #
+      # 2026-09-25: 12 minutes (the first fix) turned out to still be too
+      # tight. The job itself reliably finishes in its budget (confirmed via
+      # the jobs API: exactly 12m00s of "Run checkpointed DEMO service"),
+      # but the *run* was repeatedly observed sitting queued for up to ~10
+      # minutes before a runner started it, because a workflow_dispatch
+      # pulse (used as a stopgap while schedule: was silent) and the
+      # schedule: cron share this same concurrency group. With only ~2.5
+      # minutes of margin under the 15-minute cadence, any overlapping
+      # dispatch reliably pushed the next tick into a queued wait long
+      # enough to look like another multi-tick backlog to GitHub. 8 minutes
+      # leaves a much wider real margin so an occasional overlap no longer
+      # chains into that pattern.
+      #
+      # 2026-09-25 (later): root cause was actually account-level Actions
+      # minutes/spending-limit exhaustion (runner_id: 0 on every failed job,
+      # confirmed via billing). Cron cadence above was halved (~15min ->
+      # ~30min ticks) to reduce minutes consumption independent of the
+      # repo-visibility fix.
+      - name: Run checkpointed DEMO service
+        id: trade
         env:
           DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
           DERIV_APP_ID: "34riFtseEtSES06LjclCo"
           CFD_ALLOW_LIVE_TRADING: "false"
-      - name: Commit state changes (if any)
+          CFD_MAX_OPEN_POSITIONS: "5"
+        run: python scripts/run_cfd_service.py --minutes 8
+
+      # IMPORTANT: persist local state even when the Python scheduler fails.
+      # set_pending_entry() writes before broker submission; skipping this
+      # commit on failure would throw away recovery metadata with the runner.
+      - name: Archive runtime state before publishing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfd-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            state/cfd_*.json
+            state/cfd_*.jsonl
+            state/cfd_quota_events.jsonl
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Persist scheduler state and heartbeat
+        if: always()
         run: |
           git config user.name "trading-bot"
           git config user.email "actions@github.com"
-          for f in state/cfd_bot_state.json state/cfd_trades.jsonl state/cfd_strategy_registry.json state/cfd_paper_trades.jsonl; do
-            [ -f "$f" ] && git add "$f"
+          # Include all runtime ledgers and observations, not a partial list.
+          # This includes state/cfd_scheduler_heartbeat.json.
+          git add -u -- state
+          for f in state/cfd_*.json state/cfd_*.jsonl; do
+            if [ -f "$f" ]; then git add -- "$f"; fi
           done
           if ! git diff --cached --quiet; then
-            git commit -m "Update CFD bot state from scheduled run"
-            git push
+            git commit -m "Update CFD runtime state from scheduled run"
+            git pull --rebase origin gpt/autonomous-demo-runner
+            git push origin HEAD:gpt/autonomous-demo-runner
           else
-            echo "No state changes to commit."
+            echo "No runtime state changes to commit."
           fi

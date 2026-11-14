@@ -59,6 +59,15 @@ class TradeRecord:
     future revision. None only for a trade logged before this field
     existed."""
     leg: Optional[str] = None
+    virtual_account_id: Optional[str] = None
+    """Logical $100 sub-account that owns this trade. None for legacy
+    records created before the virtual-account laboratory existed."""
+    horizon: Optional[str] = None
+    """core/swing/intraday/scalp -- recorded at entry for later cohort analysis."""
+    entry_timeframe: Optional[str] = None
+    """Execution timeframe, e.g. H1, M15, M5, M1."""
+    context_timeframes: Optional[list[str]] = None
+    """Higher/lower timeframes used as context when the trade was opened."""
     """"scalp" or "runner" -- see trading.cfd.exit_manager.
     split_stake_for_partial_close. A "scalp" leg keeps the strategy's own
     normal fixed target; a "runner" leg has no effective fixed target and
