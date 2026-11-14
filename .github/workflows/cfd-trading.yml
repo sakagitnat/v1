@@ -1,23 +1,13 @@
 name: CFD Trading (Deriv)
 
-# Autonomous DEMO runner. The schedule follows the conservative XAUUSD
-# trading window in UTC/GMT and stays out of the published daily break.
-# The code/state source of truth for this handoff is pinned explicitly.
+# Autonomous DEMO runner. Automatic schedule disabled by user request
+# (2026-11-14) - switched to running trading elsewhere. workflow_dispatch
+# is kept so this can still be triggered manually if needed.
 on:
   workflow_dispatch: {}
   push:
     branches: [main]
     paths: [.github/workflows/cfd-trading.yml]
-  schedule:
-    # Sunday open: XAUUSD published open is 22:10 GMT.
-    - cron: "15,45 22 * * 0"
-    - cron: "*/30 23 * * 0"
-    # Monday-Thursday, excluding the XAUUSD daily break around 20:59-22:05 GMT.
-    - cron: "3,33 0-20 * * 1-4"
-    - cron: "15,45 22 * * 1-4"
-    - cron: "3,33 23 * * 1-4"
-    # Friday through the published 20:45 GMT close.
-    - cron: "3,33 0-20 * * 5"
 
 permissions:
   contents: write
