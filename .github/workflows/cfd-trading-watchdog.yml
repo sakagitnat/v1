@@ -1,8 +1,9 @@
 name: CFD Trading Watchdog (Deriv)
+# Automatic schedule disabled by user request (2026-11-14) - switched to
+# running trading elsewhere. workflow_dispatch is kept so this can still
+# be triggered manually if needed.
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: "7 * * * *"
 permissions:
   contents: read
   actions: write
