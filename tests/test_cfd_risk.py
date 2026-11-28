@@ -132,6 +132,25 @@ def test_initially_halted_blocks_entries_from_the_first_call():
     assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
 
 
+def test_halt_self_heals_from_equity_even_when_initially_halted_is_stale():
+    # 2026-09-24 review finding: a caller whose own end-of-run persist
+    # (trading.cfd.state's set_daily_risk_tracking /
+    # set_champion_daily_risk_tracking) never landed -- an exception
+    # partway through a run, after equity already moved -- could hand
+    # back initially_halted=False next run even though today's real loss
+    # already breached the threshold. Must not be maskable by a stale
+    # flag: recomputed from the numbers themselves at construction, not
+    # just trusted secondhand.
+    rm = CfdRiskManager(equity=96.0, max_daily_loss_pct=0.03, daily_start_equity=100.0, initially_halted=False)
+    assert rm.halted is True
+    assert rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0) == (0.0, 0.0, 0.0)
+
+
+def test_halt_self_heal_does_not_false_positive_under_the_threshold():
+    rm = CfdRiskManager(equity=99.0, max_daily_loss_pct=0.03, daily_start_equity=100.0, initially_halted=False)
+    assert rm.halted is False
+
+
 def test_stake_safety_margin_defaults_to_no_change():
     rm = CfdRiskManager(equity=1000, risk_per_trade=0.01, multiplier=20)
     stake, risk_amount, _ = rm.stake_and_limits(entry_price=100.0, stop_price=99.0, take_profit_price=102.0)
